@@ -83,7 +83,7 @@ class ExoPlayer2(context: Context) : KernelPlayer() {
         engine = null
     }
 
-    override fun seekTo msec: Long) {
+    override fun seekTo(msec: Long) {
         val e = engine ?: return
         e.seekTo(msec)
     }
