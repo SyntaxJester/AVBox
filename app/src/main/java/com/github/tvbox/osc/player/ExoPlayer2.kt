@@ -43,7 +43,7 @@ class ExoPlayer2(context: Context) : KernelPlayer() {
         engine = newEngine
     }
 
-    override fun setDataSource(path: String?, headers: Map<String, String>?) {
+    override fun setDataSource(path: String, headers: Map<String, String>?) {
         val e = engine ?: return
         if (path.isNullOrEmpty()) return
         e.source = path
