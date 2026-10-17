@@ -178,8 +178,7 @@ class IjkPlayer(context: Context) : KernelPlayer() {
     }
 
     override fun setSurface(surface: Surface?) {
-        // MediaPlayer 使用 setDisplay
-        mockMediaPlayer?.setDisplay(SurfaceTextureWrapper(surface))
+        mockMediaPlayer?.setSurface(surface)
     }
 
     override fun setDisplay(holder: SurfaceHolder?) {
@@ -187,11 +186,11 @@ class IjkPlayer(context: Context) : KernelPlayer() {
     }
 
     override fun clearDisplay() {
-        setSurface(null)
+        mockMediaPlayer?.setSurface(null)
     }
 
     override fun detachVideoSurface() {
-        mockMediaPlayer?.setDisplay(null)
+        mockMediaPlayer?.setSurface(null)
     }
 
     override fun setVolume(leftVolume: Float, rightVolume: Float) {
