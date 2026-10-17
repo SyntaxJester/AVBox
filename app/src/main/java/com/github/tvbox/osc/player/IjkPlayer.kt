@@ -6,8 +6,6 @@ import android.view.Surface
 import android.view.SurfaceHolder
 import com.github.tvbox.osc.player.state.PlayState
 import com.github.tvbox.osc.player.state.PlaybackStateMachine
-import com.github.tvbox.osc.util.HawkConfig
-import com.github.tvbox.osc.util.KV
 import com.github.tvbox.osc.util.LOG
 import kotlinx.coroutines.flow.StateFlow
 
@@ -52,11 +50,11 @@ class IjkPlayer(context: Context) : KernelPlayer() {
             when (what) {
                 MediaPlayer.MEDIA_INFO_BUFFERING_START -> {
                     stateMachine.onBufferingStart()
-                    mPlayerEventListener?.onInfo(MediaPlayer.MEDIA_INFO_BUFFERING_START, extra)
+                    mPlayerEventListener?.onInfo(MEDIA_INFO_BUFFERING_START, extra)
                 }
                 MediaPlayer.MEDIA_INFO_BUFFERING_END -> {
                     stateMachine.onBufferingEnd(true)
-                    mPlayerEventListener?.onInfo(MediaPlayer.MEDIA_INFO_BUFFERING_END, extra)
+                    mPlayerEventListener?.onInfo(MEDIA_INFO_BUFFERING_END, extra)
                 }
             }
             false
@@ -151,7 +149,6 @@ class IjkPlayer(context: Context) : KernelPlayer() {
 
     override fun setSpeed(speed: Float) {
         pendingSpeed = speed
-        // MediaPlayer.setSpeed() requires API 23+, skip for now
     }
 
     override fun setSurface(surface: Surface?) {
