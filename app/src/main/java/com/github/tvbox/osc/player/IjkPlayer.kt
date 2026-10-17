@@ -29,7 +29,6 @@ class IjkPlayer(context: Context) : KernelPlayer() {
     override fun initPlayer() {
         isHardwareDecode = KV.get(HawkConfig.PLAYER_HARDWARE_DECODE, true)
         
-        // 使用标准 MediaPlayer 作为降级方案
         val player = MediaPlayer()
         setupListeners(player)
         this.mockMediaPlayer = player
@@ -50,7 +49,7 @@ class IjkPlayer(context: Context) : KernelPlayer() {
         player.setOnErrorListener { _, what, extra ->
             LOG.e("$TAG onError: what=$what, extra=$extra")
             stateMachine.onError()
-            mPlayerEventListener?.onError(what, extra)
+            mPlayerEventListener?.onError()
             true
         }
         
@@ -61,7 +60,7 @@ class IjkPlayer(context: Context) : KernelPlayer() {
                     mPlayerEventListener?.onInfo(MediaPlayer.MEDIA_INFO_BUFFERING_START, extra)
                 }
                 MediaPlayer.MEDIA_INFO_BUFFERING_END -> {
-                    stateMachine.onBufferingEnd(mp.isPlaying)
+                    stateMachine.onBufferingEnd(true)
                     mPlayerEventListener?.onInfo(MediaPlayer.MEDIA_INFO_BUFFERING_END, extra)
                 }
                 else -> false
@@ -72,61 +71,79 @@ class IjkPlayer(context: Context) : KernelPlayer() {
 
     private val mp get() = mockMediaPlayer ?: throw IllegalStateException("Player not initialized")
 
-    override fun setDataSource(path: String?, headers: Map<String, String>?) {
+    override fun setDataSource(path: String, headers: Map<String, String>?) {
         val player = mockMediaPlayer ?: return
         
-        headers?.let {
-            if (it.isNotEmpty()) {
-                val sb = StringBuilder()
-                it.forEach { (k, v) -> sb.append("$k: $v\r\n") }
-                player.setDataSource(path, null, sb.toString())
-            } else {
+        if (!path.isNullOrEmpty()) {
+            headers?.let {
+                if (it.isNotEmpty()) {
+                    val sb = StringBuilder()
+                    it.forEach { (k, v) -> sb.append("$k: $v\r\n") }
+                    player.setDataSource(path, null, sb.toString())
+                } else {
+                    player.setDataSource(path)
+                }
+            } ?: run {
                 player.setDataSource(path)
             }
-        } ?: run {
-            player.setDataSource(path)
         }
     }
 
-    override fun prepareAsync() {
-        try {
+    override fun prepareAsync(): Boolean {
+        return try {
             mp.prepareAsync()
+            true
         } catch (e: Exception) {
             LOG.e("$TAG prepareAsync error: ${e.message}")
             stateMachine.onError()
-            mPlayerEventListener?.onError(-1, 0)
+            mPlayerEventListener?.onError()
+            false
         }
     }
 
-    override fun start() {
-        try {
+    override fun start(): Boolean {
+        return try {
             mp.start()
             stateMachine.onPlay()
+            true
         } catch (e: Exception) {
             LOG.e("$TAG start error: ${e.message}")
+            false
         }
     }
 
-    override fun pause() {
-        try {
+    override fun pause(): Boolean {
+        return try {
             mp.pause()
             stateMachine.onPause()
+            true
         } catch (e: Exception) {
             LOG.e("$TAG pause error: ${e.message}")
+            false
         }
     }
 
-    override fun resume() {
-        start()
+    override fun resume(): Boolean {
+        return start()
     }
 
-    override fun stop() {
-        try {
+    override fun stop(): Boolean {
+        return try {
             mp.stop()
             stateMachine.onStopped()
             awaitingPrepared = false
+            true
         } catch (e: Exception) {
             LOG.e("$TAG stop error: ${e.message}")
+            false
+        }
+    }
+
+    override fun reset() {
+        try {
+            mp.reset()
+        } catch (e: Exception) {
+            LOG.e("$TAG reset error: ${e.message}")
         }
     }
 
@@ -140,41 +157,40 @@ class IjkPlayer(context: Context) : KernelPlayer() {
         awaitingPrepared = false
     }
 
-    override fun seekTo(msec: Long) {
+    override fun seekTo(time: Long) {
         try {
-            mp.seekTo(msec.toInt())
-            stateMachine.onSeeking(msec)
+            mp.seekTo(time.toInt())
+            stateMachine.onSeeking(time)
         } catch (e: Exception) {
             LOG.e("$TAG seekTo error: ${e.message}")
         }
     }
 
-    override fun getCurrentPosition(): Long {
-        return try {
-            mp.currentPosition.toLong()
-        } catch (e: Exception) {
-            0L
-        }
-    }
+    override val currentPosition: Long
+        get() = try { mp.currentPosition.toLong() } catch (e: Exception) { 0L }
 
-    override fun getDuration(): Long {
-        return try {
-            mp.duration.toLong()
-        } catch (e: Exception) {
-            0L
-        }
-    }
+    override val duration: Long
+        get() = try { mp.duration.toLong() } catch (e: Exception) { 0L }
 
-    override fun isPlaying(): Boolean {
-        return try {
-            mp.isPlaying
-        } catch (e: Exception) {
-            false
-        }
-    }
+    override val bufferedPercentage: Int
+        get() = 0
+
+    override val speed: Float
+        get() = pendingSpeed ?: 1.0f
+
+    override val tcpSpeed: Long
+        get() = 0L
+
+    override val isPlaying: Boolean
+        get() = try { mp.isPlaying } catch (e: Exception) { false }
 
     override fun setSpeed(speed: Float) {
         pendingSpeed = speed
+        try {
+            mp.setSpeed(speed)
+        } catch (e: Exception) {
+            LOG.e("$TAG setSpeed error: ${e.message}")
+        }
     }
 
     override fun setSurface(surface: Surface?) {
@@ -186,11 +202,11 @@ class IjkPlayer(context: Context) : KernelPlayer() {
     }
 
     override fun clearDisplay() {
-        mockMediaPlayer?.setSurface(null)
+        setSurface(null)
     }
 
     override fun detachVideoSurface() {
-        mockMediaPlayer?.setSurface(null)
+        setSurface(null)
     }
 
     override fun setVolume(leftVolume: Float, rightVolume: Float) {
@@ -203,30 +219,9 @@ class IjkPlayer(context: Context) : KernelPlayer() {
 
     override fun setOptions() = Unit
 
-    /**
-     * 切换解码模式（占位）
-     */
     fun toggleDecodeMode() {
         isHardwareDecode = !isHardwareDecode
         KV.put(HawkConfig.PLAYER_HARDWARE_DECODE, isHardwareDecode)
         LOG.i("$TAG toggle decode mode: ${if (isHardwareDecode) "HARDWARE" else "SOFTWARE"}")
     }
-}
-
-// 辅助类：包装 Surface 到 SurfaceHolder
-private class SurfaceTextureWrapper(private val surface: Surface?) : SurfaceHolder {
-    override fun addCallback(callback: SurfaceHolder.Callback?) {}
-    override fun removeCallback(callback: SurfaceHolder.Callback?) {}
-    override fun setFrameSize(width: Int, height: Int) {}
-    override fun setFixedSize(width: Int, height: Int) {}
-    override fun setAspectRatio(width: Int, height: Int) {}
-    override fun setType(type: Int) {}
-    override fun getSurfaceInsets() = android.graphics.Rect()
-    override fun lockCanvas() = null
-    override fun lockCanvas(domain: android.graphics.Rect) = null
-    override fun unlockAndPostCanvas(canvas: android.graphics.Canvas) {}
-    override fun isCreating() = false
-    override fun getSurface() = surface ?: throw IllegalStateException("No surface")
-    override fun getSurfaceFrame() = android.util.Size(0, 0)
-    override fun getSurfaceInsets(dst: android.graphics.Rect?) {}
 }
