@@ -1,8 +1,6 @@
 package com.github.tvbox.osc.player
 
 import android.content.Context
-import android.view.Surface
-import android.view.SurfaceHolder
 import com.github.tvbox.osc.player.engine.PlayerEngine
 import com.github.tvbox.osc.player.engine.PlayerEngineConfig
 import com.github.tvbox.osc.player.state.PlayState
@@ -43,105 +41,71 @@ class ExoPlayer2(context: Context) : KernelPlayer() {
         )
         val newEngine = PlayerEngine(appContext, config)
         engine = newEngine
-        
-        newEngine.playbackStateListener = { state -> dispatchPlaybackState(state) }
-        newEngine.retryAsHlsListener = { awaitingPrepared = true }
-        newEngine.addErrorListener { _, _ ->
-            stateMachine.onError()
-            mPlayerEventListener?.onError()
-        }
-        LOG.i("echo-m7b-exoplayer2-engine-ready")
     }
 
-    override fun setDataSource(path: String, headers: Map<String, String>?) {
-        stateMachine.onContentReplaced()
-        engine?.setDataSource(path, headers, KV.get(HawkConfig.PLAYER_IS_LIVE, false))
+    override fun setDataSource(path: String?, headers: Map<String, String>?) {
+        val e = engine ?: return
+        if (path.isNullOrEmpty()) return
+        e.source = path
+        headers?.let { e.headers = it }
     }
 
     override fun prepareAsync() {
-        val current = engine ?: return
-        current.setStartPosition(startPosition)
-        if (!current.prepare()) return
+        val e = engine ?: return
         awaitingPrepared = true
-        stateMachine.onPrepareRequested()
-        markStartPositionApplied()
+        e.prepare()
     }
 
-    override fun start(): Boolean {
-        val current = engine ?: return false
-        if (!stateMachine.currentState.isInPlaybackState) return false
-        current.start()
-        stateMachine.onPlayRequested()
-        return true
+    override fun start() {
+        val e = engine ?: return
+        e.start()
     }
 
-    override fun pause(): Boolean {
-        val current = engine ?: return false
-        if (!stateMachine.currentState.isInPlaybackState) return false
-        if (!current.isPlaying) return false
-        current.pause()
-        stateMachine.onPauseRequested()
-        return true
+    override fun pause() {
+        val e = engine ?: return
+        e.pause()
     }
 
-    override fun stop(): Boolean {
-        val current = engine ?: return false
-        if (stateMachine.currentState == PlayState.PAUSED) return false
-        current.stop()
-        stateMachine.onStopRequested()
-        return true
+    override fun resume() {
+        val e = engine ?: return
+        e.resume()
     }
 
-    override fun abortStart() {
-        stateMachine.onStartAborted()
-    }
-
-    override fun reset() {
+    override fun stop() {
+        val e = engine ?: return
+        e.stop()
         awaitingPrepared = false
-        engine?.reset()
-        stateMachine.onReset()
     }
 
     override fun release() {
-        engine?.release()
+        val e = engine ?: return
+        e.release()
         engine = null
-        awaitingPrepared = false
-        stateMachine.onReset()
     }
 
-    override fun seekTo(time: Long) {
-        if (stateMachine.currentState == PlayState.PAUSED) {
-            stateMachine.onSeekWhilePaused()
-        }
-        engine?.seekTo(time)
+    override fun seekTo msec: Long) {
+        val e = engine ?: return
+        e.seekTo(msec)
     }
 
-    override val isPlaying: Boolean get() = engine?.isPlaying ?: false
-    override val currentPosition: Long get() = engine?.currentPosition ?: 0L
-    override val duration: Long get() = engine?.duration ?: 0L
-    override val bufferedPercentage: Int get() = engine?.bufferedPercentage ?: 0
-    override val tcpSpeed: Long get() = engine?.tcpSpeed ?: 0L
-    override val speed: Float get() = engine?.speed ?: pendingSpeed ?: 1f
+    override fun getCurrentPosition(): Long {
+        val e = engine ?: return 0L
+        return e.getCurrentPosition()
+    }
+
+    override fun getDuration(): Long {
+        val e = engine ?: return 0L
+        return e.getDuration()
+    }
+
+    override fun isPlaying(): Boolean {
+        val e = engine ?: return false
+        return e.isPlaying()
+    }
 
     override fun setSpeed(speed: Float) {
         pendingSpeed = speed
         engine?.setSpeed(speed)
-    }
-
-    override fun setSurface(surface: Surface?) {
-        engine?.setVideoSurface(surface)
-    }
-
-    override fun setDisplay(holder: SurfaceHolder?) {
-        engine?.setDisplay(holder)
-    }
-
-    override fun clearDisplay() {
-        engine?.clearVideoOutput()
-    }
-
-    override fun detachVideoSurface() {
-        engine?.detachVideoSurface()
     }
 
     override fun setVolume(leftVolume: Float, rightVolume: Float) {
@@ -152,34 +116,7 @@ class ExoPlayer2(context: Context) : KernelPlayer() {
         engine?.setLooping(isLooping)
     }
 
-    override fun setOptions() {
-        engine?.setOptions()
-    }
-
-    private fun dispatchPlaybackState(state: Int) {
-        if (awaitingPrepared) {
-            if (state == 3) { // Player.STATE_READY
-                awaitingPrepared = false
-                stateMachine.onPrepared()
-                stateMachine.onRenderingStart()
-                mPlayerEventListener?.onPrepared()
-                mPlayerEventListener?.onInfo(MEDIA_INFO_RENDERING_START, 0)
-            }
-            return
-        }
-        when (state) {
-            2 -> { // Player.STATE_BUFFERING
-                stateMachine.onBufferingStart()
-                mPlayerEventListener?.onInfo(MEDIA_INFO_BUFFERING_START, engine?.bufferedPercentage ?: 0)
-            }
-            3 -> { // Player.STATE_READY
-                stateMachine.onBufferingEnd(engine?.kernelIsPlaying == true)
-                mPlayerEventListener?.onInfo(MEDIA_INFO_BUFFERING_END, engine?.bufferedPercentage ?: 0)
-            }
-            4 -> { // Player.STATE_ENDED
-                stateMachine.onCompletion()
-                mPlayerEventListener?.onCompletion()
-            }
-        }
+    private fun bufferTimes(): Int {
+        return 3000 // 默认 3 秒缓冲
     }
 }

@@ -2,8 +2,6 @@ package com.github.tvbox.osc.player
 
 import android.content.Context
 import android.media.MediaPlayer
-import android.os.Handler
-import android.os.Looper
 import android.view.Surface
 import android.view.SurfaceHolder
 import com.github.tvbox.osc.player.state.PlayState
@@ -13,22 +11,14 @@ import com.github.tvbox.osc.util.KV
 import com.github.tvbox.osc.util.LOG
 import kotlinx.coroutines.flow.StateFlow
 
-/**
- * IJK 播放内核 - 占位实现
- * 需要添加 IJKMedia 依赖后才能使用
- */
 class IjkPlayer(context: Context) : KernelPlayer() {
-
-    companion object {
-        private const val TAG = "IjkPlayer"
-    }
-
-    private val appContext: Context = context.applicationContext
-    private val stateMachine = PlaybackStateMachine()
-    private var pendingSpeed: Float? = null
-    private var awaitingPrepared = false
-    private var isHardwareDecode: Boolean = true
+    private val TAG = "IjkPlayer"
     private var mockMediaPlayer: MediaPlayer? = null
+    private val stateMachine = PlaybackStateMachine()
+    private var awaitingPrepared = false
+    private var pendingSpeed: Float? = null
+    var isHardwareDecode = KV.get(HawkConfig.PLAYER_HARDWARE_DECODE, true)
+        private set
 
     override val playState: PlayState
         get() = stateMachine.currentState
@@ -37,7 +27,7 @@ class IjkPlayer(context: Context) : KernelPlayer() {
         get() = stateMachine.state
 
     override fun initPlayer() {
-        isHardwareDecode = KV.get(HawkConfig.PLAY_HARDWARE_DECODE, true)
+        isHardwareDecode = KV.get(HawkConfig.PLAYER_HARDWARE_DECODE, true)
         
         // 使用标准 MediaPlayer 作为降级方案
         val player = MediaPlayer()
@@ -49,7 +39,6 @@ class IjkPlayer(context: Context) : KernelPlayer() {
         player.setOnPreparedListener {
             awaitingPrepared = false
             stateMachine.onPrepared()
-            stateMachine.onRenderingStart()
             mPlayerEventListener?.onPrepared()
         }
         
@@ -58,30 +47,32 @@ class IjkPlayer(context: Context) : KernelPlayer() {
             mPlayerEventListener?.onCompletion()
         }
         
-        player.setOnErrorListener { mp, what, extra ->
-            LOG.e("$TAG error: what=$what, extra=$extra")
+        player.setOnErrorListener { _, what, extra ->
+            LOG.e("$TAG onError: what=$what, extra=$extra")
             stateMachine.onError()
-            mPlayerEventListener?.onError()
+            mPlayerEventListener?.onError(what, extra)
             true
         }
         
-        player.setOnInfoListener { mp, what, extra ->
+        player.setOnInfoListener { _, what, extra ->
             when (what) {
                 MediaPlayer.MEDIA_INFO_BUFFERING_START -> {
                     stateMachine.onBufferingStart()
-                    mPlayerEventListener?.onInfo(MEDIA_INFO_BUFFERING_START, extra)
+                    mPlayerEventListener?.onInfo(MediaPlayer.MEDIA_INFO_BUFFERING_START, extra)
                 }
                 MediaPlayer.MEDIA_INFO_BUFFERING_END -> {
                     stateMachine.onBufferingEnd(mp.isPlaying)
-                    mPlayerEventListener?.onInfo(MEDIA_INFO_BUFFERING_END, extra)
+                    mPlayerEventListener?.onInfo(MediaPlayer.MEDIA_INFO_BUFFERING_END, extra)
                 }
+                else -> false
             }
-            false
+            true
         }
     }
 
-    override fun setDataSource(path: String, headers: Map<String, String>?) {
-        stateMachine.onContentReplaced()
+    private val mp get() = mockMediaPlayer ?: throw IllegalStateException("Player not initialized")
+
+    override fun setDataSource(path: String?, headers: Map<String, String>?) {
         val player = mockMediaPlayer ?: return
         
         headers?.let {
@@ -98,80 +89,97 @@ class IjkPlayer(context: Context) : KernelPlayer() {
     }
 
     override fun prepareAsync() {
-        val player = mockMediaPlayer ?: return
-        if (!stateMachine.currentState.isInPlaybackState) return
-        player.prepareAsync()
-        awaitingPrepared = true
-        stateMachine.onPrepareRequested()
-        
-        if (startPosition > 0) {
-            player.seekTo(startPosition.toInt())
+        try {
+            mp.prepareAsync()
+        } catch (e: Exception) {
+            LOG.e("$TAG prepareAsync error: ${e.message}")
+            stateMachine.onError()
+            mPlayerEventListener?.onError(-1, 0)
         }
     }
 
-    override fun start(): Boolean {
-        val player = mockMediaPlayer ?: return false
-        if (!stateMachine.currentState.isInPlaybackState) return false
-        player.start()
-        stateMachine.onPlayRequested()
-        return true
+    override fun start() {
+        try {
+            mp.start()
+            stateMachine.onPlay()
+        } catch (e: Exception) {
+            LOG.e("$TAG start error: ${e.message}")
+        }
     }
 
-    override fun pause(): Boolean {
-        val player = mockMediaPlayer ?: return false
-        if (!stateMachine.currentState.isInPlaybackState) return false
-        if (!player.isPlaying) return false
-        player.pause()
-        stateMachine.onPauseRequested()
-        return true
+    override fun pause() {
+        try {
+            mp.pause()
+            stateMachine.onPause()
+        } catch (e: Exception) {
+            LOG.e("$TAG pause error: ${e.message}")
+        }
     }
 
-    override fun stop(): Boolean {
-        val player = mockMediaPlayer ?: return false
-        if (stateMachine.currentState == PlayState.PAUSED) return false
-        player.stop()
-        stateMachine.onStopRequested()
-        return true
+    override fun resume() {
+        start()
     }
 
-    override fun abortStart() {
-        stateMachine.onStartAborted()
-    }
-
-    override fun reset() {
-        awaitingPrepared = false
-        mockMediaPlayer?.reset()
-        stateMachine.onReset()
+    override fun stop() {
+        try {
+            mp.stop()
+            stateMachine.onStopped()
+            awaitingPrepared = false
+        } catch (e: Exception) {
+            LOG.e("$TAG stop error: ${e.message}")
+        }
     }
 
     override fun release() {
-        mockMediaPlayer?.release()
+        try {
+            mp.release()
+        } catch (e: Exception) {
+            LOG.e("$TAG release error: ${e.message}")
+        }
         mockMediaPlayer = null
         awaitingPrepared = false
-        stateMachine.onReset()
     }
 
-    override fun seekTo(time: Long) {
-        val player = mockMediaPlayer ?: return
-        if (stateMachine.currentState == PlayState.PAUSED) {
-            stateMachine.onSeekWhilePaused()
+    override fun seekTo(msec: Long) {
+        try {
+            mp.seekTo(msec.toInt())
+            stateMachine.onSeeking(msec)
+        } catch (e: Exception) {
+            LOG.e("$TAG seekTo error: ${e.message}")
         }
-        player.seekTo(time.toInt())
     }
 
-    override val isPlaying: Boolean get() = mockMediaPlayer?.isPlaying ?: false
-    override val currentPosition: Long get() = (mockMediaPlayer?.currentPosition ?: 0).toLong()
-    override val duration: Long get() = (mockMediaPlayer?.duration ?: 0).toLong()
-    override val bufferedPercentage: Int get() = 0
-    override val tcpSpeed: Long get() = 0L
-    override val speed: Float get() = pendingSpeed ?: 1f
+    override fun getCurrentPosition(): Long {
+        return try {
+            mp.currentPosition.toLong()
+        } catch (e: Exception) {
+            0L
+        }
+    }
+
+    override fun getDuration(): Long {
+        return try {
+            mp.duration.toLong()
+        } catch (e: Exception) {
+            0L
+        }
+    }
+
+    override fun isPlaying(): Boolean {
+        return try {
+            mp.isPlaying
+        } catch (e: Exception) {
+            false
+        }
+    }
 
     override fun setSpeed(speed: Float) {
         pendingSpeed = speed
     }
 
     override fun setSurface(surface: Surface?) {
-        mockMediaPlayer?.setVideoSurface(SurfaceTextureWrapper(surface))
+        // MediaPlayer 使用 setDisplay
+        mockMediaPlayer?.setDisplay(SurfaceTextureWrapper(surface))
     }
 
     override fun setDisplay(holder: SurfaceHolder?) {
@@ -183,7 +191,7 @@ class IjkPlayer(context: Context) : KernelPlayer() {
     }
 
     override fun detachVideoSurface() {
-        mockMediaPlayer?.setVideoSurface(null)
+        mockMediaPlayer?.setDisplay(null)
     }
 
     override fun setVolume(leftVolume: Float, rightVolume: Float) {
@@ -201,12 +209,12 @@ class IjkPlayer(context: Context) : KernelPlayer() {
      */
     fun toggleDecodeMode() {
         isHardwareDecode = !isHardwareDecode
-        KV.put(HawkConfig.PLAY_HARDWARE_DECODE, isHardwareDecode)
+        KV.put(HawkConfig.PLAYER_HARDWARE_DECODE, isHardwareDecode)
         LOG.i("$TAG toggle decode mode: ${if (isHardwareDecode) "HARDWARE" else "SOFTWARE"}")
     }
 }
 
-// 辅助类：包装 Surface 到 SurfaceTexture
+// 辅助类：包装 Surface 到 SurfaceHolder
 private class SurfaceTextureWrapper(private val surface: Surface?) : SurfaceHolder {
     override fun addCallback(callback: SurfaceHolder.Callback?) {}
     override fun removeCallback(callback: SurfaceHolder.Callback?) {}
@@ -214,12 +222,12 @@ private class SurfaceTextureWrapper(private val surface: Surface?) : SurfaceHold
     override fun setFixedSize(width: Int, height: Int) {}
     override fun setAspectRatio(width: Int, height: Int) {}
     override fun setType(type: Int) {}
-    override fun getSurfaceInsets(): android.graphics.Rect = android.graphics.Rect()
-    override fun lockCanvas(): android.graphics.Canvas? = null
-    override fun lockCanvas(domain: android.graphics.Rect): android.graphics.Canvas? = null
+    override fun getSurfaceInsets() = android.graphics.Rect()
+    override fun lockCanvas() = null
+    override fun lockCanvas(domain: android.graphics.Rect) = null
     override fun unlockAndPostCanvas(canvas: android.graphics.Canvas) {}
     override fun isCreating() = false
-    override fun getSurface() = surface
-    override fun getSurfaceFrame(): android.util.Size = android.util.Size(0, 0)
+    override fun getSurface() = surface ?: throw IllegalStateException("No surface")
+    override fun getSurfaceFrame() = android.util.Size(0, 0)
     override fun getSurfaceInsets(dst: android.graphics.Rect?) {}
 }
