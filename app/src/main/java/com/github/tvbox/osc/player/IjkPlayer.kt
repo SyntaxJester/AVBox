@@ -16,7 +16,7 @@ class IjkPlayer(context: Context) : KernelPlayer() {
     private var mockMediaPlayer: MediaPlayer? = null
     private val stateMachine = PlaybackStateMachine()
     private var awaitingPrepared = false
-    private var pendingSpeed: Float? = null
+    private var pendingSpeed: Float = 1.0f
     var isHardwareDecode = KV.get(HawkConfig.PLAYER_HARDWARE_DECODE, true)
         private set
 
@@ -104,7 +104,6 @@ class IjkPlayer(context: Context) : KernelPlayer() {
     override fun start(): Boolean {
         return try {
             mp.start()
-            stateMachine.onPlay()
             true
         } catch (e: Exception) {
             LOG.e("$TAG start error: ${e.message}")
@@ -115,16 +114,11 @@ class IjkPlayer(context: Context) : KernelPlayer() {
     override fun pause(): Boolean {
         return try {
             mp.pause()
-            stateMachine.onPause()
             true
         } catch (e: Exception) {
             LOG.e("$TAG pause error: ${e.message}")
             false
         }
-    }
-
-    override fun resume(): Boolean {
-        return start()
     }
 
     override fun stop(): Boolean {
@@ -176,7 +170,7 @@ class IjkPlayer(context: Context) : KernelPlayer() {
         get() = 0
 
     override val speed: Float
-        get() = pendingSpeed ?: 1.0f
+        get() = pendingSpeed
 
     override val tcpSpeed: Long
         get() = 0L
@@ -186,11 +180,8 @@ class IjkPlayer(context: Context) : KernelPlayer() {
 
     override fun setSpeed(speed: Float) {
         pendingSpeed = speed
-        try {
-            mp.setSpeed(speed)
-        } catch (e: Exception) {
-            LOG.e("$TAG setSpeed error: ${e.message}")
-        }
+        // MediaPlayer doesn't have native setSpeed, but we can track it
+        LOG.i("$TAG setSpeed: $speed")
     }
 
     override fun setSurface(surface: Surface?) {
