@@ -46,6 +46,8 @@ object HawkConfig {
     const val SOURCES_FOR_SEARCH = "checked_sources_for_search"
     const val REMOTE_TVBOX = "remote_tvbox_host"
     const val PLAYER_IS_LIVE = "player_is_live"
+    const val PLAYER_KERNEL = "player_kernel"
+    const val PLAYER_HARDWARE_DECODE = "player_hardware_decode"
     const val DOH_JSON = "doh_json"
     const val LIVE_GROUP_INDEX = "live_group_index"
     const val LIVE_GROUP_LIST = "live_group_list"

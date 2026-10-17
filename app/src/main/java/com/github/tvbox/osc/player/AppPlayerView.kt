@@ -18,6 +18,10 @@ import com.github.tvbox.osc.player.host.PlayerRenderViewFactory
 import com.github.tvbox.osc.player.host.PlayerAudioFocus
 import com.github.tvbox.osc.player.host.AudioFocusTarget
 import com.github.tvbox.osc.player.state.PlayState
+import com.github.tvbox.osc.player.IjkPlayer
+import com.github.tvbox.osc.player.ExoPlayer2
+import com.github.tvbox.osc.util.KV
+import com.github.tvbox.osc.util.HawkConfig
 import com.github.tvbox.osc.util.LOG
 import com.github.tvbox.osc.util.PlayerUtils
 import kotlinx.coroutines.CoroutineScope
@@ -169,7 +173,14 @@ open class AppPlayerView @JvmOverloads constructor(
         setOptions()
     }
 
-    protected open fun createPlayer(): KernelPlayer = ExoPlayer(context)
+    protected open fun createPlayer(): KernelPlayer {
+        val kernelType = KV.get(HawkConfig.PLAYER_KERNEL, "exo")
+        return when (kernelType) {
+            "ijk" -> IjkPlayer(context)
+            "exo2" -> ExoPlayer2(context)
+            else -> ExoPlayer(context)
+        }
+    }
 
     protected open fun setInitOptions() = Unit
 

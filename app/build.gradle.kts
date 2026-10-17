@@ -20,7 +20,7 @@ android {
         versionName = "1.2.7"
         multiDexEnabled = true
         ndk {
-            abiFilters += setOf("arm64-v8a")
+            abiFilters += setOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
         }
     }
 
@@ -149,6 +149,11 @@ dependencies {
     implementation(libs.media3.ui)
     implementation(libs.media3.ffmpeg.decoder)
     implementation(libs.media3.effect)
+    implementation(libs.ijkplayer)
+    implementation(libs.ijkplayer.arm64)
+    implementation(libs.ijkplayer.armv7a)
+    implementation(libs.ijkplayer.x86)
+    implementation(libs.ijkplayer.x86_64)
     implementation(project(":quickjs"))
     implementation(project(":pyramid"))
 

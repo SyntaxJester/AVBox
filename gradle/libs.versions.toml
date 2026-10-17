@@ -103,6 +103,11 @@ media3-database = { group = "androidx.media3", name = "media3-database", version
 media3-ui = { group = "androidx.media3", name = "media3-ui", version.ref = "media3" }
 media3-effect = { group = "androidx.media3", name = "media3-effect", version.ref = "media3" }
 media3-ffmpeg-decoder = { group = "org.jellyfin.media3", name = "media3-ffmpeg-decoder", version.ref = "media3FfmpegDecoder" }
+ijkplayer = { group = "io.github.aruzhan", name = "ijkplayer-java", version = "1.0.0" }
+ijkplayer-arm64 = { group = "io.github.aruzhan", name = "ijkplayer-arm64", version = "1.0.0" }
+ijkplayer-armv7a = { group = "io.github.aruzhan", name = "ijkplayer-armv7a", version = "1.0.0" }
+ijkplayer-x86 = { group = "io.github.aruzhan", name = "ijkplayer-x86", version = "1.0.0" }
+ijkplayer-x86_64 = { group = "io.github.aruzhan", name = "ijkplayer-x86_64", version = "1.0.0" }
 quickjs-wrapper-android = { group = "wang.harlon.quickjs", name = "wrapper-android", version.ref = "quickjsWrapper" }
 quickjs-wrapper-java = { group = "wang.harlon.quickjs", name = "wrapper-java", version.ref = "quickjsWrapper" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "androidxActivityCompose" }
