@@ -7,20 +7,14 @@ import com.github.tvbox.osc.player.state.PlayState
 import com.github.tvbox.osc.player.state.PlaybackStateMachine
 import com.github.tvbox.osc.util.HawkConfig
 import com.github.tvbox.osc.util.KV
-import com.github.tvbox.osc.util.LOG
 import kotlinx.coroutines.flow.StateFlow
 
-/**
- * ExoPlayer V2 - 基于 media3 的简化实现
- * 参考 webhtv 的 ExoPlayerEngine 设计
- */
 class ExoPlayer2(context: Context) : KernelPlayer() {
 
     private val appContext: Context = context.applicationContext
     private var engine: PlayerEngine? = null
     private val stateMachine = PlaybackStateMachine()
-    private var awaitingPrepared = false
-    private var pendingSpeed: Float? = null
+    private var pendingSpeed: Float = 1.0f
 
     override val playState: PlayState
         get() = stateMachine.currentState
@@ -30,7 +24,7 @@ class ExoPlayer2(context: Context) : KernelPlayer() {
 
     override fun initPlayer() {
         val config = PlayerEngineConfig(
-            bufferTimes = bufferTimes(),
+            bufferTimes = KV.get(HawkConfig.BUFFER_TIMES, HawkConfig.BUFFER_TIMES_DEFAULT).coerceIn(1, 10),
             tunnelingRequested = KV.get(HawkConfig.PLAY_TUNNEL, false),
             surfaceRender = KV.get(HawkConfig.PLAY_RENDER, 1) == 1,
             preferAac = KV.get(HawkConfig.PLAY_PREFER_AAC, false),
@@ -39,73 +33,107 @@ class ExoPlayer2(context: Context) : KernelPlayer() {
                 HawkConfig.EXO_VIDEO_DYNAMIC_SCHEDULING_DEFAULT,
             ),
         )
-        val newEngine = PlayerEngine(appContext, config)
-        engine = newEngine
+        engine = PlayerEngine(appContext, config)
     }
 
     override fun setDataSource(path: String, headers: Map<String, String>?) {
         val e = engine ?: return
-        if (path.isNullOrEmpty()) return
         e.source = path
         headers?.let { e.headers = it }
     }
 
-    override fun prepareAsync() {
-        val e = engine ?: return
-        awaitingPrepared = true
-        e.prepare()
+    override fun prepareAsync(): Boolean {
+        val e = engine ?: return false
+        return try {
+            e.prepare()
+            true
+        } catch (ex: Exception) {
+            false
+        }
     }
 
-    override fun start() {
-        val e = engine ?: return
-        e.start()
+    override fun start(): Boolean {
+        val e = engine ?: return false
+        return try {
+            e.start()
+            true
+        } catch (ex: Exception) {
+            false
+        }
     }
 
-    override fun pause() {
-        val e = engine ?: return
-        e.pause()
+    override fun pause(): Boolean {
+        val e = engine ?: return false
+        return try {
+            e.pause()
+            true
+        } catch (ex: Exception) {
+            false
+        }
     }
 
-    override fun resume() {
-        val e = engine ?: return
-        e.resume()
+    override fun resume(): Boolean = start()
+
+    override fun stop(): Boolean {
+        val e = engine ?: return false
+        return try {
+            e.stop()
+            true
+        } catch (ex: Exception) {
+            false
+        }
     }
 
-    override fun stop() {
-        val e = engine ?: return
-        e.stop()
-        awaitingPrepared = false
+    override fun reset() {
+        engine?.reset()
     }
 
     override fun release() {
-        val e = engine ?: return
-        e.release()
+        engine?.release()
         engine = null
     }
 
-    override fun seekTo(msec: Long) {
-        val e = engine ?: return
-        e.seekTo(msec)
+    override fun seekTo(time: Long) {
+        engine?.seekTo(time)
     }
 
-    override fun getCurrentPosition(): Long {
-        val e = engine ?: return 0L
-        return e.getCurrentPosition()
-    }
+    override val currentPosition: Long
+        get() = engine?.currentPosition ?: 0L
 
-    override fun getDuration(): Long {
-        val e = engine ?: return 0L
-        return e.getDuration()
-    }
+    override val duration: Long
+        get() = engine?.duration ?: 0L
 
-    override fun isPlaying(): Boolean {
-        val e = engine ?: return false
-        return e.isPlaying()
-    }
+    override val bufferedPercentage: Int
+        get() = engine?.bufferedPercentage ?: 0
+
+    override val isPlaying: Boolean
+        get() = engine?.isPlaying ?: false
 
     override fun setSpeed(speed: Float) {
         pendingSpeed = speed
         engine?.setSpeed(speed)
+    }
+
+    override val speed: Float
+        get() = pendingSpeed
+
+    override val tcpSpeed: Long
+        get() = 0L
+
+    override fun setSurface(surface: android.view.Surface?) {
+        engine?.setVideoSurface(surface)
+    }
+
+    override fun setDisplay(holder: android.view.SurfaceHolder?) {
+        engine?.setDisplay(holder)
+    }
+
+    override fun clearDisplay() {
+        setSurface(null)
+    }
+
+    override fun detachVideoSurface() {
+        setSurface(null)
     }
 
     override fun setVolume(leftVolume: Float, rightVolume: Float) {
@@ -116,7 +144,7 @@ class ExoPlayer2(context: Context) : KernelPlayer() {
         engine?.setLooping(isLooping)
     }
 
-    private fun bufferTimes(): Int {
-        return 3000 // 默认 3 秒缓冲
+    override fun setOptions() {
+        engine?.setOptions()
     }
 }
