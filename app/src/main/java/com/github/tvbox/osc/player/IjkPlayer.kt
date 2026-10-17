@@ -42,7 +42,7 @@ class IjkPlayer(context: Context) : KernelPlayer() {
         player.setOnErrorListener { _, what, extra ->
             LOG.e("$TAG onError: what=$what, extra=$extra")
             stateMachine.onError()
-            mPlayerEventListener?.onError(what, extra)
+            mPlayerEventListener?.onError()
             true
         }
         
@@ -70,15 +70,7 @@ class IjkPlayer(context: Context) : KernelPlayer() {
         stateMachine.onContentReplaced()
         
         try {
-            if (!headers.isNullOrEmpty() && headers.isNotEmpty()) {
-                val sb = StringBuilder()
-                for ((k, v) in headers) {
-                    sb.append("$k: $v\r\n")
-                }
-                player.setDataSource(path, null, sb.toString())
-            } else {
-                player.setDataSource(path)
-            }
+            player.setDataSource(path)
         } catch (e: Exception) {
             LOG.e("$TAG setDataSource failed: ${e.message}")
         }
@@ -143,7 +135,7 @@ class IjkPlayer(context: Context) : KernelPlayer() {
     override val isPlaying: Boolean get() = mockMediaPlayer?.isPlaying ?: false
     override val currentPosition: Long get() = mockMediaPlayer?.currentPosition?.toLong() ?: 0L
     override val duration: Long get() = mockMediaPlayer?.duration?.toLong() ?: 0L
-    override val bufferedPercentage: Int get() = mockMediaPlayer?.bufferedPercentage ?: 0
+    override val bufferedPercentage: Int get() = 0
     override val speed: Float get() = pendingSpeed ?: 1.0f
     override val tcpSpeed: Long get() = 0L
 
