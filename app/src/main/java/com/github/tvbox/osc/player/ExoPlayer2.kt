@@ -1,6 +1,8 @@
 package com.github.tvbox.osc.player
 
 import android.content.Context
+import android.view.Surface
+import android.view.SurfaceHolder
 import com.github.tvbox.osc.player.engine.PlayerEngine
 import com.github.tvbox.osc.player.engine.PlayerEngineConfig
 import com.github.tvbox.osc.player.state.PlayState
@@ -37,49 +39,36 @@ class ExoPlayer2(context: Context) : KernelPlayer() {
     }
 
     override fun setDataSource(path: String, headers: Map<String, String>?) {
-        val e = engine ?: return
-        e.source = path
-        headers?.let { e.headers = it }
+        engine?.setDataSource(path, headers)
     }
 
     override fun prepareAsync(): Boolean {
-        val e = engine ?: return false
-        return try {
-            e.prepare()
-            true
-        } catch (ex: Exception) {
-            false
-        }
+        return engine?.prepare() ?: false
     }
 
     override fun start(): Boolean {
-        val e = engine ?: return false
         return try {
-            e.start()
+            engine?.start()
             true
-        } catch (ex: Exception) {
+        } catch (_: Exception) {
             false
         }
     }
 
     override fun pause(): Boolean {
-        val e = engine ?: return false
         return try {
-            e.pause()
+            engine?.pause()
             true
-        } catch (ex: Exception) {
+        } catch (_: Exception) {
             false
         }
     }
 
-    override fun resume(): Boolean = start()
-
     override fun stop(): Boolean {
-        val e = engine ?: return false
         return try {
-            e.stop()
+            engine?.stop()
             true
-        } catch (ex: Exception) {
+        } catch (_: Exception) {
             false
         }
     }
@@ -118,13 +107,13 @@ class ExoPlayer2(context: Context) : KernelPlayer() {
         get() = pendingSpeed
 
     override val tcpSpeed: Long
-        get() = 0L
+        get() = engine?.tcpSpeed ?: 0L
 
-    override fun setSurface(surface: android.view.Surface?) {
+    override fun setSurface(surface: Surface?) {
         engine?.setVideoSurface(surface)
     }
 
-    override fun setDisplay(holder: android.view.SurfaceHolder?) {
+    override fun setDisplay(holder: SurfaceHolder?) {
         engine?.setDisplay(holder)
     }
 
@@ -133,7 +122,7 @@ class ExoPlayer2(context: Context) : KernelPlayer() {
     }
 
     override fun detachVideoSurface() {
-        setSurface(null)
+        engine?.detachVideoSurface()
     }
 
     override fun setVolume(leftVolume: Float, rightVolume: Float) {
