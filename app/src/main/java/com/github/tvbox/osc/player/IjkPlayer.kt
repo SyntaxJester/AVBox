@@ -14,11 +14,8 @@ import kotlinx.coroutines.flow.StateFlow
 class IjkPlayer(context: Context) : KernelPlayer() {
     private val TAG = "IjkPlayer"
     private var mockMediaPlayer: MediaPlayer? = null
-    private val stateMachine = PlaybackStateMachine()
-    private var awaitingPrepared = false
-    private var pendingSpeed: Float = 1.0f
-    var isHardwareDecode = KV.get(HawkConfig.PLAYER_HARDWARE_DECODE, true)
-        private set
+    val stateMachine = PlaybackStateMachine()
+    private var pendingSpeed: Float? = null
 
     override val playState: PlayState
         get() = stateMachine.currentState
@@ -27,8 +24,6 @@ class IjkPlayer(context: Context) : KernelPlayer() {
         get() = stateMachine.state
 
     override fun initPlayer() {
-        isHardwareDecode = KV.get(HawkConfig.PLAYER_HARDWARE_DECODE, true)
-        
         val player = MediaPlayer()
         setupListeners(player)
         this.mockMediaPlayer = player
@@ -36,8 +31,8 @@ class IjkPlayer(context: Context) : KernelPlayer() {
 
     private fun setupListeners(player: MediaPlayer) {
         player.setOnPreparedListener {
-            awaitingPrepared = false
             stateMachine.onPrepared()
+            stateMachine.onRenderingStart()
             mPlayerEventListener?.onPrepared()
         }
         
@@ -49,7 +44,7 @@ class IjkPlayer(context: Context) : KernelPlayer() {
         player.setOnErrorListener { _, what, extra ->
             LOG.e("$TAG onError: what=$what, extra=$extra")
             stateMachine.onError()
-            mPlayerEventListener?.onError()
+            mPlayerEventListener?.onError(what, extra)
             true
         }
         
@@ -63,125 +58,100 @@ class IjkPlayer(context: Context) : KernelPlayer() {
                     stateMachine.onBufferingEnd(true)
                     mPlayerEventListener?.onInfo(MediaPlayer.MEDIA_INFO_BUFFERING_END, extra)
                 }
-                else -> false
             }
-            true
+            false
+        }
+        
+        player.setOnVideoSizeChangedListener { _, width, height ->
+            mPlayerEventListener?.onVideoSizeChanged(width, height)
         }
     }
-
-    private val mp get() = mockMediaPlayer ?: throw IllegalStateException("Player not initialized")
 
     override fun setDataSource(path: String, headers: Map<String, String>?) {
         val player = mockMediaPlayer ?: return
+        stateMachine.onContentReplaced()
         
-        if (!path.isNullOrEmpty()) {
-            headers?.let {
-                if (it.isNotEmpty()) {
-                    val sb = StringBuilder()
-                    it.forEach { (k, v) -> sb.append("$k: $v\r\n") }
-                    player.setDataSource(path, null, sb.toString())
-                } else {
-                    player.setDataSource(path)
+        try {
+            if (!headers.isNullOrEmpty() && headers.isNotEmpty()) {
+                val sb = StringBuilder()
+                for ((k, v) in headers) {
+                    sb.append("$k: $v\r\n")
                 }
-            } ?: run {
+                player.setDataSource(path, null, sb.toString())
+            } else {
                 player.setDataSource(path)
             }
+        } catch (e: Exception) {
+            LOG.e("$TAG setDataSource failed: ${e.message}")
         }
     }
 
-    override fun prepareAsync(): Boolean {
-        return try {
-            mp.prepareAsync()
-            true
+    override fun prepareAsync() {
+        val player = mockMediaPlayer ?: return
+        try {
+            player.prepareAsync()
+            stateMachine.onPrepareRequested()
         } catch (e: Exception) {
-            LOG.e("$TAG prepareAsync error: ${e.message}")
-            stateMachine.onError()
-            mPlayerEventListener?.onError()
-            false
+            LOG.e("$TAG prepareAsync failed: ${e.message}")
         }
     }
 
     override fun start(): Boolean {
-        return try {
-            mp.start()
-            true
-        } catch (e: Exception) {
-            LOG.e("$TAG start error: ${e.message}")
-            false
-        }
+        val player = mockMediaPlayer ?: return false
+        if (!stateMachine.currentState.isInPlaybackState) return false
+        player.start()
+        stateMachine.onPlayRequested()
+        return true
     }
 
     override fun pause(): Boolean {
-        return try {
-            mp.pause()
-            true
-        } catch (e: Exception) {
-            LOG.e("$TAG pause error: ${e.message}")
-            false
-        }
+        val player = mockMediaPlayer ?: return false
+        if (!stateMachine.currentState.isInPlaybackState) return false
+        if (!player.isPlaying) return false
+        player.pause()
+        stateMachine.onPauseRequested()
+        return true
     }
 
     override fun stop(): Boolean {
-        return try {
-            mp.stop()
-            stateMachine.onStopped()
-            awaitingPrepared = false
-            true
-        } catch (e: Exception) {
-            LOG.e("$TAG stop error: ${e.message}")
-            false
-        }
+        val player = mockMediaPlayer ?: return false
+        if (stateMachine.currentState == PlayState.PAUSED) return false
+        player.stop()
+        stateMachine.onStopRequested()
+        return true
     }
 
     override fun reset() {
-        try {
-            mp.reset()
-        } catch (e: Exception) {
-            LOG.e("$TAG reset error: ${e.message}")
-        }
+        val player = mockMediaPlayer
+        player?.reset()
+        stateMachine.onReset()
     }
 
     override fun release() {
-        try {
-            mp.release()
-        } catch (e: Exception) {
-            LOG.e("$TAG release error: ${e.message}")
-        }
+        val player = mockMediaPlayer ?: return
+        player.release()
         mockMediaPlayer = null
-        awaitingPrepared = false
+        stateMachine.onReset()
     }
 
     override fun seekTo(time: Long) {
-        try {
-            mp.seekTo(time.toInt())
-            stateMachine.onSeeking(time)
-        } catch (e: Exception) {
-            LOG.e("$TAG seekTo error: ${e.message}")
+        val player = mockMediaPlayer ?: return
+        if (stateMachine.currentState == PlayState.PAUSED) {
+            stateMachine.onSeekWhilePaused()
         }
+        player.seekTo(time.toInt())
     }
 
-    override val currentPosition: Long
-        get() = try { mp.currentPosition.toLong() } catch (e: Exception) { 0L }
-
-    override val duration: Long
-        get() = try { mp.duration.toLong() } catch (e: Exception) { 0L }
-
-    override val bufferedPercentage: Int
-        get() = 0
-
-    override val speed: Float
-        get() = pendingSpeed
-
-    override val tcpSpeed: Long
-        get() = 0L
-
-    override val isPlaying: Boolean
-        get() = try { mp.isPlaying } catch (e: Exception) { false }
+    override val isPlaying: Boolean get() = mockMediaPlayer?.isPlaying ?: false
+    override val currentPosition: Long get() = mockMediaPlayer?.currentPosition?.toLong() ?: 0L
+    override val duration: Long get() = mockMediaPlayer?.duration?.toLong() ?: 0L
+    override val bufferedPercentage: Int get() = mockMediaPlayer?.bufferedPercentage ?: 0
+    override val speed: Float get() = pendingSpeed ?: 1.0f
+    override val tcpSpeed: Long get() = 0L
 
     override fun setSpeed(speed: Float) {
         pendingSpeed = speed
-        // MediaPlayer doesn't have native setSpeed, but we can track it
-        LOG.i("$TAG setSpeed: $speed")
+        // MediaPlayer.setSpeed() requires API 23+, skip for now
     }
 
     override fun setSurface(surface: Surface?) {
@@ -193,11 +163,11 @@ class IjkPlayer(context: Context) : KernelPlayer() {
     }
 
     override fun clearDisplay() {
-        setSurface(null)
+        mockMediaPlayer?.setDisplay(null)
     }
 
     override fun detachVideoSurface() {
-        setSurface(null)
+        mockMediaPlayer?.setSurface(null)
     }
 
     override fun setVolume(leftVolume: Float, rightVolume: Float) {
@@ -208,11 +178,7 @@ class IjkPlayer(context: Context) : KernelPlayer() {
         mockMediaPlayer?.isLooping = isLooping
     }
 
-    override fun setOptions() = Unit
-
-    fun toggleDecodeMode() {
-        isHardwareDecode = !isHardwareDecode
-        KV.put(HawkConfig.PLAYER_HARDWARE_DECODE, isHardwareDecode)
-        LOG.i("$TAG toggle decode mode: ${if (isHardwareDecode) "HARDWARE" else "SOFTWARE"}")
+    override fun setOptions() {
+        // No options to set for MediaPlayer
     }
 }

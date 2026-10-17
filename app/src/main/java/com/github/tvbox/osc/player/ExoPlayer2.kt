@@ -15,8 +15,8 @@ class ExoPlayer2(context: Context) : KernelPlayer() {
 
     private val appContext: Context = context.applicationContext
     private var engine: PlayerEngine? = null
-    private val stateMachine = PlaybackStateMachine()
-    private var pendingSpeed: Float = 1.0f
+    val stateMachine = PlaybackStateMachine()
+    private var pendingSpeed: Float? = null
 
     override val playState: PlayState
         get() = stateMachine.currentState
@@ -39,75 +39,71 @@ class ExoPlayer2(context: Context) : KernelPlayer() {
     }
 
     override fun setDataSource(path: String, headers: Map<String, String>?) {
-        engine?.setDataSource(path, headers)
+        stateMachine.onContentReplaced()
+        engine?.setDataSource(path, headers, KV.get(HawkConfig.PLAYER_IS_LIVE, false))
     }
 
-    override fun prepareAsync(): Boolean {
-        return engine?.prepare() ?: false
+    override fun prepareAsync() {
+        val current = engine ?: return
+        if (!current.prepare()) return
+        stateMachine.onPrepareRequested()
     }
 
     override fun start(): Boolean {
-        return try {
-            engine?.start()
-            true
-        } catch (_: Exception) {
-            false
-        }
+        val current = engine ?: return false
+        if (!stateMachine.currentState.isInPlaybackState) return false
+        current.start()
+        stateMachine.onPlayRequested()
+        return true
     }
 
     override fun pause(): Boolean {
-        return try {
-            engine?.pause()
-            true
-        } catch (_: Exception) {
-            false
-        }
+        val current = engine ?: return false
+        if (!stateMachine.currentState.isInPlaybackState) return false
+        if (!current.isPlaying) return false
+        current.pause()
+        stateMachine.onPauseRequested()
+        return true
     }
 
     override fun stop(): Boolean {
-        return try {
-            engine?.stop()
-            true
-        } catch (_: Exception) {
-            false
-        }
+        val current = engine ?: return false
+        if (stateMachine.currentState == PlayState.PAUSED) return false
+        current.stop()
+        stateMachine.onStopRequested()
+        return true
     }
 
     override fun reset() {
-        engine?.reset()
+        engine?.release()
+        engine = null
+        stateMachine.onReset()
     }
 
     override fun release() {
         engine?.release()
         engine = null
+        stateMachine.onReset()
     }
 
     override fun seekTo(time: Long) {
+        if (stateMachine.currentState == PlayState.PAUSED) {
+            stateMachine.onSeekWhilePaused()
+        }
         engine?.seekTo(time)
     }
 
-    override val currentPosition: Long
-        get() = engine?.currentPosition ?: 0L
-
-    override val duration: Long
-        get() = engine?.duration ?: 0L
-
-    override val bufferedPercentage: Int
-        get() = engine?.bufferedPercentage ?: 0
-
-    override val isPlaying: Boolean
-        get() = engine?.isPlaying ?: false
+    override val isPlaying: Boolean get() = engine?.isPlaying ?: false
+    override val currentPosition: Long get() = engine?.currentPosition ?: 0L
+    override val duration: Long get() = engine?.duration ?: 0L
+    override val bufferedPercentage: Int get() = engine?.bufferedPercentage ?: 0
+    override val speed: Float get() = engine?.speed ?: pendingSpeed ?: 1f
+    override val tcpSpeed: Long get() = engine?.tcpSpeed ?: 0L
 
     override fun setSpeed(speed: Float) {
         pendingSpeed = speed
         engine?.setSpeed(speed)
     }
-
-    override val speed: Float
-        get() = pendingSpeed
-
-    override val tcpSpeed: Long
-        get() = engine?.tcpSpeed ?: 0L
 
     override fun setSurface(surface: Surface?) {
         engine?.setVideoSurface(surface)
@@ -118,7 +114,7 @@ class ExoPlayer2(context: Context) : KernelPlayer() {
     }
 
     override fun clearDisplay() {
-        setSurface(null)
+        engine?.clearVideoOutput()
     }
 
     override fun detachVideoSurface() {
