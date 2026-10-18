@@ -14,6 +14,16 @@ class IjkPlayer(context: Context) : KernelPlayer() {
     private var mockMediaPlayer: MediaPlayer? = null
     val stateMachine = PlaybackStateMachine()
     private var pendingSpeed: Float? = null
+    
+    // 自动跳过片头片尾配置（毫秒）
+    private var introDuration = 0L
+    private var outroDuration = 0L
+    private var adDuration = 0L
+    
+    // 是否开启自动跳过
+    private var autoSkipIntro = false
+    private var autoSkipOutro = false
+    private var autoSkipAd = false
 
     override val playState: PlayState
         get() = stateMachine.currentState
