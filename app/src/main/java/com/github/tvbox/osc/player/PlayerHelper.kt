@@ -117,7 +117,10 @@ object PlayerHelper {
         val cached = mPlayersExistInfo
         if (cached != null) return cached
         val playersExist = HashMap<Int, Boolean>()
+        // 2 = ExoPlayer, 4 = IjkPlayer, 5 = ExoPlayer2
         playersExist[2] = true
+        playersExist[4] = true
+        playersExist[5] = true
         playersExist[13] = RemoteTVBox.getAvalible() != null
         mPlayersExistInfo = playersExist
         return playersExist
