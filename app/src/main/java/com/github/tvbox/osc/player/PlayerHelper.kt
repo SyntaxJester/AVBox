@@ -99,6 +99,8 @@ object PlayerHelper {
     fun getPlayerName(playType: Int): String {
         return when (playType) {
             13 -> str(R.string.player_nearby_tvbox)
+            4 -> str(R.string.player_ijk)
+            5 -> str(R.string.player_exo2)
             else -> str(R.string.player_exo)
         }
     }

@@ -307,7 +307,9 @@
     <string name="toast_live_follow_vod">直播已跟随点播源</string>
     <string name="toast_source_in_use">正在使用的源不能删除</string>
 
-    <string name="player_exo">Media3</string>
+    <string name="player_exo">Media3 (ExoPlayer)</string>
+    <string name="player_exo2">ExoPlayer2</string>
+    <string name="player_ijk">IJK (MediaPlayer)</string>
     <string name="player_nearby_tvbox">附近TVBox</string>
     <string name="player_decode_hard">硬解码</string>
     <string name="player_decode_soft">软解码</string>
