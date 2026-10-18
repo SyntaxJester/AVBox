@@ -219,6 +219,9 @@ class ExoPlayer(context: Context) : KernelPlayer() {
                 val listener = mPlayerEventListener ?: return
                 listener.onPrepared()
                 listener.onInfo(MEDIA_INFO_RENDERING_START, 0)
+                
+                // 自动跳过片头
+                checkAutoSkip(currentPosition, duration)
             }
             return
         }

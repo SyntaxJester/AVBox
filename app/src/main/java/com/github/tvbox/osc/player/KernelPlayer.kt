@@ -3,6 +3,7 @@ package com.github.tvbox.osc.player
 import android.view.Surface
 import android.view.SurfaceHolder
 import com.github.tvbox.osc.player.state.PlayState
+import com.github.tvbox.osc.util.LOG
 import kotlinx.coroutines.flow.StateFlow
 
 abstract class KernelPlayer {
@@ -98,6 +99,29 @@ abstract class KernelPlayer {
     abstract fun setSpeed(speed: Float)
 
     abstract val speed: Float
+
+    // 自动跳过片头片尾配置
+    var autoSkipEnabled = false
+    var introDurationMs = 0L
+    var outroDurationMs = 0L
+    
+    /**
+     * 检查并执行自动跳过
+     * @param currentPosition 当前播放位置（毫秒）
+     * @param duration 视频总时长（毫秒）
+     */
+    fun checkAutoSkip(currentPosition: Long, duration: Long) {
+        if (!autoSkipEnabled || duration <= 0) return
+        // 跳过片头
+        if (currentPosition < introDurationMs && introDurationMs > 0) {
+            seekTo(introDurationMs)
+            LOG.i("Auto-skip intro: $currentPosition -> ${introDurationMs}")
+        }
+        // 接近片尾时提示
+        if (outroDurationMs > 0 && duration - currentPosition < outroDurationMs) {
+            LOG.i("Approaching outro: ${duration - currentPosition}ms remaining")
+        }
+    }
 
     abstract val tcpSpeed: Long
 

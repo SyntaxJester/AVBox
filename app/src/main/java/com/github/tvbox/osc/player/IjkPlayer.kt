@@ -35,6 +35,22 @@ class IjkPlayer(context: Context) : KernelPlayer() {
         val player = MediaPlayer()
         setupListeners(player)
         this.mockMediaPlayer = player
+        
+        // 读取自动跳过配置
+        autoSkipIntro = com.github.tvbox.osc.util.KV.get(
+            com.github.tvbox.osc.util.HawkConfig.AUTO_SKIP_INTRO, false
+        )
+        autoSkipOutro = com.github.tvbox.osc.util.KV.get(
+            com.github.tvbox.osc.util.HawkConfig.AUTO_SKIP_OUTRO, false
+        )
+        autoSkipAd = com.github.tvbox.osc.util.KV.get(
+            com.github.tvbox.osc.util.HawkConfig.AUTO_SKIP_AD, false
+        )
+        
+        // 配置跳过时长（默认30秒片头，60秒片尾）
+        introDuration = 30_000L
+        outroDuration = 60_000L
+        adDuration = 30_000L
     }
 
     private fun setupListeners(player: MediaPlayer) {
