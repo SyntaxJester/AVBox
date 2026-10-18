@@ -131,6 +131,23 @@ class IjkPlayer(context: Context) : KernelPlayer() {
         }
         player.seekTo(time.toInt())
     }
+    
+    /**
+     * 自动跳过片头片尾
+     * @param duration 视频总时长（毫秒）
+     */
+    fun autoSkip(duraion: Long) {
+        val currentTime = mockMediaPlayer?.currentPosition?.toLong() ?: 0L
+        if (autoSkipIntro && currentTime < introDuration) {
+            // 跳过片头
+            mockMediaPlayer?.seekTo(introDuration.toInt())
+            LOG.i("$TAG 自动跳过片头，从 ${currentTime}ms 跳到 ${introDuration}ms")
+        }
+        if (autoSkipOutro && currentTime > duration - outroDuration) {
+            // 播放到最后几秒时提示或跳过
+            LOG.i("$TAG 接近片尾，${duration - currentTime}ms 后结束")
+        }
+    }
 
     override val isPlaying: Boolean get() = mockMediaPlayer?.isPlaying ?: false
     override val currentPosition: Long get() = mockMediaPlayer?.currentPosition?.toLong() ?: 0L
