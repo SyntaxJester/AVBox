@@ -96,7 +96,7 @@ android {
 }
 kotlin {
     compilerOptions {
-        jvmTarget.set("17")
+        jvmTarget.set(JvmTarget.JVM_21)
     }
 }
 ksp {
@@ -193,12 +193,7 @@ configurations.configureEach {
     exclude(group = "io.antmedia", module = "rtmp-client")
 }
 
-// 强制使用 JDK 17
-java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
-}
 
 tasks.withType<JavaCompile> {
-    options.compilerArgs.addAll(listOf("-source", "17", "-target", "17"))
+    options.compilerArgs.addAll(listOf("-source", "21", "-target", "21"))
 }
