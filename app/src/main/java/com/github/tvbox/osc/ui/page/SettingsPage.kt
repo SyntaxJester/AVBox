@@ -189,6 +189,7 @@ class SettingsViewModel : ViewModel() {
         playCache = KV.get(HawkConfig.PLAY_CACHE, false),
         exoCacheSizeMb = KV.get(HawkConfig.EXO_CACHE_SIZE_MB, HawkConfig.EXO_CACHE_SIZE_MB_DEFAULT),
         dohIndex = KV.get(HawkConfig.DOH_URL, 0),
+        autoSkipEnabled = KV.get(HawkConfig.AUTO_SKIP_INTRO, false),
         cacheSizeText = cacheSizeText,
     )
 
