@@ -19,7 +19,6 @@ import com.github.tvbox.osc.player.host.PlayerAudioFocus
 import com.github.tvbox.osc.player.host.AudioFocusTarget
 import com.github.tvbox.osc.player.state.PlayState
 import com.github.tvbox.osc.player.IjkPlayer
-import com.github.tvbox.osc.player.ExoPlayer2
 import com.github.tvbox.osc.util.KV
 import com.github.tvbox.osc.util.HawkConfig
 import com.github.tvbox.osc.util.LOG
@@ -177,7 +176,6 @@ open class AppPlayerView @JvmOverloads constructor(
         val kernelType = KV.get(HawkConfig.PLAYER_KERNEL, "exo")
         return when (kernelType) {
             "ijk" -> IjkPlayer(context)
-            "exo2" -> ExoPlayer2(context)
             else -> ExoPlayer(context)
         }
     }

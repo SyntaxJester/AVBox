@@ -100,7 +100,7 @@ object PlayerHelper {
         return when (playType) {
             13 -> str(R.string.player_nearby_tvbox)
             4 -> str(R.string.player_ijk)
-            5 -> str(R.string.player_exo2)
+            
             else -> str(R.string.player_exo)
         }
     }
@@ -120,7 +120,7 @@ object PlayerHelper {
         // 2 = ExoPlayer, 4 = IjkPlayer, 5 = ExoPlayer2
         playersExist[2] = true
         playersExist[4] = true
-        playersExist[5] = true
+        
         playersExist[13] = RemoteTVBox.getAvalible() != null
         mPlayersExistInfo = playersExist
         return playersExist
