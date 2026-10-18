@@ -92,7 +92,7 @@ fun PlaySettingsScreen(onNavigateBack: () -> Unit, vm: SettingsViewModel = viewM
                     SettingsSwitchRow(
                         title = stringResource(R.string.settings_auto_skip),
                         subtitle = stringResource(R.string.settings_auto_skip_summary),
-                        checked = vm.state.autoSkipEnabled,
+                        checked = state.autoSkipEnabled,
                         onCheckedChange = { enabled ->
                             vm.put(HawkConfig.AUTO_SKIP_INTRO, enabled)
                             vm.put(HawkConfig.AUTO_SKIP_OUTRO, enabled)
