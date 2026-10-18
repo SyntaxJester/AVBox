@@ -101,6 +101,7 @@ data class SettingsState(
     val playCache: Boolean,
     val exoCacheSizeMb: Int,
     val dohIndex: Int,
+    val autoSkipEnabled: Boolean,
     val cacheSizeText: String = "",
 )
 

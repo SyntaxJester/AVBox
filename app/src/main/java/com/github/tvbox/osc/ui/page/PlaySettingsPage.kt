@@ -86,6 +86,20 @@ fun PlaySettingsScreen(onNavigateBack: () -> Unit, vm: SettingsViewModel = viewM
                         onSelect = { idx -> vm.put(HawkConfig.PLAY_TYPE, playerTypes[idx]) },
                     )
                 }
+                // 自动跳过片头片尾
+                SettingsCard(SettingsCardPosition.MIDDLE) {
+                    val context = LocalContext.current
+                    SettingsSwitchRow(
+                        title = stringResource(R.string.settings_auto_skip),
+                        subtitle = stringResource(R.string.settings_auto_skip_summary),
+                        checked = vm.state.autoSkipEnabled,
+                        onCheckedChange = { enabled ->
+                            vm.put(HawkConfig.AUTO_SKIP_INTRO, enabled)
+                            vm.put(HawkConfig.AUTO_SKIP_OUTRO, enabled)
+                            vm.put(HawkConfig.AUTO_SKIP_AD, enabled)
+                        },
+                    )
+                }
                 SettingsCard(SettingsCardPosition.MIDDLE) {
                     SettingsOptionMenuRow(
                         title = stringResource(R.string.settings_play_render),

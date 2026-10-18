@@ -317,6 +317,8 @@
     <string name="settings_auto_skip_outro_summary">播放后 %d 秒时自动跳转</string>
     <string name="settings_auto_skip_ad">自动跳过广告</string>
     <string name="settings_auto_skip_ad_summary">检测到广告时自动跳过</string>
+    <string name="settings_auto_skip">自动跳过片头片尾</string>
+    <string name="settings_auto_skip_summary">在播放视频时自动跳过片头和片尾</string>
     <string name="player_decode_hard">硬解码</string>
     <string name="player_decode_soft">软解码</string>
     <string name="player_scale_fill">填充</string>
