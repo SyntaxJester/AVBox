@@ -311,6 +311,12 @@
     
     <string name="player_ijk">IJK (MediaPlayer)</string>
     <string name="player_nearby_tvbox">附近TVBox</string>
+    <string name="settings_auto_skip_intro">自动跳过片头</string>
+    <string name="settings_auto_skip_intro_summary">播放前 %d 秒时自动跳过</string>
+    <string name="settings_auto_skip_outro">自动跳过片尾</string>
+    <string name="settings_auto_skip_outro_summary">播放后 %d 秒时自动跳转</string>
+    <string name="settings_auto_skip_ad">自动跳过广告</string>
+    <string name="settings_auto_skip_ad_summary">检测到广告时自动跳过</string>
     <string name="player_decode_hard">硬解码</string>
     <string name="player_decode_soft">软解码</string>
     <string name="player_scale_fill">填充</string>
