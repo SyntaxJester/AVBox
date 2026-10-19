@@ -1,6 +1,6 @@
 [versions]
 agp = "9.4.1"
-chaquopy = "17.0.0"
+chaquopy = "17.1.0"
 compileSdk = "37"
 ndk = "27.2.12479018"
 minSdk = "24"
@@ -103,7 +103,6 @@ media3-database = { group = "androidx.media3", name = "media3-database", version
 media3-ui = { group = "androidx.media3", name = "media3-ui", version.ref = "media3" }
 media3-effect = { group = "androidx.media3", name = "media3-effect", version.ref = "media3" }
 media3-ffmpeg-decoder = { group = "org.jellyfin.media3", name = "media3-ffmpeg-decoder", version.ref = "media3FfmpegDecoder" }
-ijkplayer = { group = "io.github.aruzhan", name = "ijkplayer-java", version = "1.0.0" }
 quickjs-wrapper-android = { group = "wang.harlon.quickjs", name = "wrapper-android", version.ref = "quickjsWrapper" }
 quickjs-wrapper-java = { group = "wang.harlon.quickjs", name = "wrapper-java", version.ref = "quickjsWrapper" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "androidxActivityCompose" }
