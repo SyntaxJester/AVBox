@@ -82,6 +82,10 @@
             android:name=".ui.activity.SearchActivity"
             android:windowSoftInputMode="stateHidden|adjustResize" />
         <activity
+            android:name=".web.WebHomeActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize" />
+        <activity
             android:name=".ui.activity.PartitionListActivity" />
         <activity
             android:name=".ui.activity.ThemeSettingsActivity" />
