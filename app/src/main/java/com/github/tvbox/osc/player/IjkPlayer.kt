@@ -47,16 +47,22 @@ class IjkPlayer(context: Context) : KernelPlayer() {
             com.github.tvbox.osc.util.HawkConfig.AUTO_SKIP_AD, false
         )
         
-        // 配置跳过时长（默认30秒片头，60秒片尾）
-        introDuration = 30_000L
-        outroDuration = 60_000L
-        adDuration = 30_000L
+        // 配置跳过时长（默认90秒片头，30秒片尾，与 AutoSkipHelper 默认值一致）
+        introDuration = 90_000L
+        outroDuration = 30_000L
+        adDuration = 20_000L
     }
 
     private fun setupListeners(player: MediaPlayer) {
         player.setOnPreparedListener {
             stateMachine.onPrepared()
             stateMachine.onRenderingStart()
+            // 在准备就绪后检查是否需要自动跳过
+            if (autoSkipIntro || autoSkipOutro || autoSkipAd) {
+                // 使用默认配置的时长进行自动跳过检查
+                // 实际项目中应传入更精确的时间阈值
+                autoSkip(introDuration)
+            }
             mPlayerEventListener?.onPrepared()
         }
         
