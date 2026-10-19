@@ -192,16 +192,3 @@ dependencies {
 configurations.configureEach {
     exclude(group = "io.antmedia", module = "rtmp-client")
 }
-
-android {
-    compileOptions {
-        isCoreLibraryDesugaringEnabled = true
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
-    kotlin {
-        compilerOptions {
-            jvmTarget.set("17")
-        }
-    }
-}
