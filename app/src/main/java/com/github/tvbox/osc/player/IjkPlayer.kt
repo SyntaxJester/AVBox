@@ -61,7 +61,7 @@ class IjkPlayer(context: Context) : KernelPlayer() {
             if (autoSkipIntro || autoSkipOutro || autoSkipAd) {
                 // 使用默认配置的时长进行自动跳过检查
                 // 实际项目中应传入更精确的时间阈值
-                autoSkip(introDuration)
+                autoSkip(mockMediaPlayer?.duration?.toLong() ?: 0L)
             }
             mPlayerEventListener?.onPrepared()
         }
@@ -168,7 +168,7 @@ class IjkPlayer(context: Context) : KernelPlayer() {
      * 自动跳过片头片尾
      * @param duration 视频总时长（毫秒）
      */
-    fun autoSkip(duraion: Long) {
+    fun autoSkip(duration: Long) {
         val currentTime = mockMediaPlayer?.currentPosition?.toLong() ?: 0L
         if (autoSkipIntro && currentTime < introDuration) {
             // 跳过片头
