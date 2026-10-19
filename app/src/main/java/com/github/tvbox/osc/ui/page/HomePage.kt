@@ -219,6 +219,16 @@ fun HomePage(
                                 }
                             },
                     )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = currentSource?.name?.takeIf { it.isNotEmpty() } ?: stringResource(R.string.home_subscription_source),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
                     Spacer(modifier = Modifier.width(2.dp))
                     Icon(
                         painter = painterResource(R.drawable.ic_arrow_down),
@@ -767,16 +777,6 @@ private fun HomeCapsule(
         )
         if (trailingArrow) {
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .size(18.dp)
-                    .offset(x = HomeCapsuleArrowInset),
-            )
-        }
-    }
-}
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
