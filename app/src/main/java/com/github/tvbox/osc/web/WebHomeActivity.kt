@@ -38,21 +38,11 @@ class WebHomeActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_web_home)
 
-        setupToolbar()
         setupWebView()
     }
 
-    private fun setupToolbar() {
-        setSupportActionBar(toolbar)
-        supportActionBar?.apply {
-            setDisplayHomeAsUpEnabled(true)
-            title = getString(R.string.web_home)
-        }
-        toolbar.setNavigationOnClickListener { finish() }
-    }
-
     private fun setupWebView() {
-        webView = view_web_home
+        webView = findViewById(R.id.webview)
         val settings = webView.settings
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
