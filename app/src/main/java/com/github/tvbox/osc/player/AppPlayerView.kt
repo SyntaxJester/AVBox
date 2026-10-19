@@ -390,6 +390,20 @@ open class AppPlayerView @JvmOverloads constructor(
             mCurrentPosition = 0
             mProgressSink?.saveProgress(progressKey(), 0L)
             reportPlayState()
+
+            // 自动连播下一集
+            if (com.github.tvbox.osc.util.KV.get(
+                    com.github.tvbox.osc.util.HawkConfig.AUTO_PLAY_NEXT, false
+                )
+            ) {
+                mPlayerContainer.postDelayed({
+                    try {
+                        onAutoPlayNext?.invoke()
+                    } catch (e: Exception) {
+                        com.github.tvbox.osc.util.LOG.e("AutoPlayNext failed: ${e.message}")
+                    }
+                }, 800L)
+            }
         }
 
         override fun onVideoSizeChanged(width: Int, height: Int) {

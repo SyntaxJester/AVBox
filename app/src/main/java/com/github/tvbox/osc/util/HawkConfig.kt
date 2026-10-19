@@ -50,6 +50,7 @@ object HawkConfig {
     const val AUTO_SKIP_INTRO = "auto_skip_intro"
     const val AUTO_SKIP_OUTRO = "auto_skip_outro"
     const val AUTO_SKIP_AD = "auto_skip_ad"
+    const val AUTO_PLAY_NEXT = "auto_play_next"
     const val PLAYER_HARDWARE_DECODE = "player_hardware_decode"
     const val DOH_JSON = "doh_json"
     const val LIVE_GROUP_INDEX = "live_group_index"

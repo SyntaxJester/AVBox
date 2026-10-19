@@ -102,6 +102,7 @@ data class SettingsState(
     val exoCacheSizeMb: Int,
     val dohIndex: Int,
     val autoSkipEnabled: Boolean,
+    val autoPlayNext: Boolean,
     val cacheSizeText: String = "",
 )
 
@@ -190,6 +191,7 @@ class SettingsViewModel : ViewModel() {
         exoCacheSizeMb = KV.get(HawkConfig.EXO_CACHE_SIZE_MB, HawkConfig.EXO_CACHE_SIZE_MB_DEFAULT),
         dohIndex = KV.get(HawkConfig.DOH_URL, 0),
         autoSkipEnabled = KV.get(HawkConfig.AUTO_SKIP_INTRO, false),
+        autoPlayNext = KV.get(HawkConfig.AUTO_PLAY_NEXT, false),
         cacheSizeText = cacheSizeText,
     )
 

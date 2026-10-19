@@ -100,6 +100,17 @@ fun PlaySettingsScreen(onNavigateBack: () -> Unit, vm: SettingsViewModel = viewM
                         },
                     )
                 }
+                // 自动连播下一集
+                SettingsCard(SettingsCardPosition.MIDDLE) {
+                    SettingsSwitchRow(
+                        title = "自动连播下一集",
+                        subtitle = "当前集播放结束后自动切换到下一集",
+                        checked = state.autoPlayNext,
+                        onCheckedChange = { enabled ->
+                            vm.put(HawkConfig.AUTO_PLAY_NEXT, enabled)
+                        },
+                    )
+                }
                 SettingsCard(SettingsCardPosition.MIDDLE) {
                     SettingsOptionMenuRow(
                         title = stringResource(R.string.settings_play_render),

@@ -28,6 +28,9 @@ class ExoPlayer(context: Context) : KernelPlayer() {
 
     private var engine: PlayerEngine? = null
 
+    /** 自动跳过片头片尾辅助器 */
+    private var autoSkipHelper: AutoSkipHelper? = null
+
     val stateMachine = PlaybackStateMachine()
 
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -85,6 +88,7 @@ class ExoPlayer(context: Context) : KernelPlayer() {
     }
 
     override fun setDataSource(path: String, headers: Map<String, String>?) {
+        stopAutoSkip()
         stateMachine.onContentReplaced()
         engine?.setDataSource(path, headers, KV.get(HawkConfig.PLAYER_IS_LIVE, false))
     }
@@ -159,6 +163,59 @@ class ExoPlayer(context: Context) : KernelPlayer() {
         engine?.seekTo(time)
     }
 
+    /**
+     * 启动自动跳过检查
+     */
+    private fun startAutoSkip() {
+        val intro = KV.get(HawkConfig.AUTO_SKIP_INTRO, false)
+        val outro = KV.get(HawkConfig.AUTO_SKIP_OUTRO, false)
+        val ad = KV.get(HawkConfig.AUTO_SKIP_AD, false)
+        if (!intro && !outro && !ad) return
+
+        if (autoSkipHelper == null) {
+            autoSkipHelper = AutoSkipHelper(appContext).apply {
+                setPlayerProxy(object : AutoSkipHelper.PlayerProxy {
+                    override fun getCurrentPosition(): Long = this@ExoPlayer.currentPosition
+                    override fun getDuration(): Long = this@ExoPlayer.duration
+                    override fun seekTo(position: Long) {
+                        this@ExoPlayer.seekTo(position)
+                    }
+                    override fun isPlaying(): Boolean = this@ExoPlayer.isPlaying
+                })
+                setSkipListener { type, from, to ->
+                    LOG.i("AutoSkip: $type from $from to $to")
+                }
+            }
+        } else {
+            autoSkipHelper?.reset()
+        }
+
+        // 优先使用外部注入的精确跳过配置，否则回退到用户配置/默认值
+        val cfg = pendingSkipConfig
+        if (!cfg.isNullOrBlank()) {
+            autoSkipHelper?.parseSkipInfo(cfg)
+        } else {
+            autoSkipHelper?.loadFromConfig()
+        }
+        autoSkipHelper?.startChecking()
+    }
+
+    /**
+     * 停止自动跳过检查
+     */
+    private fun stopAutoSkip() {
+        autoSkipHelper?.stopChecking()
+    }
+
+    /**
+     * 设置跳过配置（由上层从视频元数据注入）
+     */
+    fun setSkipConfig(json: String?) {
+        pendingSkipConfig = json
+    }
+
+    private var pendingSkipConfig: String? = null
+
     override val isPlaying: Boolean get() = engine?.isPlaying ?: false
 
     override val currentPosition: Long get() = engine?.currentPosition ?: 0L
@@ -221,7 +278,7 @@ class ExoPlayer(context: Context) : KernelPlayer() {
                 listener.onInfo(MEDIA_INFO_RENDERING_START, 0)
                 
                 // 自动跳过片头
-                checkAutoSkip(currentPosition, duration)
+                startAutoSkip()
             }
             return
         }

@@ -61,6 +61,36 @@ class VodInfo : Serializable {
     var des: String? = null
     @JvmField
     var playFlag: String? = null
+    
+    // 自动跳过时间配置（从 API 元数据获取，单位：毫秒）
+    @JvmField
+    var skipIntroStart: Long = 0L
+    @JvmField
+    var skipIntroEnd: Long = 90000L  // 默认 90s
+    @JvmField
+    var skipOutroStart: Long = 0L
+    @JvmField
+    var skipOutroEnd: Long = 30000L  // 默认 30s
+    @JvmField
+    var skipAdStart: Long = 0L
+    @JvmField
+    var skipAdEnd: Long = 20000L  // 默认 20s
+    
+    // 用于从 JSON 解析跳过时间
+    fun parseSkipTimesFromMetadata(metadataJson: String?) {
+        if (metadataJson.isNullOrBlank()) return
+        try {
+            val json = org.json.JSONObject(metadataJson)
+            skipIntroStart = json.optLong("skip_intro_start", 0L)
+            skipIntroEnd = json.optLong("skip_intro_end", 90000L)
+            skipOutroStart = json.optLong("skip_outro_start", 0L)
+            skipOutroEnd = json.optLong("skip_outro_end", 30000L)
+            skipAdStart = json.optLong("skip_ad_start", 0L)
+            skipAdEnd = json.optLong("skip_ad_end", 20000L)
+        } catch (e: Exception) {
+            // 解析失败时使用默认值
+        }
+    }
     @JvmField
     var playIndex: Int = 0
     @JvmField

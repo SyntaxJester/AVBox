@@ -15,15 +15,11 @@ class IjkPlayer(context: Context) : KernelPlayer() {
     val stateMachine = PlaybackStateMachine()
     private var pendingSpeed: Float? = null
     
-    // 自动跳过片头片尾配置（毫秒）
-    private var introDuration = 0L
-    private var outroDuration = 0L
-    private var adDuration = 0L
-    
-    // 是否开启自动跳过
-    private var autoSkipIntro = false
-    private var autoSkipOutro = false
-    private var autoSkipAd = false
+    /** 自动跳过辅助器 */
+    private var autoSkipHelper: AutoSkipHelper? = null
+
+    /** 外部注入的精确跳过配置（来自视频元数据） */
+    private var pendingSkipConfig: String? = null
 
     override val playState: PlayState
         get() = stateMachine.currentState
@@ -36,33 +32,21 @@ class IjkPlayer(context: Context) : KernelPlayer() {
         setupListeners(player)
         this.mockMediaPlayer = player
         
-        // 读取自动跳过配置
-        autoSkipIntro = com.github.tvbox.osc.util.KV.get(
-            com.github.tvbox.osc.util.HawkConfig.AUTO_SKIP_INTRO, false
-        )
-        autoSkipOutro = com.github.tvbox.osc.util.KV.get(
-            com.github.tvbox.osc.util.HawkConfig.AUTO_SKIP_OUTRO, false
-        )
-        autoSkipAd = com.github.tvbox.osc.util.KV.get(
-            com.github.tvbox.osc.util.HawkConfig.AUTO_SKIP_AD, false
-        )
-        
-        // 配置跳过时长（默认90秒片头，30秒片尾，与 AutoSkipHelper 默认值一致）
-        introDuration = 90_000L
-        outroDuration = 30_000L
-        adDuration = 20_000L
+        // 初始化自动跳过辅助器
+        autoSkipHelper = AutoSkipHelper(context).apply {
+            setMediaPlayer(player)
+            setSkipListener { type, from, to ->
+                LOG.i("$TAG AutoSkip: $type from $from to $to")
+            }
+        }
     }
 
     private fun setupListeners(player: MediaPlayer) {
         player.setOnPreparedListener {
             stateMachine.onPrepared()
             stateMachine.onRenderingStart()
-            // 在准备就绪后检查是否需要自动跳过
-            if (autoSkipIntro || autoSkipOutro || autoSkipAd) {
-                // 使用默认配置的时长进行自动跳过检查
-                // 实际项目中应传入更精确的时间阈值
-                autoSkip(mockMediaPlayer?.duration?.toLong() ?: 0L)
-            }
+            // 准备就绪后启动自动跳过检查
+            startAutoSkip()
             mPlayerEventListener?.onPrepared()
         }
         
@@ -99,6 +83,7 @@ class IjkPlayer(context: Context) : KernelPlayer() {
 
     override fun setDataSource(path: String, headers: Map<String, String>?) {
         val player = mockMediaPlayer ?: return
+        autoSkipHelper?.stopChecking()
         stateMachine.onContentReplaced()
         
         try {
@@ -150,6 +135,8 @@ class IjkPlayer(context: Context) : KernelPlayer() {
     }
 
     override fun release() {
+        autoSkipHelper?.release()
+        autoSkipHelper = null
         val player = mockMediaPlayer ?: return
         player.release()
         mockMediaPlayer = null
@@ -165,20 +152,38 @@ class IjkPlayer(context: Context) : KernelPlayer() {
     }
     
     /**
-     * 自动跳过片头片尾
-     * @param duration 视频总时长（毫秒）
+     * 启动自动跳过检查
      */
-    fun autoSkip(duration: Long) {
-        val currentTime = mockMediaPlayer?.currentPosition?.toLong() ?: 0L
-        if (autoSkipIntro && currentTime < introDuration) {
-            // 跳过片头
-            mockMediaPlayer?.seekTo(introDuration.toInt())
-            LOG.i("$TAG 自动跳过片头，从 ${currentTime}ms 跳到 ${introDuration}ms")
+    private fun startAutoSkip() {
+        val intro = com.github.tvbox.osc.util.KV.get(
+            com.github.tvbox.osc.util.HawkConfig.AUTO_SKIP_INTRO, false
+        )
+        val outro = com.github.tvbox.osc.util.KV.get(
+            com.github.tvbox.osc.util.HawkConfig.AUTO_SKIP_OUTRO, false
+        )
+        val ad = com.github.tvbox.osc.util.KV.get(
+            com.github.tvbox.osc.util.HawkConfig.AUTO_SKIP_AD, false
+        )
+        if (!intro && !outro && !ad) return
+
+        val helper = autoSkipHelper ?: return
+        helper.reset()
+
+        // 优先使用元数据中的精确配置，否则读取用户配置/默认值
+        val cfg = pendingSkipConfig
+        if (!cfg.isNullOrBlank()) {
+            helper.parseSkipInfo(cfg)
+        } else {
+            helper.loadFromConfig()
         }
-        if (autoSkipOutro && currentTime > duration - outroDuration) {
-            // 播放到最后几秒时提示或跳过
-            LOG.i("$TAG 接近片尾，${duration - currentTime}ms 后结束")
-        }
+        helper.startChecking()
+    }
+
+    /**
+     * 设置跳过配置（由上层从视频元数据注入）
+     */
+    fun setSkipConfig(json: String?) {
+        pendingSkipConfig = json
     }
 
     override val isPlaying: Boolean get() = mockMediaPlayer?.isPlaying ?: false
