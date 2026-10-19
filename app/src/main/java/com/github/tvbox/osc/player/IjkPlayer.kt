@@ -7,9 +7,11 @@ import android.view.SurfaceHolder
 import com.github.tvbox.osc.player.state.PlayState
 import com.github.tvbox.osc.player.state.PlaybackStateMachine
 import com.github.tvbox.osc.util.LOG
+import com.github.tvbox.osc.util.KV
+import com.github.tvbox.osc.util.HawkConfig
 import kotlinx.coroutines.flow.StateFlow
 
-class IjkPlayer(context: Context) : KernelPlayer() {
+class IjkPlayer(private val context: Context) : KernelPlayer() {
     private val TAG = "IjkPlayer"
     private var mockMediaPlayer: MediaPlayer? = null
     val stateMachine = PlaybackStateMachine()
