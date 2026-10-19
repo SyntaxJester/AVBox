@@ -33,21 +33,21 @@ class WebHomeBridge(private val apiConfig: ApiConfig) {
 
     @JavascriptInterface
     fun vodHome(params: String): String {
-        LOG.i("echo-webhome-vodHome: $params")
+            LOG.i("vodHome: $params")
         return try {
             val sourceBean = apiConfig.getHomeSourceBean()
             val sp = apiConfig.getCSP(sourceBean)
             val result = sp.homeContent(false)
             successResult(result)
         } catch (e: Exception) {
-            LOG.e(TAG, "vodHome error: ${e.message}")
+            LOG.e("vodHome error: ${e.message}")
             errorResult(e.message ?: "unknown error")
         }
     }
 
     @JavascriptInterface
     fun vodCategory(tid: String, page: String, params: String): String {
-        LOG.i("echo-webhome-vodCategory: tid=$tid page=$page")
+            LOG.i("vodCategory: tid=$tid page=$page")
         return try {
             val obj = JSONObject(params)
             val filter = obj.optBoolean("filter", false)
@@ -61,7 +61,7 @@ class WebHomeBridge(private val apiConfig: ApiConfig) {
             val result = sp.categoryContent(tid, page, filter, extend)
             successResult(result)
         } catch (e: Exception) {
-            LOG.e(TAG, "vodCategory error: ${e.message}")
+            LOG.e("vodCategory error: ${e.message}")
             errorResult(e.message ?: "unknown error")
         }
     }
@@ -75,7 +75,7 @@ class WebHomeBridge(private val apiConfig: ApiConfig) {
             val result = sp.detailContent(listOf(id))
             successResult(result)
         } catch (e: Exception) {
-            LOG.e(TAG, "vod error: ${e.message}")
+            LOG.e("vod error: ${e.message}")
             errorResult(e.message ?: "unknown error")
         }
     }
@@ -89,7 +89,7 @@ class WebHomeBridge(private val apiConfig: ApiConfig) {
             val result = sp.searchContent(keyword, true)
             successResult(result)
         } catch (e: Exception) {
-            LOG.e(TAG, "search error: ${e.message}")
+            LOG.e("search error: ${e.message}")
             errorResult(e.message ?: "unknown error")
         }
     }

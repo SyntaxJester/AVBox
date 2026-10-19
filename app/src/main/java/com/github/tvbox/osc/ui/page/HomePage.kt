@@ -40,6 +40,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.Icon
@@ -265,7 +266,7 @@ fun HomePage(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = Icons.Default.Web,
+                    imageVector = Icons.Filled.Home,
                     contentDescription = stringResource(R.string.web_home),
                     tint = MaterialTheme.colorScheme.onSurface,
                 )

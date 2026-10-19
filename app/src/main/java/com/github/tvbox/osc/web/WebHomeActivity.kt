@@ -41,6 +41,10 @@ class WebHomeActivity : BaseActivity() {
         setupWebView()
     }
 
+    override fun init() {
+        // No-op for webhome activity
+    }
+
     private fun setupWebView() {
         webView = findViewById(R.id.webview)
         val settings = webView.settings
@@ -62,7 +66,7 @@ class WebHomeActivity : BaseActivity() {
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                LOG.i(TAG, "page finished: $url")
+                LOG.i("page finished: $url")
             }
 
             override fun shouldOverrideUrlLoading(view: WebView?, request: android.webkit.WebResourceRequest?): Boolean {
