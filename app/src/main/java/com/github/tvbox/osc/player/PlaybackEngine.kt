@@ -62,6 +62,7 @@ class PlaybackEngine(context: Context) : PlaybackHostApi {
     private var pageRef: WeakReference<PlaybackPage>? = null
     private var session: PlaybackSession? = null
     private var released: Boolean = false
+    private var autoPlayNextCallback: (() -> Unit)? = null
 
     private var liveMode: Boolean = false
     private var serviceLostKept: Boolean = false
@@ -119,6 +120,10 @@ class PlaybackEngine(context: Context) : PlaybackHostApi {
                     + " started=" + controller.isPlaybackStarted()
                     + " url=" + controller.webPlayUrl()
             )
+        }
+        // 播放完成 → 自动连播下一集
+        if (playState == PlayState.COMPLETED) {
+            tryAutoPlayNext()
         }
         if (playState == PlayState.PLAYING) {
             if (controller.isConfirmedAudioOnly()) {
@@ -246,9 +251,32 @@ class PlaybackEngine(context: Context) : PlaybackHostApi {
             videoView.attachContainerTo(page.renderSlot())
             videoView.alignRenderViewToConfig(configuredRenderType())
         }
+        // 注入自动连播回调
+        videoView.setAutoPlayNextCallback(autoPlayNextCallback)
         cancelIdleRelease()
         consumeServiceLostKeep(false)
         LOG.i(TAG + " attach page=" + page.hashCode() + " key=" + (session?.playbackKey() ?: "-"))
+    }
+
+    /** 注入自动连播下一集回调（由宿主页面设置） */
+    fun setAutoPlayNextCallback(cb: (() -> Unit)?) {
+        autoPlayNextCallback = cb
+        videoView.setAutoPlayNextCallback(cb)
+    }
+
+    /** 触发自动连播下一集 */
+    private fun tryAutoPlayNext() {
+        if (released || liveMode) return
+        if (!KV.get(HawkConfig.AUTO_PLAY_NEXT, false)) return
+        val cb = autoPlayNextCallback ?: return
+        LOG.i(TAG + " auto-play-next triggered")
+        main.postDelayed({
+            try {
+                cb.invoke()
+            } catch (e: Exception) {
+                LOG.e(TAG + " auto-play-next failed: ${e.message}")
+            }
+        }, 800L)
     }
 
     fun detach(page: PlaybackPage) {

@@ -50,6 +50,13 @@ open class AppPlayerView @JvmOverloads constructor(
 
     protected var mProgressSink: ProgressSink? = null
 
+    /** 自动连播下一集回调（由宿主页面注入） */
+    protected var onAutoPlayNext: (() -> Unit)? = null
+
+    fun setAutoPlayNextCallback(cb: (() -> Unit)?) {
+        onAutoPlayNext = cb
+    }
+
     protected val mPlayerContainer: FrameLayout = FrameLayout(context)
 
     protected var mRenderView: PlayerRenderView? = null
