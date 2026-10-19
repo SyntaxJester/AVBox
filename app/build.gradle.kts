@@ -79,6 +79,13 @@ android {
         targetCompatibility = JavaVersion.VERSION_21
     }
 
+    // Disable Gradle JVM toolchain auto-download (causes failures on aarch64)
+    tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
+        compilerOptions {
+            freeCompilerArgs.addAll("-Xjdk-release=21")
+        }
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true

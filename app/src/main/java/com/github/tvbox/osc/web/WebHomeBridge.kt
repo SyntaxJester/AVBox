@@ -1,6 +1,8 @@
 package com.github.tvbox.osc.web
 
 import android.webkit.JavascriptInterface
+import android.util.Log
+import com.github.tvbox.osc.R
 import com.github.tvbox.osc.api.ApiConfig
 import com.github.tvbox.osc.util.LOG
 import org.json.JSONObject
