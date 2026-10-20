@@ -81,8 +81,8 @@ class WebHomeActivity : BaseActivity() {
             }
         }
 
-        // 加载 eclipse 主题首页
-        webView.loadUrl("file:///android_asset/webhome/eclipse.html")
+        // 加载简约 HTML 主页
+        webView.loadUrl("file:///android_asset/webhome/index.html")
     }
 
     /**
