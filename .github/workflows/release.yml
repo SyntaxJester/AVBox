@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version / tag (e.g. v1.3.6)'
+        description: 'Release version / tag (e.g. v1.3.7)'
         required: false
-        default: 'v1.3.6'
+        default: 'v1.3.7'
       prerelease:
         description: '标记为 Pre-release'
         type: boolean
