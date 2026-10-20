@@ -40,7 +40,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.Icon
@@ -252,22 +251,6 @@ fun HomePage(
                 Icon(
                     painter = painterResource(R.drawable.ic_more_vert),
                     contentDescription = stringResource(R.string.search_settings),
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-            Spacer(Modifier.width(HomeTopBarControlSpacing))
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .glassTopBarSurface(CircleShape, MaterialTheme.colorScheme.surfaceBright)
-                    .clickable {
-                        context.startActivity(Intent(context, WebHomeActivity::class.java))
-                    },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Home,
-                    contentDescription = stringResource(R.string.web_home),
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
             }
