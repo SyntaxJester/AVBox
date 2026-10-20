@@ -58,21 +58,20 @@
 
         <activity
             android:name=".ui.activity.MainActivity"
-            android:exported="false"
+            android:exported="true"
             android:theme="@style/AppTheme.Splash"
             android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
         </activity>
 
         <activity
             android:name=".web.WebHomeActivity"
-            android:exported="true"
-            android:theme="@style/AppTheme.NoActionBar"
-            android:configChanges="orientation|screenSize">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
+            android:exported="false"
+            android:configChanges="orientation|screenSize" />
 
         <activity
             android:name=".ui.activity.LivePlayActivity"
