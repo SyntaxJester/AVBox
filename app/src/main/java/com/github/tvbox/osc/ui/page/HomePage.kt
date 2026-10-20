@@ -261,6 +261,22 @@ fun HomePage(
                     .size(40.dp)
                     .glassTopBarSurface(CircleShape, MaterialTheme.colorScheme.surfaceBright)
                     .clickable {
+                        context.startActivity(Intent(context, WebHomeActivity::class.java))
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Home,
+                    contentDescription = stringResource(R.string.web_home),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            Spacer(Modifier.width(HomeTopBarControlSpacing))
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .glassTopBarSurface(CircleShape, MaterialTheme.colorScheme.surfaceBright)
+                    .clickable {
                         context.startActivity(Intent(context, SearchActivity::class.java))
                     },
                 contentAlignment = Alignment.Center,
