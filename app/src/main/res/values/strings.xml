@@ -626,4 +626,8 @@
     <string name="osd_preload">预载</string>
     <string name="osd_cache">缓存</string>
     <string name="toast_storage_asked_by_spider">权限由爬虫模块申请</string>
+
+    <!-- WebHome (HTML 主题页) -->
+    <string name="webhome_title">WebHome</string>
+    <string name="webhome_html_home">HTML主页</string>
 </resources>
