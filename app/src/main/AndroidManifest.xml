@@ -98,12 +98,6 @@
             android:exported="false"
             android:theme="@style/AppTheme.NoActionBar" />
 
-        <activity
-            android:name=".web.WebHomeActivity"
-            android:exported="true"
-            android:screenOrientation="fullSensor"
-            android:theme="@style/AppTheme.NoActionBar" />
-
         <service
             android:name=".dlna.DLNACastService"
             android:exported="false" />
