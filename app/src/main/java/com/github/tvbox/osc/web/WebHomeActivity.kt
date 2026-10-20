@@ -53,7 +53,7 @@ class WebHomeActivity : ComponentActivity() {
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                SpiderDebug.log("webhome", "page finished: $url")
+                SpiderDebug.log("webhome: page finished: $url")
                 // 页面加载完成后再次注入（防覆盖）
                 injectBootstrapScript()
             }
