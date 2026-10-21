@@ -73,8 +73,8 @@ class WebHomeActivity : ComponentActivity() {
     }
 
     private fun loadPage() {
-        val url = "file:///android_asset/webhome/$THEME_NAME"
-        webView.loadUrl(url)
+        val html = assets.open("webhome/$THEME_NAME").bufferedReader().use { it.readText() }
+        webView.loadData(html, "text/html", "UTF-8")
     }
 
     /**
