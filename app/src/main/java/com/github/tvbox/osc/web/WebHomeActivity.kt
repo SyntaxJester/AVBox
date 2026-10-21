@@ -1,6 +1,5 @@
 package com.github.tvbox.osc.web
 
-import android.app.Activity
 import android.os.Bundle
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
@@ -8,7 +7,6 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
 import androidx.core.view.WindowCompat
-import com.github.tvbox.osc.R
 import com.github.catvod.crawler.SpiderDebug
 
 /**

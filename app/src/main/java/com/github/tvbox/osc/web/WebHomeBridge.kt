@@ -29,7 +29,6 @@ class WebHomeBridge(
 ) {
 
     companion object {
-        private const val TAG = "webhome-bridge"
         private const val CHUNK_SIZE = WebHomeProtocol.CHUNK_SIZE
         private const val INLINE_LIMIT = WebHomeProtocol.INLINE_LIMIT
     }
