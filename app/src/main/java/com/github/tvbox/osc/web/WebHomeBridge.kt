@@ -44,7 +44,7 @@ class WebHomeBridge(
      */
     @JavascriptInterface
     fun invoke(requestId: String, method: String, payloadJson: String) {
-        SpiderDebug.log(TAG, "invoke requestId=$requestId method=$method")
+        SpiderDebug.log("[webhome] invoke requestId=$requestId method=$method")
 
         Thread {
             try {
@@ -52,7 +52,7 @@ class WebHomeBridge(
                 val result = executeMethod(method, payload)
                 postResolve(requestId, result)
             } catch (e: Exception) {
-                SpiderDebug.log(TAG, "invoke failed: ${e.message}")
+                SpiderDebug.log("[webhome] invoke failed: ${e.message}")
                 postReject(requestId, e.message ?: "Unknown error", "")
             }
         }.start()
@@ -104,7 +104,7 @@ class WebHomeBridge(
         val filter = payload.optBoolean("filter", false)
         val extend = payload.optJSONObject("extend")?.toString() ?: "{}"
         
-        SpiderDebug.log(TAG, "vod.category typeId=$typeId page=$page filter=$filter extend=$extend")
+        SpiderDebug.log("[webhome] vod.category typeId=$typeId page=$page filter=$filter extend=$extend")
         
         // 演示数据 - 模拟真实的 vod.category 响应结构
         val itemsJson = """[{
@@ -133,7 +133,7 @@ class WebHomeBridge(
         val title = payload.optString("title", "")
         val pic = payload.optString("pic", "")
         
-        SpiderDebug.log(TAG, "openDetail siteKey=$siteKey vodId=$vodId title=$title")
+        SpiderDebug.log("[webhome] openDetail siteKey=$siteKey vodId=$vodId title=$title")
         
         // TODO: 启动 DetailActivity 或 DetailActivity.start(activity, ...)
         return "{}"
@@ -148,7 +148,7 @@ class WebHomeBridge(
         val content = payload.optString("content", "")
         val remarks = payload.optString("remarks", "")
         
-        SpiderDebug.log(TAG, "playVod siteKey=$siteKey vodId=$vodId title=$title")
+        SpiderDebug.log("[webhome] playVod siteKey=$siteKey vodId=$vodId title=$title")
         
         // TODO: 启动 VideoActivity
         // val intent = Intent(activity, VideoActivity::class.java).apply {
@@ -166,13 +166,13 @@ class WebHomeBridge(
 
     private fun handleSearch(payload: JSONObject): String {
         val keyword = payload.optString("keyword", "")
-        SpiderDebug.log(TAG, "search keyword=$keyword")
+        SpiderDebug.log("[webhome] search keyword=$keyword")
         
         try {
             val intent = Intent(activity, SearchActivity::class.java)
             activity.startActivity(intent)
         } catch (e: Exception) {
-            SpiderDebug.log(TAG, "search failed: ${e.message}")
+            SpiderDebug.log("[webhome] search failed: ${e.message}")
         }
         
         return "{}"
@@ -180,37 +180,37 @@ class WebHomeBridge(
 
     private fun handleOpenSite(): String {
         // 打开站点选择页
-        SpiderDebug.log(TAG, "openSite")
+        SpiderDebug.log("[webhome] openSite")
         try {
             val intent = Intent(activity, MainActivity::class.java)
             intent.putExtra("action", "open_sites")
             activity.startActivity(intent)
         } catch (e: Exception) {
-            SpiderDebug.log(TAG, "openSite failed: ${e.message}")
+            SpiderDebug.log("[webhome] openSite failed: ${e.message}")
         }
         return "{}"
     }
 
     private fun handleOpenVod(): String {
         // 打开影片列表页
-        SpiderDebug.log(TAG, "openVod")
+        SpiderDebug.log("[webhome] openVod")
         try {
             val intent = Intent(activity, MainActivity::class.java)
             activity.startActivity(intent)
         } catch (e: Exception) {
-            SpiderDebug.log(TAG, "openVod failed: ${e.message}")
+            SpiderDebug.log("[webhome] openVod failed: ${e.message}")
         }
         return "{}"
     }
 
     private fun handleOpenSetting(): String {
         // 打开设置页
-        SpiderDebug.log(TAG, "openSetting")
+        SpiderDebug.log("[webhome] openSetting")
         try {
             val intent = Intent(activity, PreferenceSettingsActivity::class.java)
             activity.startActivity(intent)
         } catch (e: Exception) {
-            SpiderDebug.log(TAG, "openSetting failed: ${e.message}")
+            SpiderDebug.log("[webhome] openSetting failed: ${e.message}")
         }
         return "{}"
     }
@@ -229,7 +229,7 @@ class WebHomeBridge(
 
     private fun handleExtToast(payload: JSONObject): String {
         val message = payload.optString("message", "")
-        SpiderDebug.log(TAG, "toast: $message")
+        SpiderDebug.log("[webhome] toast: $message")
         
         // TODO: 显示 Toast
         // Toast.makeText(activity, message, Toast.LENGTH_SHORT).show()
