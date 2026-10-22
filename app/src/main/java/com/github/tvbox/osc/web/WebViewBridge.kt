@@ -97,7 +97,7 @@ class WebViewBridge(
                     }
                 }
                 else -> {
-                    val bytes = response.body?.bytes() ?: ByteArray(0)
+                    val bytes = response.body?.bytes ?: ByteArray(0)
                     result.put("arraybuffer", Base64.encodeToString(bytes, Base64.NO_WRAP))
                     result.put("body", "")
                 }
