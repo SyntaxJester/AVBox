@@ -72,8 +72,8 @@ class WebViewBridge(
             result.put("status", status)
             result.put("responseType", responseType)
             result.put("headers", JSONObject().also {
-                for (i in 0 until respHeaders.size()) {
-                    it.put(respHeaders.name(i), respHeaders.value(i))
+                respHeaders.names().forEach { name ->
+                    it.put(name, respHeaders.value(name))
                 }
             })
 
