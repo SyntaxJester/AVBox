@@ -61,7 +61,6 @@ class WebViewBridge(
                 "DELETE" -> requestBuilder.delete(requestBody)
                 else -> requestBuilder.get()
             }
-            request.build()
 
             val response = client.newCall(request).execute()
             val ok = response.code in 200..299
@@ -105,7 +104,7 @@ class WebViewBridge(
             }
             result.toString()
         } catch (e: Exception) {
-            LOG.e(TAG, "req failed: ${e.message}")
+            LOG.e("req failed: ${e.message}")
             val result = JSONObject()
             result.put("ok", false)
             result.put("status", 0)
@@ -126,7 +125,7 @@ class WebViewBridge(
      */
     @JavascriptInterface
     fun play(url: String?, title: String?, opts: String?): String {
-        LOG.i(TAG, "play url=$url title=$title")
+        LOG.i("play url=$url title=$title")
         val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse(url ?: ""))
         intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
         mainHandler.post { context.startActivity(intent) }
@@ -138,11 +137,50 @@ class WebViewBridge(
      */
     @JavascriptInterface
     fun open(url: String?): String {
-        LOG.i(TAG, "open url=$url")
+        LOG.i("open url=$url")
         val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse(url ?: ""))
         intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
         mainHandler.post { context.startActivity(intent) }
         return "{\"ok\":true}"
+    }
+
+    /**
+     * fm.pan.check([{type,url,password}]) => [{ok,url,valid}]
+     */
+    @JavascriptInterface
+    fun panCheck(opts: String?): String {
+        val arr = JSONArray(opts ?: "[]")
+        val result = JSONArray()
+        for (i in 0 until arr.length()) {
+            val item = arr.getJSONObject(i)
+            val check = JSONObject()
+            check.put("ok", true)
+            check.put("url", item.optString("url", ""))
+            check.put("valid", true)
+            result.put(check)
+        }
+        return result.toString()
+    }
+
+    /**
+     * fm.vodInline(payload) - inline playback
+     */
+    @JavascriptInterface
+    fun vodInline(payload: String?): String {
+        LOG.i("vodInline: $payload")
+        return "{\"ok\":true}"
+    }
+
+    /**
+     * fm.pan.play({type,url,password,title,name,...})
+     */
+    @JavascriptInterface
+    fun panPlay(opts: String?): String {
+        val o = JSONObject(opts ?: "{}")
+        val url = o.optString("url", "")
+        val title = o.optString("title", o.optString("name", ""))
+        LOG.i("panPlay url=$url title=$title")
+        return play(url, title, opts)
     }
 
     /**
@@ -189,49 +227,22 @@ class WebViewBridge(
     fun restoreChrome(): String = setChrome("{\"hidden\":false}")
 
     /**
-     * fm.config() - get config (placeholder)
+     * fm.ui.openUrl(url) - open URL in browser
      */
     @JavascriptInterface
-    fun config(): String = "{\"ok\":true,\"type\":\"none\"}"
-
-    /**
-     * fm.pan.check([{type,url,password}]) => [{ok,url,valid}]
-     */
-    @JavascriptInterface
-    fun panCheck(opts: String?): String {
-        val arr = JSONArray(opts ?: "[]")
-        val result = JSONArray()
-        for (i in 0 until arr.length()) {
-            val item = arr.getJSONObject(i)
-            val check = JSONObject()
-            check.put("ok", true)
-            check.put("url", item.optString("url", ""))
-            check.put("valid", true)
-            result.put(check)
-        }
-        return result.toString()
-    }
-
-    /**
-     * fm.vodInline(payload) - inline playback (placeholder)
-     */
-    @JavascriptInterface
-    fun vodInline(payload: String?): String {
-        LOG.i(TAG, "vodInline: $payload")
+    fun openUrl(url: String?): String {
+        LOG.i("ui.openUrl: $url")
+        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse(url ?: ""))
+        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        mainHandler.post { context.startActivity(intent) }
         return "{\"ok\":true}"
     }
 
     /**
-     * fm.pan.play({type,url,password,title,name,...})
+     * fm.config() - get config (placeholder)
      */
     @JavascriptInterface
-    fun panPlay(opts: String?): String {
-        val o = JSONObject(opts ?: "{}")
-        val url = o.optString("url", "")
-        val title = o.optString("title", o.optString("name", ""))
-        LOG.i(TAG, "panPlay url=$url title=$title")
-        return play(url, title, opts)
-    }
+    fun config(): String = "{\"ok\":true,\"type\":\"none\"}"
 
     private fun resolveUrl(url: String): String {
         if (url.startsWith("http://") || url.startsWith("https://")) return url
