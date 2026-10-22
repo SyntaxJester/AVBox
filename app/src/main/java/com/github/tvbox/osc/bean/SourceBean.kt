@@ -75,6 +75,12 @@ class SourceBean {
             field = safeString(value)
         }
 
+    var homePage: String? = null
+        get() = safeString(field)
+        set(value) {
+            field = safeString(value)
+        }
+
     private var hide: Int = 0
 
     private var indexs: Int = 0
