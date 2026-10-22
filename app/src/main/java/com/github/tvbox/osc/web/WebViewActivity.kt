@@ -77,7 +77,7 @@ class WebViewActivity : AppCompatActivity() {
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                     val reqUrl = request?.url?.toString() ?: return false
-                    LOG.i(TAG, "shouldOverrideUrlLoading: $reqUrl")
+                    LOG.i("shouldOverrideUrlLoading: $reqUrl")
                     if (reqUrl.startsWith("http://") || reqUrl.startsWith("https://")) {
                         view?.loadUrl(reqUrl)
                         return false
