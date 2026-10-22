@@ -40,7 +40,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.Icon
@@ -85,7 +84,6 @@ import com.github.tvbox.osc.net.SiteSearch
 import com.github.tvbox.osc.ui.activity.ConfigManageActivity
 import com.github.tvbox.osc.ui.activity.PartitionListActivity
 import com.github.tvbox.osc.ui.activity.SearchActivity
-import com.github.tvbox.osc.web.WebHomeActivity
 import com.github.tvbox.osc.ui.activity.SearchViewModel
 import com.github.tvbox.osc.ui.components.AVBoxBottomSheet
 import com.github.tvbox.osc.ui.components.AVBoxOptionMenuAction
@@ -242,22 +240,6 @@ fun HomePage(
             }
         },
         actions = {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .glassTopBarSurface(CircleShape, MaterialTheme.colorScheme.surfaceBright)
-                    .clickable {
-                        context.startActivity(Intent(context, WebHomeActivity::class.java))
-                    },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Home,
-                    contentDescription = stringResource(R.string.webhome_html_home),
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-            Spacer(Modifier.width(HomeTopBarControlSpacing))
             Box(
                 modifier = Modifier
                     .size(40.dp)

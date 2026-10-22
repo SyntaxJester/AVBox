@@ -92,12 +92,6 @@
         <activity
             android:name=".ui.activity.PreferenceSettingsActivity" />
 
-        <activity
-            android:name=".web.WebHomeActivity"
-            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
-            android:exported="false"
-            android:theme="@style/AppTheme.NoActionBar" />
-
         <service
             android:name=".dlna.DLNACastService"
             android:exported="false" />
