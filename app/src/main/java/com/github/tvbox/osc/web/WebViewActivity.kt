@@ -56,7 +56,7 @@ class WebViewActivity : AppCompatActivity() {
 
         val url = intent.getStringExtra(EXTRA_URL) ?: "file:///android_asset/html/index融合.html"
         val title = intent.getStringExtra(EXTRA_TITLE) ?: url
-        window.title = title
+        supportActionBar?.title = title
 
         webView = findViewById(R.id.webView)
         bridge = WebViewBridge(this, webView)
