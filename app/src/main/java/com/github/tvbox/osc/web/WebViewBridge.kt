@@ -2,27 +2,22 @@ package com.github.tvbox.osc.web
 
 import android.content.Context
 import android.net.Uri
-import android.util.Log
+import android.os.Handler
+import android.os.Looper
+import android.util.Base64
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
-import androidx.annotation.Keep
 import com.github.tvbox.osc.server.ControlManager
 import com.github.tvbox.osc.util.LOG
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.BufferedReader
-import java.io.InputStreamReader
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
 
-@Keep
 class WebViewBridge(
     private val context: Context,
     private val webView: WebView
@@ -38,6 +33,8 @@ class WebViewBridge(
             .build()
     }
 
+    private val mainHandler = Handler(Looper.getMainLooper())
+
     /**
      * fm.req(url, opts) => Promise<{ok, status, body, headers, data}>
      */
@@ -45,7 +42,6 @@ class WebViewBridge(
     fun req(url: String?, opts: String?): String {
         val o = JSONObject(opts ?: "{}")
         val method = o.optString("method", "GET").uppercase()
-        val timeoutSec = o.optLong("timeout", 15L)
         val responseType = o.optString("responseType", "json")
         val headers = o.optJSONObject("headers") ?: JSONObject()
         val body = o.optString("body", "")
@@ -89,21 +85,21 @@ class WebViewBridge(
             }
 
             val responseBody = response.body?.string() ?: ""
-            
+
             when (responseType) {
                 "text" -> result.put("body", responseBody)
                 "json" -> {
                     try {
-                        result.put("body", JSONObject(responseBody))
-                        result.put("data", JSONObject(responseBody))
+                        val jsonObj = JSONObject(responseBody)
+                        result.put("body", jsonObj)
+                        result.put("data", jsonObj)
                     } catch (e: Exception) {
                         result.put("body", responseBody)
                     }
                 }
                 else -> {
-                    // arraybuffer - 返回 base64
                     val bytes = response.body?.bytes() ?: ByteArray(0)
-                    result.put("arraybuffer", android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP))
+                    result.put("arraybuffer", Base64.encodeToString(bytes, Base64.NO_WRAP))
                     result.put("body", "")
                 }
             }
@@ -120,36 +116,32 @@ class WebViewBridge(
     }
 
     /**
-     * fm.res(url, opts) - 资源请求（同 req）
+     * fm.res(url, opts) - resource request (alias for req)
      */
     @JavascriptInterface
     fun res(url: String?, opts: String?): String = req(url, opts)
 
     /**
-     * fm.play(url, title, opts?) - 播放媒体
+     * fm.play(url, title, opts?) - play media
      */
     @JavascriptInterface
     fun play(url: String?, title: String?, opts: String?): String {
         LOG.i(TAG, "play url=$url title=$title")
-        CoroutineScope(Dispatchers.Main).launch {
-            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse(url ?: ""))
-            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(intent)
-        }
+        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse(url ?: ""))
+        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        mainHandler.post { context.startActivity(intent) }
         return "{\"ok\":true,\"type\":\"play\"}"
     }
 
     /**
-     * fm.open(url) - 打开 URL
+     * fm.open(url) - open URL in browser/app
      */
     @JavascriptInterface
     fun open(url: String?): String {
         LOG.i(TAG, "open url=$url")
-        CoroutineScope(Dispatchers.Main).launch {
-            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse(url ?: ""))
-            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(intent)
-        }
+        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse(url ?: ""))
+        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        mainHandler.post { context.startActivity(intent) }
         return "{\"ok\":true}"
     }
 
@@ -167,14 +159,14 @@ class WebViewBridge(
     }
 
     /**
-     * fm.ui.setChrome({ hidden }) - 隐藏系统 UI
+     * fm.ui.setChrome({ hidden }) - hide/show system UI
      */
     @JavascriptInterface
     fun setChrome(opts: String?): String {
         val o = JSONObject(opts ?: "{}")
         val hidden = o.optBoolean("hidden", false)
-        CoroutineScope(Dispatchers.Main).launch {
-            val activity = context as? android.app.Activity ?: return@launch
+        mainHandler.post {
+            val activity = context as? android.app.Activity ?: return@post
             val window = activity.window
             if (hidden) {
                 window.decorView.systemUiVisibility = (
@@ -191,18 +183,16 @@ class WebViewBridge(
     }
 
     /**
-     * fm.ui.restoreChrome() - 恢复系统 UI
+     * fm.ui.restoreChrome() - restore system UI
      */
     @JavascriptInterface
     fun restoreChrome(): String = setChrome("{\"hidden\":false}")
 
     /**
-     * fm.config() - 获取配置
+     * fm.config() - get config (placeholder)
      */
     @JavascriptInterface
-    fun config(): String {
-        return "{\"ok\":true,\"type\":\"none\"}"
-    }
+    fun config(): String = "{\"ok\":true,\"type\":\"none\"}"
 
     /**
      * fm.pan.check([{type,url,password}]) => [{ok,url,valid}]
@@ -223,7 +213,7 @@ class WebViewBridge(
     }
 
     /**
-     * fm.vodInline(payload) - 内嵌播放（占位）
+     * fm.vodInline(payload) - inline playback (placeholder)
      */
     @JavascriptInterface
     fun vodInline(payload: String?): String {
