@@ -68,7 +68,6 @@ class WebViewActivity : AppCompatActivity() {
             settings.allowFileAccess = true
             settings.allowContentAccess = true
             settings.loadWithOverviewMode = true
-            settings.useWideViewSafeArea = true
             settings.cacheMode = WebSettings.LOAD_DEFAULT
             isHorizontalScrollBarEnabled = false
             isVerticalScrollBarEnabled = false
