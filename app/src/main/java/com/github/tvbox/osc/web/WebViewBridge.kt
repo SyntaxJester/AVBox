@@ -56,10 +56,10 @@ class WebViewBridge(
 
             val requestBody = if (body.isNotEmpty()) body.toRequestBody("application/x-www-form-urlencoded".toMediaTypeOrNull()) else null
             val request = when (method) {
-                "POST" -> requestBuilder.post(requestBody ?: "".toRequestBody(null))
-                "PUT" -> requestBuilder.put(requestBody ?: "".toRequestBody(null))
-                "DELETE" -> requestBuilder.delete(requestBody)
-                else -> requestBuilder.get()
+                "POST" -> requestBuilder.post(requestBody ?: "".toRequestBody(null)).build()
+                "PUT" -> requestBuilder.put(requestBody ?: "".toRequestBody(null)).build()
+                "DELETE" -> requestBuilder.delete(requestBody).build()
+                else -> requestBuilder.get().build()
             }
 
             val response = client.newCall(request).execute()
