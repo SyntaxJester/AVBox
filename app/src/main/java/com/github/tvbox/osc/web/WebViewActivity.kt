@@ -3,7 +3,6 @@ package com.github.tvbox.osc.web
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import android.view.View
 import android.view.WindowManager
@@ -54,7 +53,7 @@ class WebViewActivity : AppCompatActivity() {
 
         setContentView(R.layout.activity_web_home)
 
-        val url = intent.getStringExtra(EXTRA_URL) ?: "file:///android_asset/html/index融合.html"
+        val url = intent.getStringExtra(EXTRA_URL) ?: ""
         val title = intent.getStringExtra(EXTRA_TITLE) ?: url
         supportActionBar?.title = title
 
@@ -62,30 +61,47 @@ class WebViewActivity : AppCompatActivity() {
         bridge = WebViewBridge(this, webView)
 
         webView.apply {
+            // 性能优化：开启硬件加速渲染层
+            setLayerType(View.LAYER_TYPE_HARDWARE, null)
+
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.databaseEnabled = true
+
+            // 本地文件访问权限（关键：允许 file:// 页面加载同目录资源）
             settings.allowFileAccess = true
             settings.allowContentAccess = true
+            @Suppress("DEPRECATION")
+            settings.allowFileAccessFromFileURLs = true
+            @Suppress("DEPRECATION")
+            settings.allowUniversalAccessFromFileURLs = true
+
+            // 缓存策略：优先用缓存，加快二次打开
+            settings.cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
+            settings.setAppCacheEnabled(true)  // deprecated but still effective on many devices
+
+            // 视口与缩放
             settings.loadWithOverviewMode = true
-            settings.cacheMode = WebSettings.LOAD_DEFAULT
+            settings.useWideViewPort = true
+            settings.setSupportZoom(false)
+            settings.builtInZoomControls = false
+            settings.displayZoomControls = false
+
+            // 混合内容（http 资源在 https 页面中）
+            @Suppress("DEPRECATION")
+            settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+
+            // 关闭不必要的特性，减少开销
             isHorizontalScrollBarEnabled = false
             isVerticalScrollBarEnabled = false
             overScrollMode = View.OVER_SCROLL_NEVER
+            settings.mediaPlaybackRequiresUserGesture = false
+
             addJavascriptInterface(bridge, "fm")
 
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                    val reqUrl = request?.url?.toString() ?: return false
-                    LOG.i("shouldOverrideUrlLoading: $reqUrl")
-                    if (reqUrl.startsWith("http://") || reqUrl.startsWith("https://")) {
-                        view?.loadUrl(reqUrl)
-                        return false
-                    }
-                    if (reqUrl.startsWith("file:///android_asset/")) {
-                        view?.loadUrl(reqUrl)
-                        return false
-                    }
+                    // 让 WebView 自己处理所有导航，避免重复 loadUrl 导致的循环
                     return false
                 }
             }
