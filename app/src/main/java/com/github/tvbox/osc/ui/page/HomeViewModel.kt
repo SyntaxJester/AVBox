@@ -165,15 +165,14 @@ class HomeViewModel : ViewModel() {
 
     fun switchSource(bean: SourceBean) {
         LOG.i("echo--sort-switch: key=${bean.key}")
-        val api = bean.api?.trim()
-        // 如果 api 是 HTML 文件/链接，直接打开 WebView
-        if (!api.isNullOrEmpty() && (api.endsWith(".html", ignoreCase = true) ||
-                    api.startsWith("http://", ignoreCase = true) ||
-                    api.startsWith("https://", ignoreCase = true))) {
-            val url = if (api.startsWith("http")) api else "file:///android_asset/$api"
+        // 如果有 homePage 字段，说明是 HTML 源，直接打开 WebView
+        val homePage = bean.homePage?.trim()
+        if (!homePage.isNullOrEmpty()) {
+            val url = if (homePage.startsWith("http")) homePage else if (homePage.startsWith("./")) "file:///android_asset/${homePage.removePrefix("./")}" else "file:///android_asset/$homePage"
             App.getInstance()?.let { WebViewActivity.start(it, url, bean.name) }
             return
         }
+        // 正常源，按常规方式加载
         ApiConfig.get().setSourceBean(bean)
         currentSource.value = bean
         loadHome()
