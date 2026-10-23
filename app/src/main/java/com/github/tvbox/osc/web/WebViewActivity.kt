@@ -78,7 +78,6 @@ class WebViewActivity : AppCompatActivity() {
 
             // 缓存策略：优先用缓存，加快二次打开
             settings.cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
-            settings.setAppCacheEnabled(true)  // deprecated but still effective on many devices
 
             // 视口与缩放
             settings.loadWithOverviewMode = true
