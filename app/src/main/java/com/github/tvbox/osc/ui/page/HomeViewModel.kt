@@ -20,6 +20,7 @@ import com.github.tvbox.osc.util.HomeSettings
 import com.github.tvbox.osc.util.KV
 import com.github.tvbox.osc.util.LOG
 import com.github.tvbox.osc.util.LanguageManager
+import com.github.tvbox.osc.web.WebViewActivity
 import kotlin.coroutines.resume
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -164,6 +165,15 @@ class HomeViewModel : ViewModel() {
 
     fun switchSource(bean: SourceBean) {
         LOG.i("echo--sort-switch: key=${bean.key}")
+        val api = bean.api?.trim()
+        // 如果 api 是 HTML 文件/链接，直接打开 WebView
+        if (!api.isNullOrEmpty() && (api.endsWith(".html", ignoreCase = true) ||
+                    api.startsWith("http://", ignoreCase = true) ||
+                    api.startsWith("https://", ignoreCase = true))) {
+            val url = if (api.startsWith("http")) api else "file:///android_asset/$api"
+            App.getInstance()?.let { WebViewActivity.start(it, url, bean.name) }
+            return
+        }
         ApiConfig.get().setSourceBean(bean)
         currentSource.value = bean
         loadHome()
