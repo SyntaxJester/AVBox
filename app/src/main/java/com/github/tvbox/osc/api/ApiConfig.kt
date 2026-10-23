@@ -70,6 +70,10 @@ class ApiConfig private constructor() {
     @Volatile
     private var configLogo: String? = ""
 
+    /** 当前配置文件的目录，用于解析 homePage 的相对路径 */
+    @JvmField
+    var currentConfigDir: String = ""
+
     fun getConfigLogo(): String {
         return configLogo ?: ""
     }
@@ -206,6 +210,8 @@ class ApiConfig private constructor() {
         resetConfigData()
         VideoParseRuler.clearRule()
         LOG.i("echo-apiurl:" + apiUrl)
+        // 保存当前配置文件的目录，用于解析相对路径的 homePage
+        currentConfigDir = if (apiUrl.startsWith("http")) "" else File(apiUrl).parent ?: ""
         val infoJson = gson.fromJson(jsonStr, JsonObject::class.java)
         configLogo = DefaultConfig.safeJsonString(infoJson, "logo", "")
         spiderLoader.spider = DefaultConfig.safeJsonString(infoJson, "spider", "")
