@@ -102,8 +102,6 @@ class WebViewActivity : AppCompatActivity() {
             isVerticalScrollBarEnabled = false
             overScrollMode = View.OVER_SCROLL_NEVER
             settings.mediaPlaybackRequiresUserGesture = false
-            settings.renderPriority = WebSettings.RenderPriority.HIGH
-            settings.enableSmoothTransition = true
 
             // 8. JS Bridge
             addJavascriptInterface(bridge, "fm")
