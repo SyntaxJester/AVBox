@@ -21,6 +21,6 @@
         android:max="100"
         android:progress="0"
         android:visibility="gone"
-        android:progressTint="@color/colorPrimary" />
+        android:progressTint="@color/color_6200EE" />
 
 </FrameLayout>
