@@ -21,6 +21,7 @@ import com.github.tvbox.osc.sourcedata.SourceViewModel
 import com.github.tvbox.osc.util.HistoryHelper
 import com.github.tvbox.osc.util.LOG
 import com.github.tvbox.osc.util.LanguageManager
+import com.github.tvbox.osc.util.thunder.Thunder
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CompletableDeferred
@@ -101,6 +102,8 @@ class DetailViewModel : ViewModel() {
     private var detailBuildToken = 0
 
     private var detailRequestToken = 0
+
+    private var detailRetryTarget: String? = null
 
     private val fallbackCandidates = ArrayList<Movie.Video>()
     private val candidateKeys = HashSet<String>()
@@ -213,6 +216,7 @@ class DetailViewModel : ViewModel() {
         fallbackEpisode = null
         fallbackEpisodeIndex = -1
         usedSourceKeys.clear()
+        detailRetryTarget = null
         resetEngineState(keepChips = false)
     }
 
@@ -232,6 +236,7 @@ class DetailViewModel : ViewModel() {
         }
         val next = DetailFullScreenSlide.exit(slideState()) ?: return
         applySlideState(next)
+        Thunder.cancelPendingParse()
         rotating.value = DetailPlaybackCommands.exitFullScreenState(facts).second
     }
 
@@ -309,6 +314,20 @@ class DetailViewModel : ViewModel() {
         finishEvent.value = false
     }
 
+    private fun retryDetailOnce(reason: String): Boolean {
+        val key = sourceKey
+        val id = vodId
+        if (id.isEmpty()) return false
+        val target = key + "|" + id
+        if (detailRetryTarget == target) return false
+        detailRetryTarget = target
+        LOG.i("echo-detail-retry key=$key id=$id reason=$reason")
+        mainHandler.postDelayed({
+            if (sourceKey == key && vodId == id) loadDetail(id, key)
+        }, DETAIL_RETRY_DELAY_MS)
+        return true
+    }
+
     private fun loadDetail(vid: String, key: String) {
         val requestToken = nextDetailRequestToken()
         vodId = vid.orEmpty()
@@ -350,6 +369,7 @@ class DetailViewModel : ViewModel() {
 
     fun retry() {
         if (vodId.isEmpty()) return
+        detailRetryTarget = null
         loadDetail(vodId, sourceKey)
         if (searchTitle.isNotEmpty() && !sourcesSearching.value) startSourceSearch()
     }
@@ -361,7 +381,8 @@ class DetailViewModel : ViewModel() {
             return
         }
         if (vodName.isNotEmpty() && !sourcesSearching.value) startSourceSearch()
-        if (!startFallbackIfNeeded(auto = true)) {
+        val staleSource = ApiConfig.get().getSource(sourceKey) == null
+        if (!(staleSource && startFallbackIfNeeded(auto = true))) {
             if (!rollbackManualSwitch()) enterEmpty()
         }
     }
@@ -395,6 +416,9 @@ class DetailViewModel : ViewModel() {
             if (mVideo.pic.isNullOrEmpty() && vodPicture.isNotEmpty()) {
                 mVideo.pic = vodPicture
             }
+            val keep = vodInfo?.takeIf { it.sourceKey == mVideo.sourceKey }
+            val keepFlag = keep?.playFlag
+            val keepIndex = keep?.playIndex
             val info = VodInfo()
             info.setVideo(mVideo)
             info.sourceKey = mVideo.sourceKey
@@ -422,6 +446,10 @@ class DetailViewModel : ViewModel() {
                 if (info.playFlag == null || info.seriesMap?.containsKey(info.playFlag) != true) {
                     info.playFlag = info.seriesMap?.keys?.firstOrNull()
                 }
+                if (keepFlag != null && info.seriesMap?.containsKey(keepFlag) == true) {
+                    info.playFlag = keepFlag
+                    info.playIndex = (keepIndex ?: 0).coerceIn(0, (info.seriesMap?.get(keepFlag)?.size ?: 1) - 1)
+                }
                 restoreFallbackEpisode(info)
                 resetEngineState(keepChips = true)
                 val playingList = info.seriesMap?.get(info.playFlag)
@@ -441,11 +469,14 @@ class DetailViewModel : ViewModel() {
                 pageState.value = PageState.Ready
                 bumpRevision()
                 if (playingList.isNullOrEmpty()) {
-                    startFallbackIfNeeded(auto = true)
+                    if (retryDetailOnce("no-line")) return@launch
+                    LOG.i("echo-detail-no-line key=$sourceKey id=$vodId name=${info.name}")
+                    toastEvent.value = str(R.string.detail_no_playable_content)
                 }
             }
         } else {
             if (fallbackLoadingCandidate) {
+                if (retryDetailOnce("empty-candidate")) return
                 fallbackLoadingCandidate = false
                 cancelDetailTimeout()
                 loadNextFallbackCandidate()
@@ -466,10 +497,12 @@ class DetailViewModel : ViewModel() {
             finishEvent.value = true
             return
         }
+        if (retryDetailOnce("empty-detail")) return
         if (fallbackActive) {
             fallbackLoadingCandidate = false
             loadNextFallbackCandidate()
-        } else if (!startFallbackIfNeeded(auto = true)) {
+        } else {
+            LOG.i("echo-detail-empty key=$sourceKey id=$vodId name=$vodName")
             if (!rollbackManualSwitch()) enterEmpty()
         }
     }
@@ -518,7 +551,7 @@ class DetailViewModel : ViewModel() {
             }
             if (tokenStr == currentTokenStr()) {
                 sourcesSearching.value = false
-                if (fallbackAutoSwitch && !fallbackLoadingCandidate) loadNextFallbackCandidate()
+                if (fallbackActive && fallbackAutoSwitch && !fallbackLoadingCandidate) loadNextFallbackCandidate()
             }
         }
     }
@@ -538,7 +571,7 @@ class DetailViewModel : ViewModel() {
             if (fresh.isNotEmpty()) {
                 synchronized(fallbackCandidates) { fallbackCandidates.addAll(fresh) }
                 publishSourceChips()
-                if (fallbackAutoSwitch && !fallbackLoadingCandidate) loadNextFallbackCandidate()
+                if (fallbackActive && fallbackAutoSwitch && !fallbackLoadingCandidate) loadNextFallbackCandidate()
             }
             val related = videos.filter {
                 !it.id.isNullOrEmpty() && it.name?.trim() != searchTitle
@@ -572,6 +605,8 @@ class DetailViewModel : ViewModel() {
 
     fun switchSource(video: Movie.Video) {
         stopPlaybackForSwitch()
+        captureFallbackEpisode()
+        detailRetryTarget = null
         usedSourceKeys.add(video.sourceKey.orEmpty())
         vodName = video.name ?: vodName
         vodPicture = video.pic ?: vodPicture
@@ -647,7 +682,8 @@ class DetailViewModel : ViewModel() {
     private fun loadNextFallbackCandidate() {
         while (true) {
             val video = synchronized(fallbackCandidates) {
-                if (fallbackCandidates.isEmpty()) null else fallbackCandidates.removeAt(0)
+                val index = fallbackCandidates.indexOfFirst { isAutoSwitchable(it.sourceKey.orEmpty()) }
+                if (index < 0) null else fallbackCandidates.removeAt(index)
             } ?: break
             val cKey = candidateKey(video)
             if (usedSourceKeys.contains(video.sourceKey) || !triedKeys.add(cKey)) continue
@@ -664,6 +700,12 @@ class DetailViewModel : ViewModel() {
         }
         publishSourceChips()
         if (!sourcesSearching.value) finishFallbackWithoutResult()
+    }
+
+    private fun isAutoSwitchable(key: String): Boolean {
+        if (key.isEmpty()) return false
+        val source = ApiConfig.get().getSource(key) ?: return false
+        return source.isChangeable()
     }
 
     private fun loadDetailInternal(vid: String, key: String, requestToken: Int) {
@@ -755,6 +797,7 @@ class DetailViewModel : ViewModel() {
         cancelDetailTimeout()
         sourceViewModel.cancelDetail()
         searchCaller.cancelSearch()
+        Thunder.cancelPendingParse()
     }
 
     private fun candidateKey(video: Movie.Video): String =
@@ -868,10 +911,8 @@ class DetailViewModel : ViewModel() {
         qualitySelected.value = 0
     }
 
-    fun onQualityClick(position: Int, facts: DetailPlaybackFacts) {
-        val plan = DetailPlaybackPolicy.plan(DetailPlaybackEntry.Quality)
-        if (plan.enterFullScreen) onFullScreenToggleRequested(true, facts)
-        if (plan.startPlayback) sendCommand(PlaybackCommand.SelectQuality(position))
+    fun switchQuality(position: Int) {
+        sendCommand(PlaybackCommand.SelectQuality(position))
     }
 
     fun onQualitySelectionAccepted(position: Int) {
@@ -1051,6 +1092,7 @@ class DetailViewModel : ViewModel() {
         private val SEARCH_SEQ = java.util.concurrent.atomic.AtomicInteger(0)
 
         private const val DETAIL_FALLBACK_DETAIL_TIMEOUT_MS = 6000L
+        private const val DETAIL_RETRY_DELAY_MS = 700L
         private const val SOURCE_SEARCH_TIMEOUT_MS = 30_000L
         private const val SOURCE_SEARCH_CONCURRENCY = 6
 

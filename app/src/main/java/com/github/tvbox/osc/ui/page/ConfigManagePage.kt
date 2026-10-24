@@ -14,6 +14,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -50,14 +51,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.lifecycle.viewmodel.initializer
-import androidx.lifecycle.viewmodel.viewModelFactory
 import com.github.tvbox.osc.R
 import com.github.tvbox.osc.api.ApiConfig
 import com.github.tvbox.osc.ui.activity.ConfigManageActivity
@@ -73,6 +74,7 @@ import com.github.tvbox.osc.ui.components.SegmentOption
 import com.github.tvbox.osc.ui.components.SettingsCard
 import com.github.tvbox.osc.ui.components.SettingsCardPosition
 import com.github.tvbox.osc.ui.components.SettingsGroup
+import com.github.tvbox.osc.ui.components.clearFocusOnDrag
 import com.github.tvbox.osc.ui.components.RowLeadingIcon
 import com.github.tvbox.osc.ui.components.SettingsOptionRow
 import com.github.tvbox.osc.ui.components.SettingsSwitch
@@ -81,7 +83,6 @@ import com.github.tvbox.osc.ui.components.TopBarActionBox
 import com.github.tvbox.osc.ui.components.glassSurface
 import com.github.tvbox.osc.ui.theme.cardContainer
 import com.github.tvbox.osc.util.HistoryHelper
-import com.github.tvbox.osc.util.TmdbApi
 
 private fun badgeText(name: String, url: String, emptyText: String): String = when {
     name.isNotEmpty() -> name
@@ -93,11 +94,7 @@ private fun badgeText(name: String, url: String, emptyText: String): String = wh
 @Composable
 fun ConfigManageScreen(onNavigateBack: () -> Unit) {
     val context = LocalContext.current
-    val vm: ConfigManageViewModel = viewModel(
-        factory = viewModelFactory {
-            initializer { ConfigManageViewModel { TmdbApi.DefaultTmdbClient() } }
-        },
-    )
+    val vm: ConfigManageViewModel = viewModel(factory = ConfigManageViewModel.defaultFactory())
     var mode by rememberSaveable { mutableStateOf(ConfigMode.Vod) }
     var addDialogOpen by remember { mutableStateOf(false) }
     var repoSheetOpen by remember { mutableStateOf(false) }
@@ -142,6 +139,8 @@ fun ConfigManageScreen(onNavigateBack: () -> Unit) {
     val repoEntries = if (isVod) HistoryHelper.getApiLines() else HistoryHelper.getLiveApiLines()
 
     val repoActiveUrl = if (isVod) activeUrl else liveActiveUrl
+
+    val focusManager = LocalFocusManager.current
 
     val noSourceText = stringResource(R.string.config_no_source)
     val vodBadge = remember(vodItems, activeUrl, noSourceText) {
@@ -226,7 +225,13 @@ fun ConfigManageScreen(onNavigateBack: () -> Unit) {
             }
         },
     ) { topPad, _ ->
-        Column(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    detectTapGestures(onTap = { focusManager.clearFocus() })
+                },
+        ) {
             CapsuleSegmentedButton(
                 options = listOf(
                     SegmentOption(
@@ -311,7 +316,9 @@ fun ConfigManageScreen(onNavigateBack: () -> Unit) {
                     }
                     LazyColumn(
                         state = rememberLazyListState(),
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clearFocusOnDrag(focusManager),
                         contentPadding = PaddingValues(
                             start = 16.dp,
                             end = 16.dp,
@@ -396,7 +403,9 @@ fun ConfigManageScreen(onNavigateBack: () -> Unit) {
                 addDialogOpen = false
             },
             onPickFile = { onPicked ->
-                (context as? ConfigManageActivity)?.launchLocalConfig { api -> onPicked(api) }
+                (context as? ConfigManageActivity)?.launchLocalConfig { pickedName, pickedApi ->
+                    onPicked(pickedName, pickedApi)
+                }
             },
         )
     }
@@ -513,8 +522,10 @@ private fun FollowVodCard(
             title = stringResource(R.string.live_follow_vod_source),
             leadingIconRes = R.drawable.ic_subscribe_source,
             subtitle = subtitle,
+            subtitleMaxLines = 1,
             checked = checked,
             onCheckedChange = { next -> if (next) onFollow() },
+            modifier = Modifier.padding(vertical = 6.dp),
         )
     }
 }
@@ -613,7 +624,7 @@ private fun AddSubscribeDialog(
     initialUrl: String,
     onDismiss: () -> Unit,
     onSave: (String, String) -> Unit,
-    onPickFile: (onPicked: (String) -> Unit) -> Unit,
+    onPickFile: (onPicked: (name: String, api: String) -> Unit) -> Unit,
 ) {
     var name by remember { mutableStateOf(initialName) }
     var url by remember { mutableStateOf(initialUrl) }
@@ -643,7 +654,12 @@ private fun AddSubscribeDialog(
                     modifier = Modifier
                         .size(40.dp)
                         .glassSurface(CircleShape, MaterialTheme.colorScheme.surfaceBright)
-                        .clickable { onPickFile { picked -> url = picked } },
+                        .clickable {
+                            onPickFile { pickedName, pickedApi ->
+                                url = pickedApi
+                                if (name.isBlank()) name = pickedName
+                            }
+                        },
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(

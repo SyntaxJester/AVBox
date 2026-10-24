@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -24,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -52,6 +54,8 @@ private val SourceCardShapeRight = RoundedCornerShape(
     bottomEnd = 28.dp,
 )
 
+private val ExactCardShape = RoundedCornerShape(28.dp)
+
 @Composable
 fun SearchSettingsSheet(onDismiss: () -> Unit, onSelectionChanged: () -> Unit) {
     val sources = remember { ApiConfig.get().getSourceBeanList().filter(SourceBean::isSearchable) }
@@ -75,10 +79,13 @@ fun SearchSettingsSheet(onDismiss: () -> Unit, onSelectionChanged: () -> Unit) {
         onSelectionChanged()
     }
 
+    val maxSheetHeight = (LocalConfiguration.current.screenHeightDp * 0.7f).dp
+
     AVBoxBottomSheet(
         onDismissRequest = onDismiss,
         title = stringResource(R.string.search_settings),
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        modifier = Modifier.heightIn(max = maxSheetHeight),
         headerContent = {
             Text(
                 text = stringResource(R.string.search_home_poster),
@@ -103,6 +110,7 @@ fun SearchSettingsSheet(onDismiss: () -> Unit, onSelectionChanged: () -> Unit) {
                 onOptionSelected = { HomeSettings.setLayout(it) },
                 style = SegmentStyle.Separated,
                 containerColor = MaterialTheme.colorScheme.surfaceBright,
+                pressMorph = true,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
@@ -114,6 +122,7 @@ fun SearchSettingsSheet(onDismiss: () -> Unit, onSelectionChanged: () -> Unit) {
                 SettingsCard(
                     position = SettingsCardPosition.SINGLE,
                     color = MaterialTheme.colorScheme.surfaceBright,
+                    shape = ExactCardShape,
                 ) {
                     SettingsSwitchRow(
                         title = stringResource(R.string.search_exact),

@@ -28,7 +28,7 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
-class SearchViewModel : ViewModel() {
+class SearchViewModel(initialTitle: String? = null) : ViewModel() {
 
     enum class ResultState { Pending, Done }
 
@@ -58,6 +58,7 @@ class SearchViewModel : ViewModel() {
     private var semaphore = Semaphore(semaphorePermits)
     private val pendingSources = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.CompletableDeferred<Unit>>()
     private val scope = viewModelScope
+    private val searchCaller = SourceViewModel()
 
     companion object {
         private val SEARCH_SEQ = java.util.concurrent.atomic.AtomicInteger(0)
@@ -69,9 +70,13 @@ class SearchViewModel : ViewModel() {
 
         private const val HOT_SEARCH_LIMIT = 20
 
+        private const val DOUBAN_REFERER = "https://movie.douban.com/"
+
         private const val SUGGEST_URL = "https://suggest.video.iqiyi.com/?if=mobile&key="
 
         private const val SUGGEST_LIMIT = 20
+
+        private const val SUGGEST_TIMEOUT_MS = 2_000L
 
         @Volatile
         var checkedSources: HashMap<String, String>? = null
@@ -115,6 +120,11 @@ class SearchViewModel : ViewModel() {
     init {
         org.greenrobot.eventbus.EventBus.getDefault().register(this)
         fetchHotSearch()
+        val initial = initialTitle?.trim().orEmpty()
+        if (initial.isNotEmpty()) {
+            if (isCheckedSourcesStale()) loadCheckedSources()
+            search(initial)
+        }
     }
 
     override fun onCleared() {
@@ -132,19 +142,24 @@ class SearchViewModel : ViewModel() {
                 .format(java.util.Date())
             val cached = KV.get(HawkConfig.HOME_HOT, "")
             if (KV.get(HawkConfig.HOME_HOT_DAY, "") == today && cached.isNotEmpty()) {
-                hotSearch.value = parseHotTitles(cached)
-                return@launch
+                val titles = parseHotTitles(cached)
+                if (titles.isNotEmpty()) {
+                    hotSearch.value = titles
+                    return@launch
+                }
             }
             val year = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
             try {
                 val body = Http.get(DOUBAN_HOT_URL + year + "," + year) {
                     headers("User-Agent", UA.random())
+                    headers("Referer", DOUBAN_REFERER)
                 }
-                if (body.isNotEmpty()) {
+                val titles = parseHotTitles(body)
+                if (titles.isNotEmpty()) {
                     KV.put(HawkConfig.HOME_HOT, body)
                     KV.put(HawkConfig.HOME_HOT_DAY, today)
                 }
-                hotSearch.value = parseHotTitles(body)
+                hotSearch.value = titles
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
@@ -164,13 +179,16 @@ class SearchViewModel : ViewModel() {
     fun fetchSuggest(text: String) {
         suggestJob?.cancel()
         suggestJob = scope.launch {
-            try {
-                val body = Http.get(SUGGEST_URL + java.net.URLEncoder.encode(text, "UTF-8").replace("+", "%20"))
-                suggest.value = withContext(Dispatchers.IO) { parseSuggest(body) }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-            }
+            val body = withTimeoutOrNull(SUGGEST_TIMEOUT_MS) {
+                try {
+                    Http.getOnce(SUGGEST_URL + java.net.URLEncoder.encode(text, "UTF-8").replace("+", "%20"))
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    null
+                }
+            } ?: return@launch
+            suggest.value = withContext(Dispatchers.IO) { parseSuggest(body) }
         }
     }
 
@@ -285,6 +303,4 @@ class SearchViewModel : ViewModel() {
             }
         }
     }
-
-    private val searchCaller = SourceViewModel()
 }

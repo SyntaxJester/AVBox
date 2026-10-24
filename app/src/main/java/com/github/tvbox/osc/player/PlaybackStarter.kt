@@ -8,6 +8,8 @@ import com.github.tvbox.osc.data.AppGraph
 import com.github.tvbox.osc.data.PlaybackProgress
 import com.github.tvbox.osc.data.WatchProgressStore
 import com.github.tvbox.osc.event.RefreshEvent
+import com.github.tvbox.osc.player.engine.MediaSources
+import com.github.tvbox.osc.player.engine.SourcePolicy
 import com.github.tvbox.osc.player.state.PlayState
 import com.github.tvbox.osc.server.ControlManager
 import com.github.tvbox.osc.sourcedata.SourceViewModel
@@ -17,7 +19,6 @@ import com.github.tvbox.osc.util.ImgUtil
 import com.github.tvbox.osc.util.KV
 import com.github.tvbox.osc.util.LOG
 import com.github.tvbox.osc.util.MD5
-import com.github.tvbox.osc.util.thunder.Jianpian
 import com.github.tvbox.osc.util.thunder.Thunder
 import org.greenrobot.eventbus.EventBus
 import org.json.JSONException
@@ -88,7 +89,7 @@ class PlaybackStarter(private val host: Host) {
 
         fun startResolvePlayUrlTimeout()
 
-        fun startSwitchLinePlayTimeout()
+        fun startSwitchLinePlayTimeout(isoSession: Boolean)
 
         fun cancelPlayTimeout()
 
@@ -208,16 +209,8 @@ class PlaybackStarter(private val host: Host) {
         }
 
         val seriesUrl = requireNotNull(vs.url)
-        if (Jianpian.isJpUrl(seriesUrl)) {
-            host.view()?.showParse(false)
-            if (seriesUrl.startsWith("tvbox-xg:")) {
-                playUrl(requireNotNull(Jianpian.JPUrlDec(seriesUrl.substring(9))), null)
-            } else {
-                playUrl(requireNotNull(Jianpian.JPUrlDec(seriesUrl)), null)
-            }
-            return
-        }
         val thunderGen = host.resolverCurrentGen()
+        val magnetPending = Thunder.isMagnetUrl(seriesUrl)
         if (Thunder.play(seriesUrl, object : Thunder.ThunderCallback {
                 override fun status(code: Int, info: String) {
                     host.view()?.showTip(info, code >= 0, code < 0)
@@ -232,6 +225,10 @@ class PlaybackStarter(private val host: Host) {
             })
         ) {
             host.view()?.showParse(false)
+            if (magnetPending && !prepareOnly) {
+                host.cancelPlayTimeout()
+                host.view()?.showTip(PlaybackController.str(R.string.thunder_parsing), true, false)
+            }
             return
         }
 
@@ -272,8 +269,11 @@ class PlaybackStarter(private val host: Host) {
     }
 
     fun playUrl(url: String, headers: HashMap<String, String>?) {
-        host.startSwitchLinePlayTimeout()
+        host.syncDecodeFromGlobal()
         val target = attachProxySiteKey(url)
+        host.attemptState().localProxySession = SourcePolicy.isLocalProxyUrl(target)
+        SlowOpenSignal.reset()
+        host.startSwitchLinePlayTimeout(MediaSources.isoHeaders(headers))
         if (!target.startsWith("data:application")) {
             EventBus.getDefault().post(RefreshEvent(RefreshEvent.TYPE_REFRESH, target))
         }
@@ -297,6 +297,7 @@ class PlaybackStarter(private val host: Host) {
 
     fun goPlayUrl(url: String, headers: HashMap<String, String>?) {
         val st = host.attemptState()
+        st.isoSession = MediaSources.isoHeaders(headers)
         if (st.castAborted) {
             LOG.i("echo-cast abort: drop late play url")
             host.cancelPlayTimeout()

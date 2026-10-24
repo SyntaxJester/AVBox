@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -81,7 +80,7 @@ fun RecordsPage(
     var collectSelected by remember { mutableStateOf(emptySet<Int>()) }
     var dialog by remember { mutableStateOf<RecordsDialog?>(null) }
 
-    val historyListState = rememberLazyListState()
+    val historyListState = rememberLazyGridState()
     val collectListState = rememberLazyGridState()
 
     val isHistory = mode == RecordsMode.History
@@ -228,9 +227,10 @@ fun RecordsPage(
                 onOptionSelected = { mode = it },
                 style = SegmentStyle.Track,
                 containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                pressMorph = true,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 16.dp, end = 16.dp, top = topPad + 8.dp),
+                    .padding(start = 16.dp + navStart, end = 16.dp, top = topPad + 8.dp),
             )
             AnimatedContent(
                 targetState = mode,

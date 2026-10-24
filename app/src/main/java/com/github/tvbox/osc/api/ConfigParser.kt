@@ -110,7 +110,6 @@ object ConfigParser {
             sb.style = DefaultConfig.safeJsonString(obj, "style", "")
             sb.icon = DefaultConfig.safeJsonString(obj, "icon", "")
             sb.setHide(DefaultConfig.safeJsonInt(obj, "hide", 0))
-            sb.homePage = DefaultConfig.safeJsonString(obj, "homePage", "")
             sb.setIndexs(DefaultConfig.safeJsonInt(obj, "indexs", 0))
             sb.setDanmaku(DefaultConfig.safeJsonInt(obj, "danmaku", 1))
             sb.header = parseHeaderObject(obj, "header")

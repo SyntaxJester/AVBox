@@ -82,11 +82,24 @@
             android:name=".ui.activity.SearchActivity"
             android:windowSoftInputMode="stateHidden|adjustResize" />
         <activity
-            android:name=".ui.activity.PartitionListActivity" />
+            android:name=".ui.activity.PartitionListActivity"
+            android:launchMode="singleTop" />
         <activity
             android:name=".ui.activity.ThemeSettingsActivity" />
         <activity
-            android:name=".ui.activity.ConfigManageActivity" />
+            android:name=".ui.activity.ConfigManageActivity"
+            android:exported="true"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+        </activity>
         <activity
             android:name=".ui.activity.PlaySettingsActivity" />
         <activity

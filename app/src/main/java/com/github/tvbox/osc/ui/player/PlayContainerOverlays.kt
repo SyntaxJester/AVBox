@@ -5,6 +5,7 @@ import android.widget.Toast
 import com.github.tvbox.osc.R
 import com.github.tvbox.osc.player.danmu.DanmuLoadController
 import com.github.tvbox.osc.player.state.DanmuSearchSheetState
+import com.github.tvbox.osc.util.LOG
 import master.flame.danmaku.ui.widget.DanmakuView
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -135,9 +136,9 @@ internal class PlayContainerOverlays(private val host: PlayContainer) {
         }
     }
 
-    fun errorWithRetry(err: String, finish: Boolean) {
+    fun errorWithRetry(err: String, finish: Boolean, playbackError: Boolean = false) {
         if (Looper.myLooper() != Looper.getMainLooper()) {
-            host.mHandler?.post { errorWithRetry(err, finish) }
+            host.mHandler?.post { errorWithRetry(err, finish, playbackError) }
             return
         }
         if (host.scheduler.isPlaybackStarted()) {
@@ -148,7 +149,7 @@ internal class PlayContainerOverlays(private val host: PlayContainer) {
                 if (host.scheduler.autoRetry()) return@launch
                 host.scheduler.stopMusicSessionForFailedPlayback()
                 if (!host.isAttached()) return@launch
-                val text = terminalErrorText(err)
+                val text = terminalErrorText(err, playbackError)
                 setTip(text, false, true)
                 if (finish) {
                     Toast.makeText(host.context, text, Toast.LENGTH_SHORT).show()
@@ -161,7 +162,7 @@ internal class PlayContainerOverlays(private val host: PlayContainer) {
                 host.scheduler.cancelPlayTimeout()
                 host.scheduler.stopMusicSessionForFailedPlayback()
                 if (!host.isAttached()) return@launch
-                val text = terminalErrorText(err)
+                val text = terminalErrorText(err, playbackError)
                 setTip(text, false, true)
                 if (finish) {
                     Toast.makeText(host.context, text, Toast.LENGTH_SHORT).show()
@@ -170,10 +171,25 @@ internal class PlayContainerOverlays(private val host: PlayContainer) {
         }
     }
 
-    private fun terminalErrorText(err: String): String =
-        if (host.scheduler.isLastErrorExceedsDecodeCapability()) {
-            host.context.getString(R.string.player_decode_exceeds_capability)
-        } else {
-            err
+    private fun terminalErrorText(err: String, playbackError: Boolean): String {
+        val httpStatus = if (playbackError) host.scheduler.errorHttpStatusForTip() else 0
+        val text = when {
+            host.scheduler.isSourceStub() -> host.context.getString(R.string.player_source_invalid)
+            host.scheduler.isIsoBandwidthStopped() -> host.context.getString(R.string.player_iso_bandwidth_low)
+            host.scheduler.isLastErrorExceedsDecodeCapability() -> host.context.getString(
+                if (host.scheduler.isLastErrorTenBitFormat()) R.string.player_decode_10bit_tip
+                else R.string.player_decode_exceeds_capability,
+            )
+            httpStatus > 0 -> host.context.getString(R.string.player_error_play_http, httpStatus)
+            else -> err
         }
+        LOG.i(
+            "echo-player tip: $text | stub=" + host.scheduler.isSourceStub() +
+                " bandwidth=" + host.scheduler.isIsoBandwidthStopped() +
+                " exceeds=" + host.scheduler.isLastErrorExceedsDecodeCapability() +
+                " tenBit=" + host.scheduler.isLastErrorTenBitFormat() +
+                " http=" + httpStatus,
+        )
+        return text
+    }
 }

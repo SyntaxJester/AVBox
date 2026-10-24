@@ -5,6 +5,8 @@ import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.net.Uri
+import android.os.Looper
+import android.webkit.WebView
 import android.widget.Toast
 import androidx.activity.compose.setContent
 import com.github.tvbox.osc.ui.theme.enableTransparentEdgeToEdge
@@ -24,6 +26,8 @@ import com.github.tvbox.osc.ui.components.SheetHostScaffold
 import com.github.tvbox.osc.player.PageHost
 import com.github.tvbox.osc.player.PlaybackController
 import com.github.tvbox.osc.player.PlaybackService
+import com.github.tvbox.osc.player.engine.MediaSources
+import com.github.tvbox.osc.player.engine.iso.IsoSessionSignal
 import com.github.tvbox.osc.player.state.PlayState
 import com.github.tvbox.osc.ui.player.PlayContainer
 import com.github.tvbox.osc.ui.theme.AVBoxTheme
@@ -32,10 +36,10 @@ import com.github.tvbox.osc.util.LOG
 import com.github.tvbox.osc.util.MusicSettings
 import com.github.tvbox.osc.util.PermissionHelper
 import com.github.tvbox.osc.util.SpiderStorageNotice
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.launch
 
 private const val SYSBAR_APPEARANCE_REASSERT_DELAY_MS = 400L
-private const val VIDEO_SIZE_WATCH_TIMEOUT_MS = 10000L
 private const val CAST_URL_POLL_MS = 250L
 private const val CAST_URL_WAIT_ATTEMPTS = 20
 
@@ -51,13 +55,6 @@ class DetailActivity : BaseActivity(), PageHost {
     private var pendingEpisodeSync = false
     private var videoSizeWatchArmed = false
     private var castWaitAttempts = 0
-
-    private val videoSizeTimeoutRunnable = Runnable {
-        if (!videoSizeWatchArmed) return@Runnable
-        LOG.i("echo-player detail size timeout, keep portrait placeholder")
-        videoSizeWatchArmed = false
-        playContainer?.setVideoSizeReadyListener(null)
-    }
 
     private val castWaitRunnable = object : Runnable {
         override fun run() {
@@ -135,6 +132,7 @@ class DetailActivity : BaseActivity(), PageHost {
                         container?.stopForExitFullscreen()
                     }
                     vm.onFullScreenToggleRequested(false, playbackFacts())
+                    container?.hideTipOnUiThread()
                 } else {
                     if (vm.backToPreviousTarget()) {
                         pendingEpisodeSync = false
@@ -161,6 +159,7 @@ class DetailActivity : BaseActivity(), PageHost {
         setIntent(intent)
         pendingEpisodeSync = false
         vm.onFullScreenToggleRequested(false, playbackFacts())
+        playContainer?.hideTipOnUiThread()
         vm.pushTargetFromIntent(intent)
     }
 
@@ -173,6 +172,21 @@ class DetailActivity : BaseActivity(), PageHost {
             }
         }
         return requireNotNull(playContainer) { "play container not created" }
+    }
+
+    fun preheatWebView() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            runOnUiThread { preheatWebView() }
+            return
+        }
+        if (!webViewPreheated.compareAndSet(false, true)) return
+        val startedAt = System.nanoTime()
+        try {
+            WebView(this).destroy()
+            LOG.i("echo-webview-prewarm: " + (System.nanoTime() - startedAt) / 1_000_000L + "ms")
+        } catch (th: Throwable) {
+            LOG.e("DetailActivity", th)
+        }
     }
 
     fun playbackFacts(): DetailPlaybackFacts = DetailPlaybackFacts(
@@ -293,12 +307,22 @@ class DetailActivity : BaseActivity(), PageHost {
             Toast.makeText(this, getString(R.string.detail_content_not_ready), Toast.LENGTH_SHORT).show()
             return
         }
+        if (isIsoPlayback()) {
+            Toast.makeText(this, getString(R.string.player_iso_music_unsupported), Toast.LENGTH_SHORT).show()
+            return
+        }
         // 先按纯音频启动，避免详情页这一帧就把视频解码器建起来（交接后无法回收）。
         prepareAudioOnlyForMusicPage()
         ensurePlaying()
         if (!handOffToMusicPlayer()) {
             Toast.makeText(this, getString(R.string.detail_no_playable_content), Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private fun isIsoPlayback(): Boolean {
+        val controller = PlaybackService.peek()?.controller() ?: return false
+        if (!engineOwnsDetailContent()) return false
+        return MediaSources.isoHeaders(controller.webHeaderMap()) || IsoSessionSignal.escalated()
     }
 
     private fun prepareAudioOnlyForMusicPage() {
@@ -354,7 +378,6 @@ class DetailActivity : BaseActivity(), PageHost {
         } else {
             videoSizeWatchArmed = false
             playContainer?.setVideoSizeReadyListener(null)
-            window.decorView.removeCallbacks(videoSizeTimeoutRunnable)
             val controller = WindowCompat.getInsetsController(window, window.decorView)
             controller.show(WindowInsetsCompat.Type.navigationBars())
             applyHideStatusBarPref()
@@ -375,13 +398,11 @@ class DetailActivity : BaseActivity(), PageHost {
         if (videoSizeWatchArmed) return
         videoSizeWatchArmed = true
         container.setVideoSizeReadyListener { portraitVideo -> onVideoSizeReady(portraitVideo) }
-        window.decorView.postDelayed(videoSizeTimeoutRunnable, VIDEO_SIZE_WATCH_TIMEOUT_MS)
     }
 
     private fun onVideoSizeReady(portraitVideo: Boolean) {
         if (!videoSizeWatchArmed) return
         videoSizeWatchArmed = false
-        window.decorView.removeCallbacks(videoSizeTimeoutRunnable)
         playContainer?.setVideoSizeReadyListener(null)
         applyVideoOrientation(portraitVideo)
     }
@@ -435,10 +456,13 @@ class DetailActivity : BaseActivity(), PageHost {
     }
 
     override fun onDestroy() {
-        window.decorView.removeCallbacks(videoSizeTimeoutRunnable)
         window.decorView.removeCallbacks(castWaitRunnable)
         releasePlayContainer()
         vm.destroyEngine()
         super.onDestroy()
+    }
+
+    companion object {
+        private val webViewPreheated = AtomicBoolean(false)
     }
 }

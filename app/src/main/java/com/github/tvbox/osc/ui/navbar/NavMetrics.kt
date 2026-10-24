@@ -9,6 +9,8 @@ object NavMetrics {
 
     const val BAR_CROSS_DP = 64
 
+    const val SLOT_MAIN_DP = 56
+
     const val FLOATING_OVERLAY_DP = BAR_CROSS_DP + MARGIN_DP
 
     const val SURFACE_RAIL_WIDTH_DP = 80
@@ -31,6 +33,4 @@ object NavMetrics {
         glassEnabled -> FLOATING_OVERLAY_DP
         else -> 0
     }
-
-    fun scrimOpaqueAtStart(axis: NavAxis): Boolean = axis == NavAxis.Vertical
 }

@@ -30,6 +30,7 @@ import com.github.tvbox.osc.player.PlayerHelper
 import com.github.tvbox.osc.player.PreloadCoordinator
 import com.github.tvbox.osc.player.VideoOrientation
 import com.github.tvbox.osc.player.controller.VideoPlayerController
+import com.github.tvbox.osc.player.engine.MediaSources
 import com.github.tvbox.osc.player.controller.PlayerControlApi
 import com.github.tvbox.osc.player.danmu.DanmuLoadController
 import com.github.tvbox.osc.player.state.CastSheetState
@@ -62,7 +63,7 @@ class PlayContainer(activity: Activity) : FrameLayout(activity), CustomAdapt, Pl
 
     lateinit var scheduler: PlaybackController
     private lateinit var surfaceSlot: FrameLayout
-    private var engine: PlaybackEngine? = null
+    internal var engine: PlaybackEngine? = null
     var mPageHost: PageHost? = null
     var mActivity: Activity? = activity
 
@@ -344,6 +345,7 @@ class PlayContainer(activity: Activity) : FrameLayout(activity), CustomAdapt, Pl
         mController.setEnableInNormal(true)
         mController.setGestureEnabled(true)
         mVideoView = engine?.player()
+        engine?.let { (mController as? VideoPlayerController)?.bindVideoCodecFlow(it.videoCodec) }
         mController.setListener(controlListener)
         if (mVideoView != null) mController.setKernelProvider(mVideoView)
     }
@@ -353,6 +355,11 @@ class PlayContainer(activity: Activity) : FrameLayout(activity), CustomAdapt, Pl
     }
 
     fun showCastDialog() {
+        if (MediaSources.isoHeaders(scheduler.webHeaderMap())) {
+            LOG.i("echo-iso-cast-blocked")
+            Toast.makeText(mContext, mContext.getString(R.string.player_iso_cast_unsupported), Toast.LENGTH_SHORT).show()
+            return
+        }
         val webUrl = scheduler.webPlayUrl()
         if (TextUtils.isEmpty(webUrl)) {
             Toast.makeText(mContext, mContext.getString(R.string.toast_no_cast_url), Toast.LENGTH_SHORT).show()
@@ -450,7 +457,8 @@ class PlayContainer(activity: Activity) : FrameLayout(activity), CustomAdapt, Pl
 
     fun hidePreloadReady() = overlays.hidePreloadReady()
 
-    fun errorWithRetry(err: String, finish: Boolean) = overlays.errorWithRetry(err, finish)
+    fun errorWithRetry(err: String, finish: Boolean, playbackError: Boolean = false) =
+        overlays.errorWithRetry(err, finish, playbackError)
 
     fun initSubtitleView() = subtitles.initSubtitleView()
 
@@ -489,6 +497,7 @@ class PlayContainer(activity: Activity) : FrameLayout(activity), CustomAdapt, Pl
         if (scheduler != null) scheduler.stopPlaybackForPageExit()
         val revived = PlaybackService.engine(activity)
         engine = revived
+        (mController as? VideoPlayerController)?.bindVideoCodecFlow(revived.videoCodec)
         scheduler = revived.controller()
         mVideoView = revived.player()
         revived.attach(this)

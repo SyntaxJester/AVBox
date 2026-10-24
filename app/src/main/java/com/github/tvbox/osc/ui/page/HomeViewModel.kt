@@ -20,7 +20,6 @@ import com.github.tvbox.osc.util.HomeSettings
 import com.github.tvbox.osc.util.KV
 import com.github.tvbox.osc.util.LOG
 import com.github.tvbox.osc.util.LanguageManager
-import com.github.tvbox.osc.web.WebViewActivity
 import kotlin.coroutines.resume
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -165,37 +164,9 @@ class HomeViewModel : ViewModel() {
 
     fun switchSource(bean: SourceBean) {
         LOG.i("echo--sort-switch: key=${bean.key}")
-        // 如果有 homePage 字段，说明是 HTML 源，直接打开 WebView
-        val homePage = bean.homePage?.trim()
-        if (!homePage.isNullOrEmpty()) {
-            val url = resolveHomePageUrl(homePage)
-            App.getInstance()?.let { WebViewActivity.start(it, url, bean.name) }
-            return
-        }
-        // 正常源，按常规方式加载
         ApiConfig.get().setSourceBean(bean)
         currentSource.value = bean
         loadHome()
-    }
-
-    /**
-     * 解析 homePage 为可加载的 URL：
-     * - http(s):// 开头 → 直接使用
-     * - ./ 或相对路径 → 基于当前配置文件目录拼接（本地文件用 file://）
-     * - 绝对路径 → 直接 file://
-     */
-    private fun resolveHomePageUrl(homePage: String): String {
-        if (homePage.startsWith("http://", true) || homePage.startsWith("https://", true)) {
-            return homePage
-        }
-        val configDir = ApiConfig.get().currentConfigDir
-        val relative = homePage.removePrefix("./")
-        return if (configDir.isNotEmpty()) {
-            "file://$configDir/$relative"
-        } else {
-            // 没有本地配置目录时，退回到 assets
-            "file:///android_asset/$relative"
-        }
     }
 
     fun isSubscribeDisabled(item: SubscribeSource): Boolean = BootGuard.isDisabledSource(item.url)

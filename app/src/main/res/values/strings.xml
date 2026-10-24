@@ -55,8 +55,11 @@
     <string name="toast_subtitle_not_found">未查询到匹配字幕</string>
 
     <string name="player_error_sniff">嗅探错误</string>
-    <string name="player_error_play">视频播放出错</string>
+    <string name="player_error_play">片源播放失败，请切换线路或更换片源</string>
+    <string name="player_error_play_http">片源播放失败（HTTP %1$d），请切换线路或更换片源</string>
+    <string name="player_site_failed">%1$s：%2$s</string>
     <string name="player_decode_exceeds_capability">超出内核解码能力上限</string>
+    <string name="player_decode_10bit_tip">该线路为 10-bit 编码，设备不支持</string>
     <string name="player_no_audio_track">没有音轨</string>
     <string name="player_switch_audio_track">切换音轨</string>
     <string name="player_no_video_track">没有视轨</string>
@@ -235,8 +238,9 @@
     <string name="preload_cache_size">缓存容量</string>
 
     <string name="search_field_hint">搜索片名、演员</string>
-    <string name="search_result_layout">结果展示方式</string>
+    <string name="search_result_layout">搜索结果展示方式</string>
     <string name="search_site_empty">该站点暂无结果</string>
+    <string name="search_site_filter_hint">过滤</string>
     <string name="common_clear">清空</string>
     <string name="common_loading_more">加载中…</string>
     <string name="common_no_more">没有更多了</string>
@@ -254,6 +258,7 @@
     <string name="following_no_schedule">未设置更新日</string>
     <string name="following_update_days">每%1$s</string>
     <string name="following_update_time">%1$s 更新</string>
+    <string name="following_update_today_time">今天 %1$s 更新</string>
     <string name="following_not_watched">还没有看</string>
     <string name="following_watched">已经看了</string>
     <string name="following_delete_selected_message">确定删除选中的 %1$d 部追剧吗？</string>
@@ -269,11 +274,11 @@
     <string name="music_previous">上一首</string>
     <string name="music_next">下一首</string>
 
-    <string name="search_home_poster">首页海报</string>
+    <string name="search_home_poster">海报样式</string>
     <string name="search_layout_horizontal">沉浸</string>
     <string name="search_layout_vertical">普通</string>
-    <string name="search_result_layout_horizontal">横向展示</string>
-    <string name="search_result_layout_vertical">竖向展示</string>
+    <string name="search_result_layout_horizontal">卡片视图</string>
+    <string name="search_result_layout_vertical">列表视图</string>
     <string name="search_exact">精准搜索</string>
     <string name="search_sites">搜索站点</string>
     <string name="search_sites_none_hint">未选择站点，将搜不到结果</string>
@@ -299,7 +304,7 @@
     <string name="dialog_kernel_prewarm_cancel">我不开了</string>
     <string name="dialog_api_url_hint">请输入 API 地址</string>
     <string name="dialog_source_disabled_title">该源已被自动停用</string>
-    <string name="dialog_source_disabled_message">「%1$s」此前导致应用崩溃，已被自动停用。\n\n若该源已经修好，可以重新启用；否则切换后很可能再次闪退。</string>
+    <string name="dialog_source_disabled_message">「%1$s」此前导致应用崩溃，已被自动停用。\n\n若该源已经修好，可以重新启用，否则切换后很可能再次闪退。</string>
     <string name="dialog_source_disabled_confirm">仍要启用</string>
 
     <string name="toast_cache_cleared">清理成功</string>
@@ -307,18 +312,8 @@
     <string name="toast_live_follow_vod">直播已跟随点播源</string>
     <string name="toast_source_in_use">正在使用的源不能删除</string>
 
-    <string name="player_exo">Media3 (ExoPlayer)</string>
-    
-    <string name="player_ijk">IJK (MediaPlayer)</string>
+    <string name="player_exo">Media3</string>
     <string name="player_nearby_tvbox">附近TVBox</string>
-    <string name="settings_auto_skip_intro">自动跳过片头</string>
-    <string name="settings_auto_skip_intro_summary">播放前 %d 秒时自动跳过</string>
-    <string name="settings_auto_skip_outro">自动跳过片尾</string>
-    <string name="settings_auto_skip_outro_summary">播放后 %d 秒时自动跳转</string>
-    <string name="settings_auto_skip_ad">自动跳过广告</string>
-    <string name="settings_auto_skip_ad_summary">检测到广告时自动跳过</string>
-    <string name="settings_auto_skip">自动跳过片头片尾</string>
-    <string name="settings_auto_skip_summary">在播放视频时自动跳过片头和片尾</string>
     <string name="player_decode_hard">硬解码</string>
     <string name="player_decode_soft">软解码</string>
     <string name="player_scale_fill">填充</string>
@@ -333,7 +328,6 @@
     <string name="detail_source">来源：%1$s</string>
     <string name="detail_collapse">收起</string>
     <string name="detail_expand">展开</string>
-    <string name="detail_quality">清晰度</string>
     <string name="detail_line">线路</string>
     <string name="detail_line_video_count">共 %1$d 个视频</string>
     <string name="detail_episodes">选集</string>
@@ -533,8 +527,15 @@
     <string name="player_get_info_error">获取播放信息错误</string>
     <string name="player_getting_info">正在获取播放信息</string>
     <string name="player_play_url_empty">获取播放地址为空</string>
-    <string name="player_play_error_retry">播放出错，自动重试</string>
+    <string name="player_iso_unsupported">ISO 格式的蓝光原盘无法播放</string>
+    <string name="player_iso_music_unsupported">ISO 蓝光原盘不支持音乐模式</string>
+    <string name="player_source_invalid">该线路返回的资源不完整</string>
+    <string name="player_iso_cast_unsupported">ISO 格式的蓝光原盘不支持投屏</string>
+    <string name="player_iso_bandwidth_low">网盘限速，带宽不足</string>
+    <string name="player_play_error_retry">片源播放失败，正在重试</string>
     <string name="player_decode_fallback_tip">硬解失败，已切换软解重试</string>
+    <string name="player_decode_fallback_hard_tip">软解失败，已切换硬解重试</string>
+    <string name="player_audio_track_fallback_tip">音轨无法解码，自动切换</string>
     <string name="player_call_external_play">推送到%1$s进行播放</string>
     <string name="player_call_external_result">推送到%1$s%2$s</string>
 
@@ -573,6 +574,8 @@
     <string name="thunder_error_parse">解析异常</string>
     <string name="thunder_error_download">下载出错</string>
     <string name="thunder_error_timeout">解析下载超时</string>
+    <string name="thunder_parsing">磁力解析中，请稍候</string>
+    <string name="thunder_parse_timeout">磁力解析超时</string>
     <string name="thunder_error_name_too_long">文件名太长</string>
     <string name="thunder_error_path_too_long">文件路径太长</string>
     <string name="thunder_error_file_too_small">文件太小</string>
@@ -591,7 +594,11 @@
     <string name="cast_device_offline">设备离线</string>
     <string name="toast_local_config_read_failed">读取本地配置失败</string>
     <string name="toast_local_missing_files_hint">还有 %1$d 个同目录文件没搬过来,请选择该配置所在的文件夹</string>
+    <string name="toast_local_source_imported">已导入本地源「%1$s」</string>
+    <string name="toast_local_source_already_imported">此源已导入</string>
+    <string name="toast_local_source_unsupported">只支持 .py 或 .js 本地源</string>
     <string name="toast_local_missing_files_all_files">还有 %1$d 个同目录文件没搬过来,请选择该配置所在的文件夹(开启「所有文件访问」后可直接引用原目录,不必搬文件)</string>
+    <string name="toast_storage_asked_by_spider">权限由爬虫模块申请</string>
     <string name="toast_local_tree_denied">没拿到该配置所在文件夹的授权,已取消导入(可再点一次重试)</string>
     <string name="toast_local_tree_forbidden">该配置在系统不允许授权的目录里(存储根/下载/Android),请把它放进自建文件夹(如 手机存储/AVBox/)后再导入</string>
     <string name="toast_local_refs_missing">还有 %1$d 个同目录引用的文件没搬过来,该源可能不可用(可重新导入)</string>
@@ -612,6 +619,8 @@
     <string name="osd_chip">芯片</string>
     <string name="osd_screen">屏幕</string>
     <string name="osd_network_env">网络环境</string>
+    <string name="osd_memory">PSS</string>
+    <string name="osd_heap">Java 堆</string>
     <string name="osd_state_ready">就绪</string>
     <string name="osd_state_playing">播放中</string>
     <string name="osd_state_buffering">缓冲中</string>
@@ -625,8 +634,4 @@
     <string name="osd_tunnel">隧道</string>
     <string name="osd_preload">预载</string>
     <string name="osd_cache">缓存</string>
-    <string name="toast_storage_asked_by_spider">权限由爬虫模块申请</string>
-
-    <!-- WebHome (HTML 主题页) -->
-    <string name="webhome_html_home">HTML主页</string>
 </resources>

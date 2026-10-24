@@ -5,6 +5,7 @@ import com.github.tvbox.osc.api.ApiConfig
 import com.github.tvbox.osc.base.App
 import com.github.tvbox.osc.data.CurrentSubscription
 import com.github.tvbox.osc.io.FileUtils
+import com.github.tvbox.osc.player.PlaybackService
 import com.github.tvbox.osc.server.ControlManager
 import com.github.tvbox.osc.ui.activity.SearchViewModel
 import com.github.tvbox.osc.util.BootGuard
@@ -19,6 +20,7 @@ import kotlin.coroutines.resume
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -61,6 +63,7 @@ object AppBootstrap {
     }
 
     fun retry() {
+        ApiConfig.get().cancelPendingLoads()
         _state.value = Boot.Loading
         startInit(forceFresh = true, offline = false)
     }
@@ -72,12 +75,13 @@ object AppBootstrap {
 
     fun onApiUrlChanged() {
         val generation = bootGeneration.next()
+        ApiConfig.get().cancelPendingLoads()
         _state.value = Boot.Loading
-        LOG.i("echo-switch: request")
+        LOG.debugI("echo-switch: request")
         scope.launch {
             val startedAt = System.currentTimeMillis()
             ApiConfig.get().invalidateVodConfig()
-            LOG.i("echo-switch: invalidate dt=" + (System.currentTimeMillis() - startedAt) + "ms")
+            LOG.debugI("echo-switch: invalidate dt=" + (System.currentTimeMillis() - startedAt) + "ms")
             SearchViewModel.clearCheckedSources()
             subscriptionCidFlow.value = CurrentSubscription.cid()
             startInit(forceFresh = true, offline = false, generation = generation)
@@ -124,6 +128,7 @@ object AppBootstrap {
                             return@withLock
                         }
                     } else {
+                        if (!bootGeneration.isLatest(generation)) return@withLock
                         dataInitOk = true
                         if (ApiConfig.get().getSpider().isNullOrEmpty()) jarInitOk = true
                     }
@@ -131,17 +136,80 @@ object AppBootstrap {
                 if (dataInitOk && !jarInitOk) {
                     val err = awaitLoadJar()
                     jarInitOk = true
-                    if (err != null) toast(err + " jar load err")
+                    if (!err.isNullOrEmpty() && bootGeneration.isLatest(generation)) toast(err)
                 }
                 if (dataInitOk && jarInitOk && bootGeneration.isLatest(generation)) {
                     ApiConfig.get().warmSearchSpiders()
                     _state.value = Boot.Ready(generation)
+                    if (!offline && !forceFresh) scheduleConfigRefresh(generation)
                 }
             }
         }
     }
 
     private const val CONFIG_CACHE_TTL_MS = 12 * 60 * 60 * 1000L
+
+    private const val CONFIG_REFRESH_DELAY_MS = 4_000L
+
+    private fun scheduleConfigRefresh(generation: Long) {
+        scope.launch {
+            delay(CONFIG_REFRESH_DELAY_MS)
+            if (!bootGeneration.isLatest(generation)) return@launch
+            ApiConfig.get().refreshConfigIfChanged { newBody, oldBody ->
+                applyRefreshedConfig(newBody, oldBody, generation)
+            }
+        }
+    }
+
+    private fun applyRefreshedConfig(newBody: String, oldBody: String, generation: Long) {
+        scope.launch {
+            initMutex.withLock {
+                if (!bootGeneration.isLatest(generation)) return@withLock
+                if (PlaybackService.peek()?.attachedPage() != null) {
+                    LOG.debugI("echo-config-refresh: deferred")
+                    return@withLock
+                }
+                if (oldBody.isEmpty()) {
+                    LOG.debugI("echo-config-refresh: no baseline")
+                    return@withLock
+                }
+                val apiUrl = KV.get(HawkConfig.API_URL, "")
+                try {
+                    ApiConfig.get().applyRefreshedConfig(apiUrl, newBody)
+                } catch (th: Throwable) {
+                    LOG.e("AppBootstrap", th)
+                    rollbackConfig(apiUrl, oldBody)
+                    return@withLock
+                }
+                if (!ApiConfig.get().getSpider().isNullOrEmpty()) {
+                    val jarErr = try {
+                        awaitLoadJar()
+                    } catch (th: Throwable) {
+                        LOG.e("AppBootstrap", th)
+                        "jar load failed"
+                    }
+                    if (jarErr != null) {
+                        rollbackConfig(apiUrl, oldBody)
+                        return@withLock
+                    }
+                }
+                ApiConfig.get().warmSearchSpiders()
+                LOG.debugI("echo-config-refresh: applied")
+                _state.value = Boot.Ready(bootGeneration.next())
+            }
+        }
+    }
+
+    private fun rollbackConfig(apiUrl: String, oldBody: String) {
+        if (oldBody.isEmpty()) return
+        try {
+            ApiConfig.get().restoreConfigCache(apiUrl, oldBody)
+            ApiConfig.get().applyRefreshedConfig(apiUrl, oldBody)
+            LOG.debugI("echo-config-refresh: rollback")
+        } catch (th: Throwable) {
+            LOG.e("AppBootstrap", th)
+        }
+    }
 
     private fun useCachedConfig(): Boolean {
         val apiUrl = KV.get(HawkConfig.API_URL, "")

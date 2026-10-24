@@ -115,6 +115,23 @@ class ApiConfig private constructor() {
         configLoader.loadLiveConfig(useCache, callback)
     }
 
+    fun refreshConfigIfChanged(onChanged: (String, String) -> Unit) {
+        configLoader.refreshIfChanged(onChanged)
+    }
+
+    fun applyRefreshedConfig(apiUrl: String, body: String) {
+        configLoader.applyRefreshed(apiUrl, body)
+    }
+
+    fun restoreConfigCache(apiUrl: String, body: String) {
+        configLoader.restoreCache(apiUrl, body)
+    }
+
+    fun cancelPendingLoads() {
+        configLoader.cancelVodFetches()
+        spiderLoader.invalidateJarLoads()
+    }
+
     fun hasLiveConfigResult(): Boolean {
         return !liveChannelGroupList.isEmpty()
     }
@@ -207,6 +224,10 @@ class ApiConfig private constructor() {
     }
 
     fun parseJson(apiUrl: String, jsonStr: String) {
+        if (apiUrl != KV.get(HawkConfig.API_URL, "")) {
+            LOG.debugI("echo-switch: drop stale config")
+            return
+        }
         resetConfigData()
         VideoParseRuler.clearRule()
         LOG.i("echo-apiurl:" + apiUrl)

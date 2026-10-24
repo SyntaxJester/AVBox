@@ -25,16 +25,31 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.InputStreamReader
 import java.util.ArrayList
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.function.Supplier
 
 class ConfigLoader(private val owner: ApiConfig) {
     private val configLoadExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val activeFetches = ConcurrentHashMap<String, okhttp3.Call>()
 
     fun loadConfig(useCache: Boolean, callback: ApiConfig.LoadConfigCallback, activity: Activity?) {
         configLoadExecutor.execute(Runnable { runLoadConfig(useCache, callback, activity) })
     }
+
+    fun cancelVodFetches() {
+        cancelFetch(KIND_VOD)
+        cancelFetch(KIND_REFRESH)
+    }
+
+    private fun cancelFetch(kind: String) {
+        val call = activeFetches.remove(kind) ?: return
+        LOG.debugI("echo-switch: cancel " + kind + " fetch")
+        call.cancel()
+    }
+
+    private fun isStaleFetch(apiUrl: String): Boolean = apiUrl != KV.get(HawkConfig.API_URL, "")
 
     private fun runLoadConfig(useCache: Boolean, callback: ApiConfig.LoadConfigCallback, activity: Activity?) {
         val apiUrl = KV.get(HawkConfig.API_URL, "")
@@ -62,8 +77,13 @@ class ConfigLoader(private val owner: ApiConfig) {
         val configUrl = resolved.url
         val configKey = resolved.key
 
-        fetchConfigAsync(apiUrl, configUrl, configKey, object : ConfigFetchCallback {
+        fetchConfigAsync(apiUrl, configUrl, configKey, KIND_VOD, object : ConfigFetchCallback {
             override fun success(body: String) {
+                if (isStaleFetch(apiUrl)) {
+                    LOG.debugI("echo-switch: drop stale config fetch")
+                    callback.error("stale")
+                    return
+                }
                 try {
                     if (switchApiCollectionIfNeeded(apiUrl, body)) {
                         FileUtils.saveCache(cache, body)
@@ -81,6 +101,11 @@ class ConfigLoader(private val owner: ApiConfig) {
             }
 
             override fun error(error: String?) {
+                if (isStaleFetch(apiUrl)) {
+                    LOG.debugI("echo-switch: drop stale config fetch")
+                    callback.error("stale")
+                    return
+                }
                 if (isLocalSourceUnreadable(apiUrl)) {
                     callback.error(localSourceUnreadableMsg())
                     return
@@ -107,6 +132,54 @@ class ConfigLoader(private val owner: ApiConfig) {
                 callback.error(ApiConfig.str(R.string.toast_config_fetch_failed, error))
             }
         })
+    }
+
+    fun refreshIfChanged(onChanged: (String, String) -> Unit) {
+        configLoadExecutor.execute(Runnable {
+            try {
+                val apiUrl = KV.get(HawkConfig.API_URL, "")
+                if (!isRemoteSource(apiUrl)) {
+                    LOG.debugI("echo-config-refresh: skip local")
+                    return@Runnable
+                }
+                val app = App.getInstance() ?: return@Runnable
+                val cache = File(app.getFilesDir().getAbsolutePath() + "/" + MD5.encode(apiUrl))
+                val previous = if (cache.exists()) readConfigFile(cache) else ""
+                val resolved = ConfigParser.configUrl(apiUrl, Supplier { ApiConfig.localFileBase() })
+                fetchConfigAsync(apiUrl, resolved.url, resolved.key, KIND_REFRESH, object : ConfigFetchCallback {
+                    override fun success(body: String) {
+                        if (isStaleFetch(apiUrl)) {
+                            LOG.debugI("echo-config-refresh: drop stale")
+                            return
+                        }
+                        if (ConfigContentDiff.isSame(body, previous)) {
+                            LOG.debugI("echo-config-refresh: unchanged")
+                            return
+                        }
+                        LOG.debugI("echo-config-refresh: changed " + previous.length + "->" + body.length)
+                        FileUtils.saveCache(cache, body)
+                        onChanged(body, previous)
+                    }
+
+                    override fun error(error: String?) {
+                        LOG.debugI("echo-config-refresh: failed " + error)
+                    }
+                })
+            } catch (th: Throwable) {
+                LOG.debugI("echo-config-refresh: error " + th.message)
+            }
+        })
+    }
+
+    fun applyRefreshed(apiUrl: String, body: String) {
+        clearApiLinesIfUnmatched(apiUrl)
+        owner.parseJson(apiUrl, body)
+    }
+
+    fun restoreCache(apiUrl: String, body: String) {
+        if (body.isEmpty()) return
+        val app = App.getInstance() ?: return
+        FileUtils.saveCache(File(app.getFilesDir().getAbsolutePath() + "/" + MD5.encode(apiUrl)), body)
     }
 
     fun loadLiveConfig(useCache: Boolean, callback: ApiConfig.LoadConfigCallback) {
@@ -144,7 +217,7 @@ class ConfigLoader(private val owner: ApiConfig) {
                 LOG.e("ApiConfig", th)
             }
         }
-        fetchConfigAsync(liveApiUrl, liveApiConfigUrl, liveConfigKey, object : ConfigFetchCallback {
+        fetchConfigAsync(liveApiUrl, liveApiConfigUrl, liveConfigKey, KIND_LIVE, object : ConfigFetchCallback {
             override fun success(body: String) {
                 try {
                     if (switchLiveApiCollectionIfNeeded(liveApiUrl, body)) {
@@ -331,18 +404,22 @@ class ConfigLoader(private val owner: ApiConfig) {
         fun error(error: String?)
     }
 
-    private fun fetchConfigAsync(apiUrl: String, requestUrl: String, configKey: String?, callback: ConfigFetchCallback) {
+    private fun fetchConfigAsync(apiUrl: String, requestUrl: String, configKey: String?, kind: String, callback: ConfigFetchCallback) {
         configLoadExecutor.execute(Runnable {
             var result = ""
             var error: String? = ""
             var response: okhttp3.Response? = null
+            var call: okhttp3.Call? = null
             try {
                 val request = okhttp3.Request.Builder()
                         .url(requestUrl)
                         .build()
                 var client: okhttp3.OkHttpClient? = OkGoHelper.getDefaultClient()
                 if (client == null) client = com.github.catvod.net.OkHttp.client()
-                response = client.newCall(request).execute()
+                val configCall = client.newCall(request)
+                call = configCall
+                activeFetches[kind] = configCall
+                response = configCall.execute()
                 if (!response.isSuccessful) {
                     error = "HTTP " + response.code
                 } else if (response.body == null) {
@@ -360,6 +437,7 @@ class ConfigLoader(private val owner: ApiConfig) {
                 error = th.message
                 if (TextUtils.isEmpty(error)) error = th.toString()
             } finally {
+                if (call != null && activeFetches[kind] === call) activeFetches.remove(kind)
                 if (response != null) SpiderLoader.closeQuietly(response.body)
             }
             val finalResult = result
@@ -382,5 +460,11 @@ class ConfigLoader(private val owner: ApiConfig) {
             }
             return sb.toString()
         }
+    }
+
+    private companion object {
+        private const val KIND_VOD = "vod"
+        private const val KIND_REFRESH = "refresh"
+        private const val KIND_LIVE = "live"
     }
 }

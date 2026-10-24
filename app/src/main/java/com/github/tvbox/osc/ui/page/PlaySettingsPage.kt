@@ -86,31 +86,6 @@ fun PlaySettingsScreen(onNavigateBack: () -> Unit, vm: SettingsViewModel = viewM
                         onSelect = { idx -> vm.put(HawkConfig.PLAY_TYPE, playerTypes[idx]) },
                     )
                 }
-                // 自动跳过片头片尾
-                SettingsCard(SettingsCardPosition.MIDDLE) {
-                    val context = LocalContext.current
-                    SettingsSwitchRow(
-                        title = stringResource(R.string.settings_auto_skip),
-                        subtitle = stringResource(R.string.settings_auto_skip_summary),
-                        checked = state.autoSkipEnabled,
-                        onCheckedChange = { enabled ->
-                            vm.put(HawkConfig.AUTO_SKIP_INTRO, enabled)
-                            vm.put(HawkConfig.AUTO_SKIP_OUTRO, enabled)
-                            vm.put(HawkConfig.AUTO_SKIP_AD, enabled)
-                        },
-                    )
-                }
-                // 自动连播下一集
-                SettingsCard(SettingsCardPosition.MIDDLE) {
-                    SettingsSwitchRow(
-                        title = "自动连播下一集",
-                        subtitle = "当前集播放结束后自动切换到下一集",
-                        checked = state.autoPlayNext,
-                        onCheckedChange = { enabled ->
-                            vm.put(HawkConfig.AUTO_PLAY_NEXT, enabled)
-                        },
-                    )
-                }
                 SettingsCard(SettingsCardPosition.MIDDLE) {
                     SettingsOptionMenuRow(
                         title = stringResource(R.string.settings_play_render),
