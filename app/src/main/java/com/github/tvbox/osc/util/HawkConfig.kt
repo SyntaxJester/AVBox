@@ -81,7 +81,12 @@ object HawkConfig {
     const val ISO_PGS_DEFAULT = true
     const val PRELOAD_DURATION = "preload_duration"
     const val PRELOAD_DURATION_DEFAULT = 60
-    const val PLAY_CACHE = "play_cache"
+    const val AUTO_SKIP_INTRO = "auto_skip_intro"
+    const val AUTO_SKIP_OUTRO = "auto_skip_outro"
+    const val AUTO_SKIP_AD = "auto_skip_ad"
+    const val AUTO_PLAY_NEXT = "auto_play_next"
+    const val PLAYER_HARDWARE_DECODE = "player_hardware_decode"
+    const val PLAYER_KERNEL = "player_kernel"
     const val EXO_CACHE_SIZE_MB = "exo_cache_size_mb"
     const val EXO_CACHE_SIZE_MB_DEFAULT = 512
     const val DANMU_OPEN = "danmu_open"

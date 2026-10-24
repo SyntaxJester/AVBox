@@ -1,3 +1,14 @@
+## v1.3.17
+- 恢复原版 fork 专属功能（v1.3.16 误删）：
+  - 音频指纹广告检测模块（ad/audio/*）
+  - 自动跳过片头/片尾/广告功能（AutoSkipHelper、IjkPlayer）
+  - P2P 加速支持（Jianpian、P2PClass）
+  - HTML 主页按钮（仅在有 homePage 配置的源显示）
+  - 补充 HawkConfig 常量：AUTO_SKIP_INTRO/OUTRO/AD、PLAYER_HARDWARE_DECODE、PLAYER_KERNEL
+- 版本：v1.3.17 (versionCode 48)
+
+---
+
 ## v1.3.16
 - 同步原版 v1.2.9 全部功能：
   - 修复网盘源点进文件夹后显示成其他影片

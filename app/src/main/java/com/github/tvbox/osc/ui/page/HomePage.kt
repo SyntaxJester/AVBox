@@ -37,9 +37,11 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.Icon
@@ -87,6 +89,7 @@ import com.github.tvbox.osc.ui.activity.ConfigManageActivity
 import com.github.tvbox.osc.ui.activity.PartitionListActivity
 import com.github.tvbox.osc.ui.activity.SearchActivity
 import com.github.tvbox.osc.ui.activity.SearchViewModel
+import com.github.tvbox.osc.web.WebViewActivity
 import com.github.tvbox.osc.ui.components.AVBoxBottomSheet
 import com.github.tvbox.osc.ui.components.AVBoxOptionMenuAction
 import com.github.tvbox.osc.ui.components.AppTopBarScaffold
@@ -249,6 +252,33 @@ fun HomePage(
                     .glassTopBarSurface(ContinuousCapsule, MaterialTheme.colorScheme.surfaceBright),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                // HTML 主页按钮 - 仅当当前源有 homePage 时显示
+                val htmlPage = currentSource?.homePage?.trim()
+                if (!htmlPage.isNullOrEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .glassTopBarSurface(CircleShape, MaterialTheme.colorScheme.surfaceBright)
+                            .clickable {
+                                val resolvedUrl = if (htmlPage.startsWith("./")) {
+                                    "file:///android_asset/${htmlPage.removePrefix("./")}"
+                                } else if (htmlPage.startsWith("http")) {
+                                    htmlPage
+                                } else {
+                                    "file:///android_asset/$htmlPage"
+                                }
+                                WebViewActivity.start(context, resolvedUrl, currentSource?.name)
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Home,
+                            contentDescription = stringResource(R.string.webhome_html_home),
+                            tint = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                    Spacer(Modifier.width(HomeTopBarControlSpacing))
+                }
                 Box(
                     modifier = Modifier
                         .size(40.dp)
