@@ -8,7 +8,7 @@ import com.github.tvbox.osc.util.KV
 
 object LiquidGlassState {
 
-    const val DEFAULT_BLUR_DP = 20f
+    const val DEFAULT_BLUR_DP = 5f
     const val DEFAULT_DISTORTION_DP = 30f
     const val DEFAULT_TRANSLUCENCY = 0.5f
     const val DEFAULT_DISPERSION = true

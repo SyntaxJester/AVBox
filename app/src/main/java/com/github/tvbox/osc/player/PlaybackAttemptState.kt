@@ -15,6 +15,9 @@ class PlaybackAttemptState {
     var hasAutoSwitchedDecode: Boolean = false
 
     @JvmField
+    var hasAutoSwitchedAudioTrack: Boolean = false
+
+    @JvmField
     var autoSwitchedDecodeOld: String? = null
 
     @JvmField
@@ -80,6 +83,24 @@ class PlaybackAttemptState {
     var castPrepareOnly: Boolean = false
 
     @JvmField
+    var isoSession: Boolean = false
+
+    @JvmField
+    var hasRefreshedOnIsoHttpError: Boolean = false
+
+    @JvmField
+    var isoBandwidthSwitchTried: Boolean = false
+
+    @JvmField
+    var localProxySession: Boolean = false
+
+    @JvmField
+    var slowOpenExtended: Boolean = false
+
+    @JvmField
+    var lastHttpStatus: Int = 0
+
+    @JvmField
     @Volatile
     var castAborted: Boolean = false
 
@@ -90,6 +111,10 @@ class PlaybackAttemptState {
         castAborted = false
         hasRefreshedOnFormatError = false
         refreshKeepsProgress = false
+        isoBandwidthSwitchTried = false
+        localProxySession = false
+        slowOpenExtended = false
+        lastHttpStatus = 0
     }
 
     fun beginNewPlay() {
@@ -98,9 +123,15 @@ class PlaybackAttemptState {
         allowSwitchPlayer = true
         hasAutoSwitchedPlayer = false
         hasAutoSwitchedDecode = false
+        hasAutoSwitchedAudioTrack = false
         hasRetriedAfterStart = false
         hasRetriedSameUrlOnBoot = false
         usedPreloadedResult = false
+        isoSession = false
+        hasRefreshedOnIsoHttpError = false
+        localProxySession = false
+        slowOpenExtended = false
+        lastHttpStatus = 0
     }
 
     fun userSelfRescue() {
@@ -108,6 +139,8 @@ class PlaybackAttemptState {
         hasRetriedAfterStart = false
         hasRetriedSameUrlOnBoot = false
         hasRefreshedOnFormatError = false
+        hasRefreshedOnIsoHttpError = false
+        isoBandwidthSwitchTried = false
     }
 
     fun stoppedForSourceSwitch() {
@@ -120,8 +153,10 @@ class PlaybackAttemptState {
     fun resetAutoRetryLadder() {
         allowSwitchPlayer = true
         hasAutoSwitchedPlayer = false
+        hasAutoSwitchedAudioTrack = false
         hasRetriedSameUrlOnBoot = false
         hasRefreshedOnFormatError = false
+        hasRefreshedOnIsoHttpError = false
         clearTriedLines()
     }
 
@@ -129,6 +164,8 @@ class PlaybackAttemptState {
         allowSwitchPlayer = true
         hasAutoSwitchedPlayer = false
         hasRefreshedOnFormatError = false
+        hasRefreshedOnIsoHttpError = false
+        slowOpenExtended = false
         if (switchIntent != SwitchIntent.REBUILD) switchIntent = SwitchIntent.REUSE
     }
 

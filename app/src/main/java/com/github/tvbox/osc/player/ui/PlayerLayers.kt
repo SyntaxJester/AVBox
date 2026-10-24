@@ -24,6 +24,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
@@ -41,6 +46,7 @@ import com.github.tvbox.osc.player.state.PlayerActions
 import com.github.tvbox.osc.player.state.PlayerUiState
 
 private val PillShape = RoundedCornerShape(50)
+private const val NET_SPEED_CENTER_DELAY_MS = 300L
 
 @Composable
 private fun HintPill(modifier: Modifier, content: @Composable RowScope.() -> Unit) {
@@ -79,13 +85,13 @@ fun PlayerTipLayer(state: PlayerUiState) {
             if (state.tipLoading) {
                 ContainedLoadingIndicator(
                     containerColor = Color.White.copy(alpha = 0.2f),
-                    indicatorColor = Color.White.copy(alpha = 0.75f),
+                    indicatorColor = Color.White,
                 )
             } else {
                 Icon(
-                    painter = painterResource(R.drawable.icon_error),
+                    painter = painterResource(R.drawable.ic_warning),
                     contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.75f),
+                    tint = Color.White,
                     modifier = Modifier.size(48.dp),
                 )
             }
@@ -94,7 +100,7 @@ fun PlayerTipLayer(state: PlayerUiState) {
                 Text(
                     text = state.tipMsg,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.75f),
+                    color = Color.White,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(horizontal = 24.dp),
                 )
@@ -172,7 +178,17 @@ fun PlayerLoadingLayer(state: PlayerUiState) {
 
 @Composable
 fun PlayerNetSpeedCenter(state: PlayerUiState) {
-    if (!state.netSpeedCenterVisible || state.tipVisible) return
+    val target = state.netSpeedCenterVisible && !state.tipVisible
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(target) {
+        if (!target) {
+            visible = false
+            return@LaunchedEffect
+        }
+        kotlinx.coroutines.delay(NET_SPEED_CENTER_DELAY_MS)
+        visible = true
+    }
+    if (!visible) return
     Box(Modifier.fillMaxSize()) {
         Text(
             text = state.netSpeedCenter,

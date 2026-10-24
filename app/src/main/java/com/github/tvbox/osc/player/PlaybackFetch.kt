@@ -6,6 +6,7 @@ import com.github.tvbox.osc.R
 import com.github.tvbox.osc.api.ApiConfig
 import com.github.tvbox.osc.api.DanmakuApi
 import com.github.tvbox.osc.io.FileUtils
+import com.github.tvbox.osc.player.engine.MediaSources
 import com.github.tvbox.osc.sourcedata.SourceViewModel
 import com.github.tvbox.osc.util.LOG
 import java.nio.charset.StandardCharsets
@@ -123,12 +124,15 @@ class PlaybackFetch(private val controller: PlaybackController) {
                     controller.handleResolvePlayUrlFailed(msg)
                     return
                 }
+                val iso = MediaSources.isIsoFormat(info.optString("format", "")) || MediaSources.isIsoUri(url)
+                if (iso) LOG.i("echo-iso-play: format=" + info.optString("format", ""))
                 controller.setUserPickedLine(false)
                 val danmaku = info.optString("danmaku", "").trim { it <= ' ' }
                 val danmuProgressKey = controller.progressKey()
                 controller.setWebUserAgent(null)
                 controller.setWebHeaderMap(null)
-                val headers = PlaybackController.extractHeaders(info)
+                val extracted = PlaybackController.extractHeaders(info)
+                val headers = if (iso) MediaSources.withIsoHeader(extracted) else extracted
                 if (headers != null) {
                     controller.setWebHeaderMap(headers)
                     val ua = PlaybackController.headerValue(headers, "user-agent")

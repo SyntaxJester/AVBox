@@ -3,6 +3,7 @@ package com.github.tvbox.osc.base
 import android.app.Activity
 import android.app.Application
 import android.content.Context
+import android.os.Build
 import android.os.StrictMode
 import android.os.SystemClock
 
@@ -22,7 +23,6 @@ import com.github.tvbox.osc.util.KV
 import com.github.tvbox.osc.util.LOG
 import com.github.tvbox.osc.util.LanguageManager
 import com.github.tvbox.osc.util.Probe
-import com.p2p.P2PClass
 import com.whl.quickjs.android.QuickJSLoader
 
 import com.github.tvbox.osc.player.engine.PlayerCache
@@ -84,6 +84,7 @@ class App : Application() {
         Probe.trace("boot:vodImages") { com.github.tvbox.osc.ui.components.VodImages.init() }
         bootMark("vodImages")
         Thread({
+            FileUtils.ensureNoMediaMarker()
             FileUtils.purgeExoCacheIfPending()
             PlayerCache.warmup(this)
             Probe.trace("boot:cleanPlayerCache") { FileUtils.cleanPlayerCache() }
@@ -114,6 +115,7 @@ class App : Application() {
 
     private fun installStrictMode() {
         if (!BuildConfig.DEBUG) return
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return
         StrictMode.setThreadPolicy(
             StrictMode.ThreadPolicy.Builder()
                 .detectDiskReads()
@@ -161,29 +163,11 @@ class App : Application() {
     companion object {
         private var instance: App? = null
 
-        private var p: P2PClass? = null
-
-        @JvmField
-        var burl: String? = null
-
         private var dashData: String? = null
 
         @JvmStatic
         fun getInstance(): App? {
             return instance
-        }
-
-        @JvmStatic
-        fun getp2p(): P2PClass? {
-            try {
-                if (p == null) {
-                    p = P2PClass(FileUtils.getExternalCachePath())
-                }
-                return p
-            } catch (e: Exception) {
-                LOG.e(e.toString())
-                return null
-            }
         }
     }
 }

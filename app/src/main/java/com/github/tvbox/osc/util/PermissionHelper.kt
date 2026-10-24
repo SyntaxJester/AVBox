@@ -40,6 +40,7 @@ object PermissionHelper {
 
     @JvmStatic
     fun requestStorage(activity: Activity, callback: OnPermissionCallback) {
+        hostAskAt = SystemClock.elapsedRealtime()
         val permissions: Array<IPermission> = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
             arrayOf(PermissionLists.getManageExternalStoragePermission())
         else

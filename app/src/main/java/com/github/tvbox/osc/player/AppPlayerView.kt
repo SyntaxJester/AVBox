@@ -18,9 +18,6 @@ import com.github.tvbox.osc.player.host.PlayerRenderViewFactory
 import com.github.tvbox.osc.player.host.PlayerAudioFocus
 import com.github.tvbox.osc.player.host.AudioFocusTarget
 import com.github.tvbox.osc.player.state.PlayState
-import com.github.tvbox.osc.player.IjkPlayer
-import com.github.tvbox.osc.util.KV
-import com.github.tvbox.osc.util.HawkConfig
 import com.github.tvbox.osc.util.LOG
 import com.github.tvbox.osc.util.PlayerUtils
 import kotlinx.coroutines.CoroutineScope
@@ -49,13 +46,6 @@ open class AppPlayerView @JvmOverloads constructor(
     protected var mMediaPlayer: KernelPlayer? = null
 
     protected var mProgressSink: ProgressSink? = null
-
-    /** 自动连播下一集回调（由宿主页面注入） */
-    protected var onAutoPlayNext: (() -> Unit)? = null
-
-    fun setAutoPlayNextCallback(cb: (() -> Unit)?) {
-        onAutoPlayNext = cb
-    }
 
     protected val mPlayerContainer: FrameLayout = FrameLayout(context)
 
@@ -170,8 +160,11 @@ open class AppPlayerView @JvmOverloads constructor(
 
     protected open fun showNetWarning(): Boolean = false
 
+    internal var videoCodecObserver: VideoCodecObserver? = null
+
     protected open fun initPlayer() {
         val player = createPlayer()
+        (player as? ExoPlayer)?.setVideoCodecObserver(videoCodecObserver)
         player.setPlayerEventListener(kernelEventListener)
         mMediaPlayer = player
         setInitOptions()
@@ -179,13 +172,7 @@ open class AppPlayerView @JvmOverloads constructor(
         setOptions()
     }
 
-    protected open fun createPlayer(): KernelPlayer {
-        val kernelType = KV.get(HawkConfig.PLAYER_KERNEL, "exo")
-        return when (kernelType) {
-            "ijk" -> IjkPlayer(context)
-            else -> ExoPlayer(context)
-        }
-    }
+    protected open fun createPlayer(): KernelPlayer = ExoPlayer(context)
 
     protected open fun setInitOptions() = Unit
 
@@ -221,6 +208,10 @@ open class AppPlayerView @JvmOverloads constructor(
             0,
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.CENTER),
         )
+        render.getView().addOnLayoutChangeListener { _, l, t, r, b, _, _, _, _ ->
+            notifyVideoRect(l, t, r - l, b - t)
+        }
+        render.getView().post { notifyVideoRect() }
     }
 
     protected fun startPrepare(reset: Boolean) {
@@ -397,20 +388,6 @@ open class AppPlayerView @JvmOverloads constructor(
             mCurrentPosition = 0
             mProgressSink?.saveProgress(progressKey(), 0L)
             reportPlayState()
-
-            // 自动连播下一集
-            if (com.github.tvbox.osc.util.KV.get(
-                    com.github.tvbox.osc.util.HawkConfig.AUTO_PLAY_NEXT, false
-                )
-            ) {
-                mPlayerContainer.postDelayed({
-                    try {
-                        onAutoPlayNext?.invoke()
-                    } catch (e: Exception) {
-                        com.github.tvbox.osc.util.LOG.e("AutoPlayNext failed: ${e.message}")
-                    }
-                }, 800L)
-            }
         }
 
         override fun onVideoSizeChanged(width: Int, height: Int) {
@@ -601,6 +578,8 @@ open class AppPlayerView @JvmOverloads constructor(
          * 纯 Compose 控制器本身不是 View，应覆写此方法返回其 ComposeView 宿主。
          */
         fun controllerView(): View? = this as? View
+
+        fun onVideoRectChanged(left: Int, top: Int, width: Int, height: Int) = Unit
     }
 
     protected var mVideoController: VideoControllerHost? = null
@@ -612,6 +591,7 @@ open class AppPlayerView @JvmOverloads constructor(
         val old = mVideoController
         old?.controllerView()?.let { mPlayerContainer.removeView(it) }
         mVideoController = controller
+        lastVideoRect = null
         if (controller != null) {
             controller.controllerView()?.let { attach ->
                 mPlayerContainer.addView(
@@ -625,7 +605,30 @@ open class AppPlayerView @JvmOverloads constructor(
             if (state != PlayState.IDLE && state != PlayState.ERROR) {
                 controller.startProgress()
             }
+            notifyVideoRect()
         }
+    }
+
+    private var lastVideoRect: IntArray? = null
+
+    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+        super.onLayout(changed, left, top, right, bottom)
+        notifyVideoRect()
+    }
+
+    private fun notifyVideoRect() {
+        val view = mRenderView?.getView() ?: return
+        notifyVideoRect(view.left, view.top, view.width, view.height)
+    }
+
+    private fun notifyVideoRect(left: Int, top: Int, width: Int, height: Int) {
+        val controller = mVideoController ?: return
+        if (width <= 0 || height <= 0) return
+        val rect = intArrayOf(left, top, width, height)
+        if (rect.contentEquals(lastVideoRect)) return
+        lastVideoRect = rect
+        LOG.i("echo-render-rect:" + left + "," + top + ":" + width + "x" + height)
+        controller.onVideoRectChanged(left, top, width, height)
     }
 
     open fun releaseController(): VideoControllerHost? {

@@ -11,6 +11,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebView
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
 import androidx.media3.ui.SubtitleView
 import com.github.tvbox.osc.R
@@ -18,9 +19,11 @@ import com.github.tvbox.osc.api.ApiConfig
 import com.github.tvbox.osc.bean.SourceBean
 import com.github.tvbox.osc.player.AppPlayerView
 import com.github.tvbox.osc.player.MyVideoView
+import com.github.tvbox.osc.player.VideoCodecInfo
 import com.github.tvbox.osc.player.state.LockVisibility
 import com.github.tvbox.osc.player.state.PlayerUiState
 import com.github.tvbox.osc.player.state.PlayState
+import com.github.tvbox.osc.player.state.VideoRect
 import com.github.tvbox.osc.player.state.VideoSizeGate
 import com.github.tvbox.osc.player.ui.PlayerSurfaceHost
 import com.github.tvbox.osc.player.ui.VideoGestureHandler
@@ -32,6 +35,8 @@ import com.github.tvbox.osc.util.DanmuHelper
 import com.github.tvbox.osc.util.LOG
 import com.github.tvbox.osc.util.PlayerUtils
 import com.github.tvbox.osc.util.SubtitleHelper
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import org.json.JSONObject
 import java.util.HashMap
 
@@ -173,7 +178,24 @@ class VideoPlayerController(
     private var skipEnd = true
     internal var isClickBackBtn = false
     private var showParseFlag = false
-    internal var playerConfig: JSONObject? = null
+    private val playerConfigState = mutableStateOf<JSONObject?>(null)
+
+    private val videoCodecFlowState =
+        mutableStateOf<StateFlow<VideoCodecInfo>>(MutableStateFlow(VideoCodecInfo()))
+
+    internal val videoCodecFlow: StateFlow<VideoCodecInfo>
+        get() = videoCodecFlowState.value
+
+    internal fun bindVideoCodecFlow(flow: StateFlow<VideoCodecInfo>) {
+        videoCodecFlowState.value = flow
+    }
+
+    internal var playerConfig: JSONObject?
+        get() = playerConfigState.value
+        set(value) {
+            playerConfigState.value = value
+        }
+
     internal var listener: VodControlListener? = null
 
     internal val uiHandler by lazy { Handler(Looper.getMainLooper()) }
@@ -301,6 +323,13 @@ class VideoPlayerController(
         initOrientationState()
     }
 
+    override fun onVideoRectChanged(left: Int, top: Int, width: Int, height: Int) {
+        val rect = VideoRect(left, top, width, height)
+        if (rect.empty) return
+        if (rect == state.videoRect) return
+        state.videoRect = rect
+    }
+
     /** 对应原 View.onDetachedFromWindow：宿主被摘除时清理挂起的回调。 */
     internal fun onHostDetached() {
         uiHandler.removeCallbacks(progressRunnable)
@@ -397,9 +426,7 @@ class VideoPlayerController(
         if (state.dragging) return
         if (view?.isPlaying != true) return
         progressTicking = true
-        val speed = view.speed.takeIf { it > 0f } ?: 1f
-        val delayMs = ((1000 - state.position % 1000) / speed).toLong().coerceAtLeast(1L)
-        uiHandler.postDelayed(progressRunnable, delayMs)
+        uiHandler.postDelayed(progressRunnable, ProgressTickDelay.next(state.position, view.speed))
     }
 
     override fun startProgress() {

@@ -95,12 +95,74 @@ object PlayerHelper {
             name.contains(".sw.") ||
             name.endsWith(".sw")
 
+    /**
+     * 视频解码器实际类型：MediaCodec 的视频解码器非软即硬，不依赖 API 29 的
+     * isHardwareAccelerated 标志（低版本会拿不到）。ffmpeg 兜底渲染器不走 MediaCodec，不在此列。
+     */
+    @JvmStatic
+    fun videoDecodeKindOf(codecName: String?, softwareOnly: Boolean): PlayerDecodeKind {
+        val name = codecName.orEmpty()
+        if (name.isEmpty()) return PlayerDecodeKind.UNKNOWN
+        if (softwareOnly || isSoftwareCodecName(name)) return PlayerDecodeKind.SOFTWARE
+        return PlayerDecodeKind.HARDWARE
+    }
+
+    /** 参数面板「解码方式」的选中项：实际生效优先，未初始化时回落到本片档位。0=硬解码 1=软解码。 */
+    @JvmStatic
+    fun decodeDisplayIndex(actualKind: PlayerDecodeKind, configuredExo: String?): Int = when (actualKind) {
+        PlayerDecodeKind.SOFTWARE -> 1
+        PlayerDecodeKind.HARDWARE -> 0
+        PlayerDecodeKind.UNKNOWN -> if ("软解码" == configuredExo) 1 else 0 // i18n: keep
+    }
+
+    @JvmStatic
+    fun pendingDecodeIndex(
+        pending: String?,
+        pendingAt: Long,
+        pendingGeneration: Int,
+        now: Long,
+        currentGeneration: Int,
+        timeoutMs: Long,
+    ): Int? {
+        if (pending == null) return null
+        if (now - pendingAt > timeoutMs) return null
+        if (pendingGeneration != currentGeneration) return null
+        return if ("软解码" == pending) 1 else 0 // i18n: keep
+    }
+
+    /**
+     * 自动软解回退是否会落到当前已经使用的 codec 上（设备没有硬解时常见）。
+     * 只在实际已跑在软解器上时才可能"切了没变化"：当前是硬解器一律允许回退；
+     * media3 会按 format 支持再重排软解候选，所以不拿排序前的首候选去否决硬解回退。
+     */
+    @JvmStatic
+    fun shouldSkipSoftDecodeFallback(
+        softCandidateName: String?,
+        currentCodecName: String?,
+        currentKind: PlayerDecodeKind,
+    ): Boolean {
+        if (currentKind != PlayerDecodeKind.SOFTWARE) return false
+        if (currentCodecName.isNullOrEmpty()) return false
+        if (!softCandidateName.isNullOrEmpty()) return softCandidateName == currentCodecName
+        return true
+    }
+
+    @JvmStatic
+    fun shouldSkipHardDecodeFallback(
+        hardCandidateName: String?,
+        currentCodecName: String?,
+        currentKind: PlayerDecodeKind,
+    ): Boolean {
+        if (currentKind == PlayerDecodeKind.HARDWARE) return true
+        if (currentCodecName.isNullOrEmpty()) return false
+        if (hardCandidateName.isNullOrEmpty()) return false
+        return hardCandidateName == currentCodecName
+    }
+
     @JvmStatic
     fun getPlayerName(playType: Int): String {
         return when (playType) {
             13 -> str(R.string.player_nearby_tvbox)
-            4 -> str(R.string.player_ijk)
-            
             else -> str(R.string.player_exo)
         }
     }
@@ -117,10 +179,7 @@ object PlayerHelper {
         val cached = mPlayersExistInfo
         if (cached != null) return cached
         val playersExist = HashMap<Int, Boolean>()
-        // 2 = ExoPlayer, 4 = IjkPlayer, 5 = ExoPlayer2
         playersExist[2] = true
-        playersExist[4] = true
-        
         playersExist[13] = RemoteTVBox.getAvalible() != null
         mPlayersExistInfo = playersExist
         return playersExist

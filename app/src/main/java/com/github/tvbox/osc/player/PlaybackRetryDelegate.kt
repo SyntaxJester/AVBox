@@ -1,9 +1,17 @@
 package com.github.tvbox.osc.player
 
+import android.net.Uri
 import android.text.TextUtils
+import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import com.github.tvbox.osc.R
+import com.github.tvbox.osc.bean.SourceBean
 import com.github.tvbox.osc.bean.VodInfo
 import com.github.tvbox.osc.data.EpisodeMatcher
+import com.github.tvbox.osc.player.engine.iso.IsoAudioFallback
+import com.github.tvbox.osc.player.engine.iso.IsoBandwidthGuard
+import com.github.tvbox.osc.player.engine.iso.IsoSessionSignal
+import com.github.tvbox.osc.player.engine.iso.IsoThroughput
+import com.github.tvbox.osc.player.engine.iso.stopsIsoBandwidthRetry
 import com.github.tvbox.osc.util.HawkConfig
 import com.github.tvbox.osc.util.KV
 import com.github.tvbox.osc.util.LOG
@@ -21,6 +29,8 @@ class PlaybackRetryDelegate(private val host: Host) {
 
         fun vod(): VodInfo?
 
+        fun sourceBean(): SourceBean?
+
         fun currentSeries(flag: String?, index: Int): VodInfo.VodSeries?
 
         fun progressKey(): String?
@@ -28,6 +38,8 @@ class PlaybackRetryDelegate(private val host: Host) {
         suspend fun getSavedProgress(url: String): Long
 
         fun inheritProgressFrom(key: String?, position: Long)
+
+        fun videoCodecInfo(): VideoCodecInfo
 
         fun webPlayUrl(): String?
 
@@ -48,6 +60,10 @@ class PlaybackRetryDelegate(private val host: Host) {
         fun cancelPlayRequest()
 
         fun cancelPlayTimeout()
+
+        fun startSwitchLinePlayTimeout(isoSession: Boolean)
+
+        fun extendSwitchLinePlayTimeout(graceMs: Long)
 
         fun isPlaybackStarted(): Boolean
 
@@ -102,33 +118,134 @@ class PlaybackRetryDelegate(private val host: Host) {
         return ExoPlayer.ERROR_KIND_UNKNOWN
     }
 
-    private fun trySoftDecodeFallback(): Boolean {
+    private fun exoLastErrorTrackKind(): Int {
+        try {
+            val live = host.view()?.mediaPlayer()
+            if (live is ExoPlayer) return live.lastErrorTrackKind()
+        } catch (ignored: Throwable) {
+            LOG.d("PlaybackController", "exo error track kind probe failed")
+        }
+        return ExoPlayer.ERROR_TRACK_UNKNOWN
+    }
+
+    private fun exoLastErrorFormatId(): String? {
+        try {
+            val live = host.view()?.mediaPlayer()
+            if (live is ExoPlayer) return live.lastErrorFormatId()
+        } catch (ignored: Throwable) {
+            LOG.d("PlaybackController", "exo error format id probe failed")
+        }
+        return null
+    }
+
+    private fun tryAudioTrackFallback(): Boolean {
+        val st = host.attemptState()
+        if (st.hasAutoSwitchedAudioTrack) return false
+        val webUrl = host.webPlayUrl() ?: return false
+        if (TextUtils.isEmpty(webUrl)) return false
+        val pid = IsoAudioFallback.pidOfFormatId(exoLastErrorFormatId())
+        if (pid == null) {
+            LOG.i("echo-autoRetry audio track fallback: no pid")
+            return false
+        }
+        st.hasAutoSwitchedAudioTrack = true
+        IsoAudioFallback.suppress(Uri.parse(webUrl).toString(), pid)
+        LOG.i("echo-autoRetry audio track fallback:$pid")
+        val view = host.view()
+        if (view != null && view.isPageAlive()) {
+            view.runOnUi { view.toast(PlaybackController.str(R.string.player_audio_track_fallback_tip)) }
+        }
+        host.stopParse()
+        host.initParseLoadFound()
+        st.playbackStarted = false
+        if (view != null && !host.isCrossContentReuseAllowed()) view.releasePlayer()
+        if (view != null) host.playUrl(webUrl, host.webHeaderMap())
+        st.hasAutoSwitchedAudioTrack = true
+        return true
+    }
+
+    private fun softwareDecodeCandidateName(): String? {
+        val exo = host.view()?.mediaPlayer() as? ExoPlayer ?: return null
+        val mime = exo.selectedVideoFormat?.sampleMimeType ?: return null
+        return runCatching {
+            MediaCodecSelector.PREFER_SOFTWARE.getDecoderInfos(mime, false, false)
+        }.getOrNull()?.firstOrNull()?.name
+    }
+
+    private fun hardDecodeCandidateName(): String? {
+        val exo = host.view()?.mediaPlayer() as? ExoPlayer ?: return null
+        val mime = exo.selectedVideoFormat?.sampleMimeType ?: return null
+        return runCatching {
+            MediaCodecSelector.DEFAULT.getDecoderInfos(mime, false, false)
+        }.getOrNull()?.firstOrNull()?.name
+    }
+
+    private fun tryDecodeFallback(): Boolean {
+        if (exoLastErrorTrackKind() == ExoPlayer.ERROR_TRACK_AUDIO) return false
         val st = host.attemptState()
         val cfg = host.playerCfg() ?: return false
         if (st.hasAutoSwitchedDecode) return false
         if (cfg.optInt("pl", 2) >= 10) return false
         val decodeKey = "exo"
-        if ("硬解码" != cfg.optString(decodeKey, "")) return false // i18n: keep —— 已经是软解,不再回退
+        val toSoftware = when (cfg.optString(decodeKey, "")) {
+            "硬解码" -> true // i18n: keep
+            "软解码" -> false // i18n: keep
+            else -> return false
+        }
+        val codecInfo = host.videoCodecInfo()
+        val currentCodec = codecInfo.decoderName
+        if (toSoftware) {
+            if (PlayerHelper.shouldSkipSoftDecodeFallback(
+                    softwareDecodeCandidateName(),
+                    currentCodec,
+                    codecInfo.kind,
+                )
+            ) {
+                LOG.i("echo-autoRetry skip soft decode: software target already in use ($currentCodec)")
+                return false
+            }
+        } else {
+            val hardCandidate = hardDecodeCandidateName()
+            if (PlayerHelper.shouldSkipHardDecodeFallback(
+                    hardCandidate,
+                    currentCodec,
+                    codecInfo.kind,
+                )
+            ) {
+                LOG.i(
+                    "echo-autoRetry skip hard decode: kind=${codecInfo.kind}" +
+                        " current=$currentCodec candidate=$hardCandidate",
+                )
+                return false
+            }
+        }
         val webUrl = host.webPlayUrl() ?: return false
         if (TextUtils.isEmpty(webUrl)) return false
         val oldDecode = cfg.optString(decodeKey, "")
         try {
-            cfg.put(decodeKey, "软解码") // i18n: keep
+            cfg.put(decodeKey, if (toSoftware) "软解码" else "硬解码") // i18n: keep
         } catch (th: Throwable) {
             return false
         }
-        LOG.i("echo-autoRetry hard->soft decode: " + host.webPlayUrl())
+        LOG.i(
+            (if (toSoftware) "echo-autoRetry hard->soft decode: " else "echo-autoRetry soft->hard decode: ") + webUrl,
+        )
         st.autoSwitchedDecodeOld = oldDecode
         st.autoSwitchedDecodeKey = decodeKey
         st.hasAutoSwitchedDecode = true
-        val view = host.view()
-        view?.applyPlayerConfig(cfg)
         host.stopParse()
         host.initParseLoadFound()
+        val view = host.view()
         if (view != null && view.isPageAlive()) {
-            view.runOnUi { view.toast(PlaybackController.str(R.string.player_decode_fallback_tip)) }
+            val tip = if (toSoftware) {
+                R.string.player_decode_fallback_tip
+            } else {
+                R.string.player_decode_fallback_hard_tip
+            }
+            view.runOnUi { view.toast(PlaybackController.str(tip)) }
         }
         view?.releasePlayer()
+        view?.applyPlayerConfig(cfg)
         if (view != null) host.playUrl(webUrl, host.webHeaderMap())
         return true
     }
@@ -146,6 +263,23 @@ class PlaybackRetryDelegate(private val host: Host) {
     fun retryAfterStartedError(): Boolean {
         if (dropRetryIfCastAborted("retryAfterStartedError")) return false
         val st = host.attemptState()
+        if (exoLastErrorKind() == ExoPlayer.ERROR_KIND_DECODE
+            && exoLastErrorTrackKind() == ExoPlayer.ERROR_TRACK_AUDIO
+        ) {
+            return tryAudioTrackFallback()
+        }
+        if (isoSessionLike(st) && exoLastErrorKind() != ExoPlayer.ERROR_KIND_DECODE) {
+            val view = host.view()
+            val durationMs = view?.mediaPlayer()?.duration?.takeIf { it > 0L } ?: (view?.duration() ?: 0L)
+            val verdict = IsoBandwidthGuard.evaluate(durationMs)
+            if (verdict != null) {
+                LOG.i("echo-iso-bandwidth-mid:${verdict.measuredBytesPerSecond}:${verdict.requiredBytesPerSecond}")
+                view?.showTip(PlaybackController.str(R.string.player_iso_bandwidth_low), false, true)
+                st.isoBandwidthSwitchTried = true
+                st.playbackStarted = false
+                return false
+            }
+        }
         if (st.hasRetriedAfterStart) return false
         val webUrl = host.webPlayUrl() ?: return false
         if (TextUtils.isEmpty(webUrl)) return false
@@ -203,10 +337,34 @@ class PlaybackRetryDelegate(private val host: Host) {
         return true
     }
 
+    private suspend fun retryIsoHttpError(): Boolean {
+        val st = host.attemptState()
+        if (!isoSessionLike(st)) return false
+        if (!RetryPolicy.isHttpStatusError(exoLastErrorCodeName())) return false
+        if (st.hasRefreshedOnIsoHttpError) {
+            LOG.i("echo-iso-refresh-resolve-exhausted, try next line: " + host.webPlayUrl())
+            return tryNextLineIfEnabled()
+        }
+        st.hasRefreshedOnIsoHttpError = true
+        st.refreshKeepsProgress = true
+        st.playbackStarted = false
+        LOG.i("echo-iso-refresh-resolve: " + host.webPlayUrl())
+        host.stopParse()
+        host.initParseLoadFound()
+        if (!host.isCrossContentReuseAllowed()) host.view()?.releasePlayer()
+        host.play(false)
+        return true
+    }
+
     suspend fun autoRetry(): Boolean {
         if (dropRetryIfCastAborted("autoRetry")) return false
         val st = host.attemptState()
         if (retryWithFreshResolve("autoRetry")) return true
+        if (retryIsoHttpError()) return true
+        if (stopsIsoBandwidthRetry(isoSessionLike(st), st.isoBandwidthSwitchTried)) {
+            LOG.i("echo-iso-bandwidth-exhausted")
+            return false
+        }
         val currentTime = System.currentTimeMillis()
         if (currentTime - st.lastRetryTime > 60_000) {
             LOG.i("echo-reset-autoRetryCount")
@@ -232,7 +390,12 @@ class PlaybackRetryDelegate(private val host: Host) {
             if (view != null) host.playUrl(requireNotNull(webUrl), host.webHeaderMap())
             return true
         }
-        if (exoErrorKind != ExoPlayer.ERROR_KIND_NETWORK && trySoftDecodeFallback()) return true
+        if (exoErrorKind == ExoPlayer.ERROR_KIND_DECODE
+            && exoLastErrorTrackKind() == ExoPlayer.ERROR_TRACK_AUDIO
+        ) {
+            return tryAudioTrackFallback()
+        }
+        if (exoErrorKind != ExoPlayer.ERROR_KIND_NETWORK && tryDecodeFallback()) return true
         if (webUrl != null) {
             if (st.allowSwitchPlayer && !st.hasAutoSwitchedPlayer) {
                 LOG.i("echo-autoRetry switch player and replay current url")
@@ -259,7 +422,7 @@ class PlaybackRetryDelegate(private val host: Host) {
     suspend fun tryNextLineIfEnabled(): Boolean {
         restoreAutoSwitchedPlayer()
         restoreAutoSwitchedDecode()
-        if (host.attemptState().allowAutoSwitchLine && (KV.get(HawkConfig.AUTO_SWITCH_LINE, false) as Boolean)) {
+        if (host.attemptState().allowAutoSwitchLine && (KV.get(HawkConfig.AUTO_SWITCH_LINE, HawkConfig.AUTO_SWITCH_LINE_DEFAULT) as Boolean)) {
             return tryNextLine()
         }
         LOG.i("echo-autoRetry line switching disabled")
@@ -312,6 +475,7 @@ class PlaybackRetryDelegate(private val host: Host) {
         vod.playFlag = flagToSwitch
         vod.playIndex = nextIndex
         st.onLineSwitched()
+        IsoSessionSignal.reset()
         host.inheritProgressFrom(preProgressKey, preProgress)
         host.play(false)
         return true
@@ -355,7 +519,7 @@ class PlaybackRetryDelegate(private val host: Host) {
     suspend fun handleResolvePlayUrlFailed(err: String) {
         if (dropRetryIfCastAborted("resolveFailed")) {
             host.stopMusicSessionForFailedPlayback()
-            showErrorTip(err)
+            showErrorTip(resolveFailedTip(err))
             return
         }
         val st = host.attemptState()
@@ -367,13 +531,22 @@ class PlaybackRetryDelegate(private val host: Host) {
             st.userPickedLine = false
             host.cancelPlayTimeout()
             host.stopMusicSessionForFailedPlayback()
-            showErrorTip(err)
+            showErrorTip(resolveFailedTip(err))
             return
         }
         if (tryNextLineIfEnabled()) return
         host.cancelPlayTimeout()
         host.stopMusicSessionForFailedPlayback()
-        showErrorTip(err)
+        showErrorTip(resolveFailedTip(err))
+    }
+
+    private fun resolveFailedTip(err: String): String {
+        val site = host.sourceBean()?.name?.trim().orEmpty()
+        if (site.isEmpty()) return err
+        val text = PlaybackController.str(R.string.player_site_failed, site, err)
+        if (text.isEmpty()) return err
+        LOG.i("echo-resolve-failed tip: $text")
+        return text
     }
 
     suspend fun handleSwitchLinePlayTimeout() {
@@ -387,10 +560,48 @@ class PlaybackRetryDelegate(private val host: Host) {
         val state = view?.playState()
         LOG.i("echo-switchLinePlay timeout state: $state, started: " + st.playbackStarted)
         if (abortIfCastPrepare("switchLineTimeout")) return
+        val slowOpenExtend = st.localProxySession && !isoSessionLike(st) &&
+            SlowOpenSignal.shouldExtend(host.isPlaybackStarted(), st.slowOpenExtended)
+        if (slowOpenExtend) {
+            st.slowOpenExtended = true
+            LOG.i("echo-slow-open extend bytes=${SlowOpenSignal.bytes()} localProxy=${st.localProxySession}")
+            host.extendSwitchLinePlayTimeout(PlaybackTimeouts.SLOW_OPEN_GRACE_MS)
+            return
+        }
         if (host.isPlaybackStarted()) {
             host.cancelPlayTimeout()
             view?.hideTipOnUiThread()
             return
+        }
+        if (IsoSessionSignal.consumeWindowExtension()) {
+            LOG.i("echo-iso-bdav-timeout-extend")
+            st.isoSession = true
+            host.startSwitchLinePlayTimeout(true)
+            return
+        }
+        if (st.isoSession) {
+            val durationMs = view?.mediaPlayer()?.duration?.takeIf { it > 0L } ?: (view?.duration() ?: 0L)
+            LOG.i(
+                "echo-iso-bandwidth-probe:dur=$durationMs" +
+                    ":bps=${IsoThroughput.bytesPerSecond()}:target=${IsoThroughput.targetLength()}",
+            )
+            val verdict = IsoBandwidthGuard.evaluate(durationMs)
+            if (verdict != null) {
+                LOG.i("echo-iso-bandwidth:${verdict.measuredBytesPerSecond}:${verdict.requiredBytesPerSecond}")
+                view?.showTip(PlaybackController.str(R.string.player_iso_bandwidth_low), false, true)
+                host.stopParse()
+                if (st.isoBandwidthSwitchTried) {
+                    host.stopMusicSessionForFailedPlayback()
+                    host.cancelPlayTimeout()
+                    return
+                }
+                st.isoBandwidthSwitchTried = true
+                if (!tryNextLineIfEnabled()) {
+                    host.stopMusicSessionForFailedPlayback()
+                    host.cancelPlayTimeout()
+                }
+                return
+            }
         }
         LOG.i("echo-switchLinePlay timeout, try next line")
         host.stopParse()
@@ -412,4 +623,7 @@ class PlaybackRetryDelegate(private val host: Host) {
     private fun showErrorTip(err: String) {
         host.view()?.showTip(err, false, true)
     }
+
+    private fun isoSessionLike(st: PlaybackAttemptState): Boolean =
+        st.isoSession || IsoSessionSignal.escalated()
 }

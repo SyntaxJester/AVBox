@@ -112,6 +112,9 @@ class KVKeySpec : KVDecoder.TypeRegistry {
             register(HawkConfig.KERNEL_PREWARM, false)
             register(HawkConfig.EXO_VIDEO_DYNAMIC_SCHEDULING, false)
             register(HawkConfig.PRELOAD_NEXT_EPISODE, false)
+            register(HawkConfig.ISO_LPCM, true)
+            register(HawkConfig.ISO_TRUEHD_CORE, true)
+            register(HawkConfig.ISO_PGS, true)
             register(HawkConfig.PLAY_CACHE, false)
             register(HawkConfig.DANMU_OPEN, false)
             register(HawkConfig.DANMU_RANDOM_COLOR, false)
@@ -149,8 +152,11 @@ class KVKeySpec : KVDecoder.TypeRegistry {
             register(HawkConfig.LIVE_API_LINE_LIST, object : TypeToken<ArrayList<String>>() {
             })
             register(HawkConfig.BOOT_LOADING_JAR, "")
+            register(HawkConfig.BOOT_LOADING_SCOPE, "")
             register(HawkConfig.BOOT_SAFE_DISABLED, "")
             register(HawkConfig.BOOT_DISABLED_SOURCES, object : TypeToken<ArrayList<String>>() {
+            })
+            register(HawkConfig.BOOT_DISABLED_JARS, object : TypeToken<ArrayList<String>>() {
             })
             register(HawkConfig.BOOT_VOD_SOURCE, "")
             register(HawkConfig.BOOT_LIVE_SOURCE, "")

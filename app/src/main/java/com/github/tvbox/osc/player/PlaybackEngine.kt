@@ -18,14 +18,35 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.lang.ref.WeakReference
 import java.util.HashMap
 
-class PlaybackEngine(context: Context) : PlaybackHostApi {
+class PlaybackEngine(context: Context) : PlaybackHostApi, VideoCodecObserver {
 
     private val appContext: Context = context.applicationContext
+
+    private val _videoCodec = MutableStateFlow(VideoCodecInfo())
+
+    val videoCodec: StateFlow<VideoCodecInfo> = _videoCodec.asStateFlow()
+
+    override val codecInfo: VideoCodecInfo
+        get() = _videoCodec.value
+
+    override fun onCodecInitialized(name: String, kind: PlayerDecodeKind) {
+        _videoCodec.update {
+            it.copy(decoderName = name, kind = kind, generation = it.generation + 1)
+        }
+    }
+
+    override fun onCodecReleased() {
+        _videoCodec.update { VideoCodecInfo(generation = it.generation + 1) }
+    }
 
     private val videoView: MyVideoView
 
@@ -62,7 +83,6 @@ class PlaybackEngine(context: Context) : PlaybackHostApi {
     private var pageRef: WeakReference<PlaybackPage>? = null
     private var session: PlaybackSession? = null
     private var released: Boolean = false
-    private var autoPlayNextCallback: (() -> Unit)? = null
 
     private var liveMode: Boolean = false
     private var serviceLostKept: Boolean = false
@@ -94,6 +114,7 @@ class PlaybackEngine(context: Context) : PlaybackHostApi {
     private fun createPlayerView(): MyVideoView {
         val ctx = ContextThemeWrapper(appContext, R.style.AppTheme_NoActionBar)
         val view = MyVideoView(ctx)
+        view.videoCodecObserver = this
         view.setRenderViewFactory(
             if (KV.get(HawkConfig.PLAY_RENDER, 1) == 1) {
                 EngineSurfaceRenderViewFactory.create()
@@ -120,10 +141,6 @@ class PlaybackEngine(context: Context) : PlaybackHostApi {
                     + " started=" + controller.isPlaybackStarted()
                     + " url=" + controller.webPlayUrl()
             )
-        }
-        // 播放完成 → 自动连播下一集
-        if (playState == PlayState.COMPLETED) {
-            tryAutoPlayNext()
         }
         if (playState == PlayState.PLAYING) {
             if (controller.isConfirmedAudioOnly()) {
@@ -251,32 +268,9 @@ class PlaybackEngine(context: Context) : PlaybackHostApi {
             videoView.attachContainerTo(page.renderSlot())
             videoView.alignRenderViewToConfig(configuredRenderType())
         }
-        // 注入自动连播回调
-        videoView.setAutoPlayNextCallback(autoPlayNextCallback)
         cancelIdleRelease()
         consumeServiceLostKeep(false)
         LOG.i(TAG + " attach page=" + page.hashCode() + " key=" + (session?.playbackKey() ?: "-"))
-    }
-
-    /** 注入自动连播下一集回调（由宿主页面设置） */
-    fun setAutoPlayNextCallback(cb: (() -> Unit)?) {
-        autoPlayNextCallback = cb
-        videoView.setAutoPlayNextCallback(cb)
-    }
-
-    /** 触发自动连播下一集 */
-    private fun tryAutoPlayNext() {
-        if (released || liveMode) return
-        if (!KV.get(HawkConfig.AUTO_PLAY_NEXT, false)) return
-        val cb = autoPlayNextCallback ?: return
-        LOG.i(TAG + " auto-play-next triggered")
-        main.postDelayed({
-            try {
-                cb.invoke()
-            } catch (e: Exception) {
-                LOG.e(TAG + " auto-play-next failed: ${e.message}")
-            }
-        }, 800L)
     }
 
     fun detach(page: PlaybackPage) {
@@ -392,6 +386,7 @@ class PlaybackEngine(context: Context) : PlaybackHostApi {
         controller.releaseFetch()
         controller.stopParse()
         controller.stopLoadWebView(true)
+        onCodecReleased()
         stateScope.cancel()
         main.removeCallbacksAndMessages(null)
     }
@@ -666,6 +661,8 @@ class PlaybackEngine(context: Context) : PlaybackHostApi {
 
         override fun applyPlayerConfig(cfg: JSONObject) {
         }
+
+        override fun videoCodecInfo(): VideoCodecInfo = videoCodec.value
 
         override fun firstUrlByArray(url: String): String {
             return PlayerSwitchUseCase.firstUrlByArray(url)

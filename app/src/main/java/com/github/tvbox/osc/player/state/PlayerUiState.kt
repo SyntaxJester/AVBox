@@ -38,6 +38,7 @@ class PlayerUiState {
 
     var title: String by mutableStateOf("")
     var videoSize: String by mutableStateOf(VideoSizeGate.UNKNOWN)
+    var videoRect: VideoRect by mutableStateOf(VideoRect(0, 0, 0, 0))
     var videoQuality: String by mutableStateOf("")
     var sysTime: String by mutableStateOf("")
     var batteryPercent: Int by mutableStateOf(-1)
@@ -54,9 +55,9 @@ class PlayerUiState {
     var lockState: LockVisibility by mutableStateOf(LockVisibility.GONE)
 
     var infoOsdVisible: Boolean by mutableStateOf(false)
-    var infoOsdLeft: List<String> by mutableStateOf(emptyList())
-    var infoOsdRight: List<String> by mutableStateOf(emptyList())
-    var infoOsdFooter: String by mutableStateOf("")
+    var infoOsdLeft: List<Pair<String, String>> by mutableStateOf(emptyList())
+    var infoOsdRight: List<Pair<String, String>> by mutableStateOf(emptyList())
+    var infoOsdFooter: Pair<String, String>? by mutableStateOf(null)
     var showParseRow: Boolean by mutableStateOf(false)
     var isPortrait: Boolean by mutableStateOf(true)
     var playerType: Int by mutableStateOf(2)
@@ -131,10 +132,19 @@ class PlayerUiState {
         get() = controlsVisible && !loadingVisible && !tipVisible && !locked
 
     val netSpeedCenterVisible: Boolean
-        get() = playState == PlayState.IDLE
+        get() = playState == PlayState.IDLE && !previewMode
 }
 
 enum class LockVisibility { GONE, HIDDEN, SHOWN }
+
+data class VideoRect(
+    val left: Int,
+    val top: Int,
+    val width: Int,
+    val height: Int,
+) {
+    val empty: Boolean get() = width <= 0 || height <= 0
+}
 
 enum class ParamsTab { Playback, Picture }
 
@@ -153,7 +163,6 @@ class ParamsChoice(
 
 class ParamsSheetState(
     val speed: ParamsChoice,
-    val decode: ParamsChoice,
     val player: ParamsChoice,
     val scale: ParamsChoice,
     val picture: PictureParamsState,

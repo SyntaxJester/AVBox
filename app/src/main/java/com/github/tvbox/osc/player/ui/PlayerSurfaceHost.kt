@@ -6,11 +6,17 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.viewinterop.AndroidView
 import com.github.tvbox.osc.player.controller.VideoPlayerController
+import com.github.tvbox.osc.player.state.VideoRect
 import com.github.tvbox.osc.ui.theme.AVBoxTheme
 
 /**
@@ -22,21 +28,29 @@ import com.github.tvbox.osc.ui.theme.AVBoxTheme
  */
 @Composable
 internal fun PlayerSurfaceHost(controller: VideoPlayerController) {
+    val cfg = controller.playerConfig
+    val codecFlow = controller.videoCodecFlow
+    val decodeFlow = remember(cfg, codecFlow) { controller.config.decodeChoiceFlow(cfg) }
+    val decodeChoice by decodeFlow.collectAsState(
+        initial = remember(cfg) { controller.config.decodeChoiceNow(cfg) },
+    )
     AVBoxTheme(manageStatusBarIcons = false) {
         Box(
             Modifier
                 .fillMaxSize()
                 .onSizeChanged { controller.onHostSizeChanged(it.width, it.height) },
         ) {
-            AndroidView(
-                factory = { adopt(controller.subtitleView) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter),
-            )
+            Box(Modifier.videoRectLayout(controller.state.videoRect)) {
+                AndroidView(
+                    factory = { adopt(controller.subtitleView) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomCenter),
+                )
+            }
             AndroidView(
                 factory = { adopt(controller.exoSubtitleView) },
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.videoRectLayout(controller.state.videoRect),
             )
             AndroidView(
                 factory = { adopt(controller.lyricView) },
@@ -45,6 +59,7 @@ internal fun PlayerSurfaceHost(controller: VideoPlayerController) {
             PlayerOverlay(
                 state = controller.state,
                 actions = controller.actions,
+                decodeChoice = decodeChoice,
                 gestureHandler = controller.gestureHandler,
                 gestureSession = { w, h, sw, y ->
                     controller.gestureActions.beginSession(w, h, sw, y)
@@ -62,4 +77,15 @@ internal fun PlayerSurfaceHost(controller: VideoPlayerController) {
 private fun <T : View> adopt(view: T): T {
     (view.parent as? ViewGroup)?.removeView(view)
     return view
+}
+
+private fun Modifier.videoRectLayout(rect: VideoRect): Modifier = layout { measurable, constraints ->
+    val hostWidth = constraints.maxWidth
+    val hostHeight = constraints.maxHeight
+    if (rect.empty) {
+        val placeable = measurable.measure(constraints)
+        return@layout layout(hostWidth, hostHeight) { placeable.place(0, 0) }
+    }
+    val placeable = measurable.measure(Constraints.fixed(rect.width, rect.height))
+    layout(hostWidth, hostHeight) { placeable.place(rect.left, rect.top) }
 }

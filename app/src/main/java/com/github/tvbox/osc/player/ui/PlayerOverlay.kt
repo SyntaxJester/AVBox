@@ -33,8 +33,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import com.github.tvbox.osc.R
+import com.github.tvbox.osc.player.state.ParamsChoice
 import com.github.tvbox.osc.player.state.PlayerActions
 import com.github.tvbox.osc.player.state.PlayerUiState
+import com.github.tvbox.osc.util.LOG
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 
@@ -42,6 +44,7 @@ import kotlinx.coroutines.delay
 fun PlayerOverlay(
     state: PlayerUiState,
     actions: PlayerActions,
+    decodeChoice: ParamsChoice,
     gestureHandler: VideoGestureHandler,
     gestureSession: (width: Int, height: Int, screenWidth: Int, downY: Float) -> VideoGestureSession,
     onTapPending: () -> Unit,
@@ -84,7 +87,7 @@ fun PlayerOverlay(
         PlayerFadeVisibility(
             visible = state.loadingVisible && !state.tipVisible,
             enterMs = PLAYER_OSD_IN_MS,
-            exitMs = PLAYER_OSD_OUT_MS,
+            exitMs = if (state.tipVisible) 0 else PLAYER_OSD_OUT_MS,
         ) {
             PlayerLoadingLayer(state)
         }
@@ -109,6 +112,7 @@ fun PlayerOverlay(
         state.paramsSheet?.let { sheet ->
             PlayerParamsSheet(
                 sheet = sheet,
+                decodeChoice = decodeChoice,
                 tab = state.paramsTab,
                 onTabSelected = { state.paramsTab = it },
                 osdVisible = state.infoOsdVisible,
@@ -149,7 +153,8 @@ fun PlayerOverlay(
     }
     LaunchedEffect(Unit) {
         while (true) {
-            actions.refreshSystemInfo()
+            runCatching { actions.refreshSystemInfo() }
+                .onFailure { LOG.e("echo-osd-refresh-failed: $it") }
             delay(1000)
         }
     }
