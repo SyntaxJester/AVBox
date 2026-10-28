@@ -25,7 +25,6 @@ import com.github.tvbox.osc.util.LanguageManager
 import com.github.tvbox.osc.util.Probe
 import com.p2p.P2PClass
 import com.whl.quickjs.android.QuickJSLoader
-import com.whl.quickjs.android.QuickJSLoader
 
 import com.github.tvbox.osc.player.engine.PlayerCache
 import me.jessyan.autosize.AutoSizeConfig

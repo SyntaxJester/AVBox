@@ -87,9 +87,6 @@ object HawkConfig {
     const val AUTO_PLAY_NEXT = "auto_play_next"
     const val PLAYER_HARDWARE_DECODE = "player_hardware_decode"
     const val PLAYER_KERNEL = "player_kernel"
-    const val PRELOAD_NEXT_EPISODE = "preload_next_episode"
-    const val PRELOAD_DURATION = "preload_duration"
-    const val PRELOAD_DURATION_DEFAULT = 60
     const val PLAY_CACHE = "play_cache"
     const val EXO_CACHE_SIZE_MB = "exo_cache_size_mb"
     const val EXO_CACHE_SIZE_MB_DEFAULT = 512
