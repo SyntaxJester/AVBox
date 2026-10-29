@@ -1,3 +1,26 @@
+## v1.3.19 (2026-10-29)
+
+**整合 X-BOX HTML 功能和代理功能:**
+
+- 新增 HtmlActivity：完整的 WebView 容器，支持 fm-api.js 注入
+- 新增 HtmlSpider：处理 type=6 的 HTML 类型站点
+- 新增 fm-api.js：JS API 桥接层，提供 fm.req/fm.play/fm.open 等接口
+- 新增 webnav.jar：WebNav 导航服务（csp_WebNav/csp_Nostr）
+- 更新 SpiderLoader.getCSP() 支持 .html 类型站点
+- 更新 AndroidManifest.xml 添加 HtmlActivity 声明
+
+**HTML 类型站点配置示例:**
+```json
+{
+    "key": "xxx",
+    "api": "./assets/html/example.html",
+    "type": 6,
+    "ext": "..."
+}
+```
+
+---
+
 ## v1.3.18 (2026-10-29)
 
 **新增 HTML 代理支持:**
