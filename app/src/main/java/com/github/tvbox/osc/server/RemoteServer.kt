@@ -2,10 +2,12 @@ package com.github.tvbox.osc.server
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.res.AssetManager
 import android.net.wifi.WifiManager
 import android.os.Environment
 import android.text.TextUtils
 import android.util.Base64
+import android.webkit.MimeTypeMap
 
 import com.github.tvbox.osc.api.ApiConfig
 import com.github.tvbox.osc.base.App
@@ -199,6 +201,29 @@ class RemoteServer(port: Int, context: Context) : NanoHTTPD(port) {
                     } catch (th: Throwable) {
                         return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.INTERNAL_ERROR, NanoHTTPD.MIME_PLAINTEXT, th.message)
                     }
+                } else if (fileName.startsWith("/html/")) {
+                    try {
+                        val path = fileName.substring(6)
+                        if (path.isEmpty()) {
+                            return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.NOT_FOUND, NanoHTTPD.MIME_PLAINTEXT, "Not Found")
+                        }
+                        val ctx = AppContextHolder.context()
+                        if (ctx == null) {
+                            return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.INTERNAL_ERROR, NanoHTTPD.MIME_PLAINTEXT, "Context not available")
+                        }
+                        val assetManager = ctx.assets
+                        val list = assetManager.list("html") ?: arrayOf()
+                        val found = list.any { it == path || it == path.removeSuffix(".html") }
+                        if (!found) {
+                            return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.NOT_FOUND, NanoHTTPD.MIME_PLAINTEXT, "Asset not found: $path")
+                        }
+                        val assetPath = if (path.endsWith(".html")) path else "$path.html"
+                        val inputStream = assetManager.open("html/$assetPath")
+                        val mimeType = guessMimeType(assetPath)
+                        return NanoHTTPD.newChunkedResponse(NanoHTTPD.Response.Status.OK, mimeType, inputStream)
+                    } catch (th: Throwable) {
+                        return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.INTERNAL_ERROR, NanoHTTPD.MIME_PLAINTEXT, th.message)
+                    }
                 } else if (fileName == "/dns-query") {
                     val name = session.parms["name"]
                     var rs = ByteArray(0)
@@ -340,6 +365,33 @@ class RemoteServer(port: Int, context: Context) : NanoHTTPD(port) {
     private fun isLocalRequest(session: NanoHTTPD.IHTTPSession): Boolean {
         val address = session.remoteIpAddress
         return address != null && (address.startsWith("127.") || address == "::1")
+    }
+
+    private fun guessMimeType(path: String): String {
+        val ext = path.substringAfterLast('.', "").lowercase()
+        return when (ext) {
+            "html", "htm" -> "text/html; charset=utf-8"
+            "js", "mjs" -> "application/javascript; charset=utf-8"
+            "css" -> "text/css; charset=utf-8"
+            "json" -> "application/json; charset=utf-8"
+            "svg" -> "image/svg+xml"
+            "png" -> "image/png"
+            "jpg", "jpeg" -> "image/jpeg"
+            "gif" -> "image/gif"
+            "webp" -> "image/webp"
+            "ico" -> "image/x-icon"
+            "woff" -> "font/woff"
+            "woff2" -> "font/woff2"
+            "ttf" -> "font/ttf"
+            "otf" -> "font/otf"
+            "txt", "log", "md" -> "text/plain; charset=utf-8"
+            "xml" -> "text/xml; charset=utf-8"
+            "m3u8" -> "application/vnd.apple.mpegurl"
+            "mp4" -> "video/mp4"
+            "mp3" -> "audio/mpeg"
+            "wasm" -> "application/wasm"
+            else -> MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "application/octet-stream"
+        }
     }
 
     private fun fileTime(time: Long, fmt: String): String {

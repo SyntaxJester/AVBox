@@ -1,3 +1,19 @@
+## v1.3.18 (2026-10-29)
+
+**新增 HTML 代理支持:**
+
+- 修复 HTML 页面相对资源加载 404 问题
+- 新增 `/html/` 路由处理器，支持从 assets/html 目录提供文件
+- 支持所有常见 MIME 类型（HTML, JS, CSS, JSON, 图片，字体等）
+- 与现有 WebViewBridge.resolveUrl() 配合工作，HTML 页面的 fm.req/fetch 现在可以正常加载相对资源
+
+**技术细节:**
+- RemoteServer 新增 `/html/` 路由处理器
+- 新增 `guessMimeType()` 方法自动识别 MIME 类型
+- 使用 AssetManager 读取 assets/html 目录
+
+---
+
 ## v1.3.14 (2026-10-24)
 
 **同步原版 v1.2.9 全部功能:**
