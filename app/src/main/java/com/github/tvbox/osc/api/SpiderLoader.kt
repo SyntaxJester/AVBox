@@ -8,6 +8,7 @@ import android.util.Base64
 import com.github.catvod.crawler.JarLoader
 import com.github.catvod.crawler.JsLoader
 import com.github.catvod.crawler.Spider
+import com.github.catvod.crawler.HtmlSpider
 import com.github.catvod.crawler.python.IPyLoader
 import com.github.tvbox.osc.R
 import com.github.tvbox.osc.base.App
@@ -353,6 +354,11 @@ class SpiderLoader {
             currentPyKey = sourceBean.key
             pyLoader.setRecentPyKey(currentPyKey)
             return pyLoader.getSpider(requireNotNull(sourceBean.key) { "source key missing" }, sourceBean.api, sourceBean.ext)
+        } else if (api.endsWith(".html") || api.contains(".html?")) {
+            // type 6：html 脚本。与 js/py 走同一套 Spider 接口，
+            // 数据由脚本 return 回来，WebView 只负责跑脚本。
+            currentPyKey = ""
+            return HtmlSpider(sourceBean.key, sourceBean.api, sourceBean.ext)
         } else {
             currentPyKey = ""
             return jarLoader.getSpider(sourceBean.key, sourceBean.api, sourceBean.ext, sourceBean.jar)
