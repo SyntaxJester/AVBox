@@ -29,6 +29,8 @@ import com.github.tvbox.osc.util.LOG
 import com.github.tvbox.osc.util.LanguageManager
 import com.github.tvbox.osc.util.LocalAddress
 import com.github.tvbox.osc.util.RegexUtils
+import com.github.tvbox.osc.util.SiteExt
+import com.github.tvbox.osc.util.SiteProxy
 import com.github.tvbox.osc.util.VideoParseRuler
 import com.github.tvbox.osc.util.live.TxtSubscribe
 import com.google.gson.Gson
@@ -104,11 +106,14 @@ class ApiConfig private constructor() {
     }
 
     fun loadConfig(useCache: Boolean, callback: LoadConfigCallback, activity: Activity?) {
-        configLoader.loadConfig(useCache, callback, activity)
+        // 拉在线订阅不属于任何站点，先摘掉站点代理，避免上个站点的代理越界作用到订阅拉取上
+        SiteProxy.suspendInfra()
+        configLoader.loadConfig(useCache, InfraAwareCallback(callback), activity)
     }
 
     fun loadLiveConfig(useCache: Boolean, callback: LoadConfigCallback) {
-        configLoader.loadLiveConfig(useCache, callback)
+        SiteProxy.suspendInfra()
+        configLoader.loadLiveConfig(useCache, InfraAwareCallback(callback))
     }
 
     fun refreshConfigIfChanged(onChanged: (String, String) -> Unit) {
@@ -302,6 +307,16 @@ class ApiConfig private constructor() {
         ConfigApplier.applyDoh(infoJson)
         LOG.i("echo-api-config-----------load")
         ConfigApplier.applyAds(infoJson)
+
+        // 站点级代理：启用当前站点的代理
+        SiteProxy.apply(getHomeSourceBean())
+    }
+
+    /** 站点 ext 覆盖：从本地恢复的覆盖写回站点配置 */
+    private fun applySiteExtOverrides(sites: LinkedHashMap<String?, SourceBean>) {
+        for (sb in sites.values) {
+            SiteExt.apply(sb)
+        }
     }
 
     private fun loadDefaultConfig() {
@@ -811,6 +826,8 @@ class ApiConfig private constructor() {
     }
 
     fun setSourceBean(sourceBean: SourceBean) {
+        // 站点级代理：开启的站点临时起全局代理，未开启的站点关掉
+        SiteProxy.apply(sourceBean)
         this.mHomeSource = sourceBean
         KV.put(HawkConfig.HOME_API, sourceBean.key)
     }
@@ -1011,6 +1028,24 @@ class ApiConfig private constructor() {
         @JvmStatic
         fun setLiveGroupIndex(index: Int) {
             KV.put(getLiveGroupIndexKey(), index)
+        }
+    }
+
+    /** 订阅拉取结束（成功或失败）都恢复站点代理，防止一次失败把代理永久摘掉 */
+    private class InfraAwareCallback(private val delegate: LoadConfigCallback) : LoadConfigCallback {
+        private var done = false
+        private fun finish() {
+            if (done) return
+            done = true
+            SiteProxy.resumeInfra()
+        }
+        override fun success() {
+            finish()
+            delegate.success()
+        }
+        override fun error(msg: String?) {
+            finish()
+            delegate.error(msg)
         }
     }
 }

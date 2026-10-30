@@ -18,8 +18,8 @@ import com.github.tvbox.osc.util.KV
 import com.github.tvbox.osc.util.LOG
 import com.github.tvbox.osc.util.MD5
 import com.github.tvbox.osc.util.PermissionHelper
+import com.github.tvbox.osc.util.LocalScriptSource
 import com.github.tvbox.osc.util.PySourcePack
-
 import java.io.BufferedReader
 import java.io.File
 import java.io.FileInputStream
@@ -55,6 +55,25 @@ class ConfigLoader(private val owner: ApiConfig) {
         val apiUrl = KV.get(HawkConfig.API_URL, "")
         if (apiUrl.isEmpty()) {
             callback.error("-1")
+            return
+        }
+        // LocalScriptSource (lscript://) 支持
+        if (LocalScriptSource.isLocalScript(apiUrl)) {
+            configLoadExecutor.execute(Runnable {
+                try {
+                    val json = LocalScriptSource.buildJson(apiUrl)
+                    if (isStaleFetch(apiUrl)) {
+                        callback.error("stale")
+                        return@Runnable
+                    }
+                    clearApiLinesIfUnmatched(apiUrl)
+                    owner.parseJson(apiUrl, json)
+                    callback.success()
+                } catch (th: Throwable) {
+                    LOG.e("ApiConfig", th)
+                    callback.error(ApiConfig.str(R.string.toast_config_parse_failed))
+                }
+            })
             return
         }
         val cache = File(requireNotNull(App.getInstance()) { "app instance not ready" }.getFilesDir().getAbsolutePath() + "/" + MD5.encode(apiUrl))
