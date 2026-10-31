@@ -1047,5 +1047,8 @@ class ApiConfig private constructor() {
             finish()
             delegate.error(msg)
         }
+        override fun notice(msg: String?) {
+            delegate.notice(msg)
+        }
     }
 }
