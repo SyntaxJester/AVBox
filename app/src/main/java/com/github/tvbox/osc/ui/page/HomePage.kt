@@ -1,6 +1,5 @@
 @file:OptIn(
     androidx.compose.material3.ExperimentalMaterial3Api::class,
-    androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class,
 )
 
 package com.github.tvbox.osc.ui.page
@@ -56,10 +55,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
-import androidx.compose.material3.pulltorefresh.PullToRefreshState
-import androidx.compose.material3.pulltorefresh.pullToRefresh
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -172,7 +167,7 @@ fun HomePage(
 
     val listState = rememberLazyListState()
 
-    val pullState = rememberPullToRefreshState()
+    // val pullState = rememberPullToRefreshState()
 
     val pageLoading by vm.pageLoading.collectAsStateWithLifecycle()
     val sortLoadFailed by vm.sortLoadFailed.collectAsStateWithLifecycle()
@@ -415,7 +410,7 @@ fun HomePage(
                     vm = vm,
                     topPadding = topPad,
                     contentPadding = contentPadding,
-                    pullState = pullState,
+                    // pullState = pullState,
                     onCardClick = { video -> handleCardClick(vm, video, context) },
                     onCardLongClick = { video -> vodMenu.show(video) },
                 )
@@ -425,7 +420,7 @@ fun HomePage(
                     .fillMaxSize()
                     .pullToRefresh(
                         isRefreshing = false,
-                        state = pullState,
+                        // state = null,
                         onRefresh = { vm.reload() },
                     ),
                 contentPadding = PaddingValues(
@@ -540,7 +535,7 @@ fun HomePage(
 
         if (sources.isNotEmpty() && homeLayout == HomeSettings.HomeLayout.Horizontal) {
             HomePullRefreshIndicator(
-                state = pullState,
+                // state = null,
                 isRefreshing = false,
                 topPadding = topPad,
                 modifier = Modifier.align(Alignment.TopCenter),
@@ -803,36 +798,6 @@ fun HomePage(
 }
 
 @Composable
-fun HomePullRefreshIndicator(
-    state: PullToRefreshState,
-    isRefreshing: Boolean,
-    topPadding: Dp,
-    modifier: Modifier = Modifier,
-) {
-    PullToRefreshDefaults.IndicatorBox(
-        state = state,
-        isRefreshing = isRefreshing,
-        modifier = modifier
-            .offset(y = topPadding)
-            .size(48.dp),
-        shape = RectangleShape,
-        containerColor = Color.Transparent,
-        elevation = 0.dp,
-    ) {
-        Crossfade(targetState = isRefreshing) { refreshing ->
-            if (refreshing) {
-                ContainedLoadingIndicator(modifier = Modifier.size(48.dp))
-            } else {
-                ContainedLoadingIndicator(
-                    progress = { state.distanceFraction },
-                    modifier = Modifier
-                        .size(48.dp)
-                        .drawWithContent {
-                            val progress = state.distanceFraction
-                            if (progress > 1f) {
-                                rotate(degrees = -(progress - 1f) * 180f) {
-                                    this@drawWithContent.drawContent()
-                                }
                             } else {
                                 drawContent()
                             }
