@@ -9,7 +9,9 @@ import com.github.tvbox.osc.util.DefaultConfig
 import com.github.tvbox.osc.util.HeaderGuard
 import com.github.tvbox.osc.util.HistoryHelper
 import com.github.tvbox.osc.util.LOG
+import com.github.tvbox.osc.util.LocalApi
 import com.github.tvbox.osc.util.RegexUtils
+import com.github.tvbox.osc.util.SiteExt
 import com.google.gson.Gson
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
@@ -77,6 +79,20 @@ object ConfigParser {
         return line.substring(start, end).trim { it <= ' ' }
     }
 
+    /**
+     * 本地脚本的 api 写成 "file:///sdcard/x.js" 或 "/sdcard/x.js" 这类绝对路径时：
+     *  - js 走 JsSpider，会拼成 "http://127.0.0.1:port/file/" + 绝对路径，
+     *    而服务端 /file/ 端点会再拼一次外部存储根目录，路径重复就取不到文件，
+     *    所以 js 要换算成 clan://localhost/<相对路径>；
+     *  - py 走 app.py 的 downloadPlugin，只认 file:// 前缀的【绝对路径】，
+     *    给 clan:// 会被当远程地址下载，必然失败，所以 py 要保持 file:// 绝对路径。
+     * 早期把两者统一成 clan:// 导致 py 全线加载失败，现在按后缀分流（见 LocalApi.normalize）。
+     */
+    @JvmStatic
+    fun normalizeLocalApi(api: String?): String {
+        return LocalApi.normalize(api)
+    }
+
     @JvmStatic
     fun parseSites(infoJson: JsonObject): List<SourceBean> {
         val sites: MutableList<SourceBean> = ArrayList()
@@ -91,7 +107,7 @@ object ConfigParser {
             sb.key = siteKey
             sb.name = if (obj.has("name")) obj.get("name").asString.trim { it <= ' ' } else siteKey
             sb.type = obj.get("type").asInt
-            sb.api = obj.get("api").asString.trim { it <= ' ' }
+            sb.api = normalizeLocalApi(obj.get("api").asString.trim { it <= ' ' })
             sb.setSearchable(DefaultConfig.safeJsonInt(obj, "searchable", 1))
             sb.setQuickSearch(DefaultConfig.safeJsonInt(obj, "quickSearch", 1))
             sb.setChangeable(DefaultConfig.safeJsonInt(obj, "changeable", 1))
@@ -103,6 +119,7 @@ object ConfigParser {
             sb.playerUrl = DefaultConfig.safeJsonString(obj, "playUrl", "")
             sb.ext = DefaultConfig.safeJsonString(obj, "ext", "")
             sb.jar = DefaultConfig.safeJsonString(obj, "jar", "")
+            sb.proxy = DefaultConfig.safeJsonString(obj, "proxy", "")
             sb.playerType = DefaultConfig.safeJsonInt(obj, "playerType", -1)
             sb.categories = DefaultConfig.safeJsonStringList(obj, "categories")
             sb.timeout = DefaultConfig.safeJsonInt(obj, "timeout", 0)
@@ -110,10 +127,10 @@ object ConfigParser {
             sb.style = DefaultConfig.safeJsonString(obj, "style", "")
             sb.icon = DefaultConfig.safeJsonString(obj, "icon", "")
             sb.setHide(DefaultConfig.safeJsonInt(obj, "hide", 0))
-            sb.homePage = DefaultConfig.safeJsonString(obj, "homePage", "")
             sb.setIndexs(DefaultConfig.safeJsonInt(obj, "indexs", 0))
             sb.setDanmaku(DefaultConfig.safeJsonInt(obj, "danmaku", 1))
             sb.header = parseHeaderObject(obj, "header")
+            SiteExt.apply(sb)
             val extPreview = sb.ext
             LOG.i("echo-site:" + sb.name + " icon:" + sb.icon
                     + " ext:" + (if (extPreview != null && extPreview.length > 160) extPreview.substring(0, 160) else extPreview))
