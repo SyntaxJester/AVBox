@@ -1,6 +1,7 @@
 package com.github.tvbox.osc.util
 
 import android.app.Activity
+import com.github.tvbox.osc.util.LOG
 
 import java.util.Stack
 
@@ -86,7 +87,7 @@ class ActivityStack private constructor() {
             System.exit(code)
         } catch (e: Exception) {
             activityStack?.clear()
-            AppLog.e("AppManager", e)
+            LOG.e("AppManager", e)
         }
     }
 

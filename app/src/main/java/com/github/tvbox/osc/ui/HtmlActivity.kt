@@ -12,7 +12,7 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import com.github.tvbox.osc.util.KV
-import com.github.tvbox.osc.util.AppLog
+import com.github.tvbox.osc.util.LOG
 import org.json.JSONObject
 import java.io.File
 
@@ -136,7 +136,7 @@ class HtmlActivity : Activity() {
                 description: String?,
                 failingUrl: String?,
             ) {
-                AppLog.i("$TAG: load error $errorCode ${description ?: ""}")
+                LOG.i("$TAG: load error $errorCode ${description ?: ""}")
                 settle(null)
             }
 
@@ -147,7 +147,7 @@ class HtmlActivity : Activity() {
             ) {
                 // Android 6+ 走这个重载；只对主请求生效，子资源失败不算
                 if (request != null && !request.isForMainFrame) return
-                AppLog.i("$TAG: load error ${error?.errorCode} ${error?.description}")
+                LOG.i("$TAG: load error ${error?.errorCode} ${error?.description}")
                 settle(null)
             }
         }
@@ -182,13 +182,13 @@ class HtmlActivity : Activity() {
                 text = resp.body?.string()
                 resp.close()
             } catch (th: Throwable) {
-                AppLog.e(TAG, th)
+                LOG.e(TAG, th)
             }
             mainHandler.post {
                 if (isFinishing || isDestroyed) return@post
                 val view = webView ?: return@post
                 if (text.isNullOrEmpty()) {
-                    AppLog.i("$TAG: remote html empty, fallback to loadUrl")
+                    LOG.i("$TAG: remote html empty, fallback to loadUrl")
                     view.loadUrl(url)
                 } else {
                     view.loadDataWithBaseURL(url, text, "text/html", charset, null)
@@ -225,7 +225,7 @@ class HtmlActivity : Activity() {
                 @Suppress("DEPRECATION")
                 view.evaluateJavascript(api, null)
             } catch (th: Throwable) {
-                AppLog.e(TAG, th)
+                LOG.e(TAG, th)
             }
         }
     }
@@ -270,7 +270,7 @@ class HtmlActivity : Activity() {
                 @Suppress("DEPRECATION")
                 view.evaluateJavascript(script, null)
             } catch (th: Throwable) {
-                AppLog.e(TAG, th)
+                LOG.e(TAG, th)
                 settle(null)
             }
         }
@@ -319,7 +319,7 @@ class HtmlActivity : Activity() {
         try {
             req.callback.invoke(result)
         } catch (th: Throwable) {
-            AppLog.e(TAG, th)
+            LOG.e(TAG, th)
         }
         mainHandler.removeCallbacks(idleClose)
         mainHandler.postDelayed(idleClose, IDLE_CLOSE_MS)
@@ -334,7 +334,7 @@ class HtmlActivity : Activity() {
         try {
             left?.callback?.invoke(null)
         } catch (th: Throwable) {
-            AppLog.e(TAG, th)
+            LOG.e(TAG, th)
         }
         try {
             finish()
@@ -355,7 +355,7 @@ class HtmlActivity : Activity() {
         try {
             assets.open(name).bufferedReader().use { it.readText() }
         } catch (th: Throwable) {
-            AppLog.e(TAG, th)
+            LOG.e(TAG, th)
             null
         }
 
@@ -400,7 +400,7 @@ class HtmlActivity : Activity() {
 
         @JavascriptInterface
         fun log(msg: String?) {
-            AppLog.i("$TAG[${req.siteKey}]: ${msg ?: ""}")
+            LOG.i("$TAG[${req.siteKey}]: ${msg ?: ""}")
         }
 
         /** 同步请求：走 App 网络栈，站点代理开关对它同样生效 */
@@ -427,7 +427,7 @@ class HtmlActivity : Activity() {
                 resp.close()
                 text
             } catch (th: Throwable) {
-                AppLog.e(TAG, th)
+                LOG.e(TAG, th)
                 ""
             }
         }
@@ -445,7 +445,7 @@ class HtmlActivity : Activity() {
             try {
                 KV.put(varKey(req.siteKey, key), value ?: "")
             } catch (th: Throwable) {
-                AppLog.e(TAG, th)
+                LOG.e(TAG, th)
             }
         }
 

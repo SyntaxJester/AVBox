@@ -309,9 +309,7 @@ object ConfigParser {
         return ConfigUrl(configUrl, key)
     }
 
-    companion object {
-        const val TYPE_HTML = 6
-    }
+    const val TYPE_HTML = 6
 
     class ConfigUrl(@JvmField val url: String, @JvmField val key: String?)
 }
