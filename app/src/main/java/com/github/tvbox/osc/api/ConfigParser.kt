@@ -107,6 +107,10 @@ object ConfigParser {
             sb.key = siteKey
             sb.name = if (obj.has("name")) obj.get("name").asString.trim { it <= ' ' } else siteKey
             sb.type = obj.get("type").asInt
+            // 确保 HTML 类型的站点正确设置
+            if (obj.has("type") && obj.get("type").asInt == 6) {
+                sb.type = TYPE_HTML
+            }
             sb.api = normalizeLocalApi(obj.get("api").asString.trim { it <= ' ' })
             sb.setSearchable(DefaultConfig.safeJsonInt(obj, "searchable", 1))
             sb.setQuickSearch(DefaultConfig.safeJsonInt(obj, "quickSearch", 1))
@@ -303,6 +307,10 @@ object ConfigParser {
             configUrl = apiUrl
         }
         return ConfigUrl(configUrl, key)
+    }
+
+    companion object {
+        const val TYPE_HTML = 6
     }
 
     class ConfigUrl(@JvmField val url: String, @JvmField val key: String?)

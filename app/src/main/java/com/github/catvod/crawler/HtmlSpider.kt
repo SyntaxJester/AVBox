@@ -2,7 +2,7 @@ package com.github.catvod.crawler
 
 import android.os.Handler
 import android.os.Looper
-import com.github.tvbox.osc.ui.activity.HtmlActivity
+import com.github.tvbox.osc.ui.HtmlActivity
 import com.github.tvbox.osc.util.AppContextHolder
 import com.github.tvbox.osc.util.LOG
 import org.json.JSONObject
@@ -44,11 +44,10 @@ class HtmlSpider(
      */
     override fun homeContent(filter: Boolean): String? {
         val raw = call("homeContent", JSONObject().put("filter", filter))
-        return withLaunchCard(raw)
+        return withLaunchCard(raw, ensureClass = true)
     }
 
-    override fun homeVideoContent(): String? =
-        call("homeVideoContent", JSONObject())
+    override fun homeVideoContent(): String? = withLaunchCard(call("homeVideoContent", JSONObject()))
 
     override fun categoryContent(
         tid: String?,
@@ -57,13 +56,15 @@ class HtmlSpider(
         extend: HashMap<String, String>?,
     ): String? {
         val map: Map<String, String> = extend ?: emptyMap()
-        return call(
-            "categoryContent",
-            JSONObject()
-                .put("tid", tid ?: "")
-                .put("pg", pg)
-                .put("filter", filter)
-                .put("extend", JSONObject(map).toString()),
+        return withLaunchCard(
+            call(
+                "categoryContent",
+                JSONObject()
+                    .put("tid", tid ?: "")
+                    .put("pg", pg)
+                    .put("filter", filter)
+                    .put("extend", JSONObject(map).toString()),
+            )
         )
     }
 
@@ -77,12 +78,32 @@ class HtmlSpider(
         return call("detailContent", JSONObject().put("ids", org.json.JSONArray(list)))
     }
 
-    /** 把启动卡挂到宫格末尾：真实内容在前，入口永远在 */
-    private fun withLaunchCard(raw: String?): String {
+    /**
+     * 把启动卡挂到宫格末尾：真实内容在前，入口永远在。
+     *
+     * ensureClass=true 时还要兜底分类：脚本没返回 class、或 class 为空数组，
+     * 首页分类就是空的，SortLoader 会把它判成解析失败并弹「加载失败，请检查网络」——
+     * 所以 html 站点必须永远至少有一个分类。
+     */
+    private fun withLaunchCard(raw: String?, ensureClass: Boolean = false): String {
         val base = if (raw.isNullOrBlank()) JSONObject() else try {
             JSONObject(raw)
         } catch (th: Throwable) {
             JSONObject()
+        }
+        if (ensureClass) {
+            val cls = base.optJSONArray("class")
+            val empty = cls == null || cls.length() == 0
+            if (empty) {
+                base.put(
+                    "class",
+                    org.json.JSONArray().put(
+                        JSONObject()
+                            .put("type_id", LAUNCH_TID)
+                            .put("type_name", LAUNCH_CLASS_NAME),
+                    ),
+                )
+            }
         }
         if (!base.has("list")) base.put("list", org.json.JSONArray())
         val arr = base.optJSONArray("list") ?: org.json.JSONArray()
@@ -137,7 +158,6 @@ class HtmlSpider(
     }
 
     private fun call(method: String, args: JSONObject): String? {
-        val ctx = AppContextHolder.context() ?: return null
         val latch = CountDownLatch(1)
         val result = AtomicReference<String?>()
         val request = HtmlActivity.Request(
@@ -157,11 +177,18 @@ class HtmlSpider(
                 if (HtmlActivity.dispatchToLive(request)) return@post
                 HtmlActivity.finishIfRunning(null)
                 HtmlActivity.pending = request
-                ctx.startActivity(
-                    android.content.Intent(ctx, HtmlActivity::class.java)
-                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                        .addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP),
-                )
+                // 用前台 Activity 启动，别用 Application + NEW_TASK：
+                // NEW_TASK 会让系统去复用/另起 task，本 task 还在前台时这次启动
+                // 常被压在后面，表现就是 html 页面被首页遮住。
+                val starter = resolveStarter() ?: run {
+                    latch.countDown()
+                    return@post
+                }
+                val launch = android.content.Intent(starter, HtmlActivity::class.java)
+                if (starter !is android.app.Activity) {
+                    launch.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                starter.startActivity(launch)
             } catch (th: Throwable) {
                 LOG.e(TAG, th)
                 latch.countDown()
@@ -176,10 +203,33 @@ class HtmlSpider(
         return result.get()
     }
 
+    /**
+     * 取栈顶 Activity 作为启动上下文。拿不到才退回 Application。
+     * 栈顶可能刚被 finishIfRunning 结束掉，所以这里要逐个检查 isFinishing/isDestroyed。
+     */
+    private fun resolveStarter(): android.content.Context? {
+        val stack = try {
+            com.github.tvbox.osc.util.ActivityStack.getInstance()
+        } catch (th: Throwable) {
+            null
+        }
+        if (stack != null) {
+            try {
+                val top = stack.currentActivity()
+                if (!top.isFinishing && !top.isDestroyed) return top
+            } catch (th: Throwable) {
+                // 栈为空等，忽略，走下面的兜底
+            }
+        }
+        return AppContextHolder.context()
+    }
+
     private companion object {
         const val TAG = "HtmlSpider"
         const val TIMEOUT_SEC = 30L
         const val LAUNCH_NAME = "启动脚本"
         const val LAUNCH_ID = "__html_launch__"
+        const val LAUNCH_TID = "__html_launch__"
+        const val LAUNCH_CLASS_NAME = "启动"
     }
 }
