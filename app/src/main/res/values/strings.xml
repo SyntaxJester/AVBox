@@ -498,6 +498,8 @@
     <string name="settings_nav_live_hidden">导航栏隐藏直播</string>
     <string name="settings_auto_switch_line">自动换线</string>
     <string name="settings_m3u8_purify">M3U8 净化</string>
+    <string name="settings_ad_block">去广告</string>
+    <string name="settings_ad_audio_fingerprint">音频指纹广告检测</string>
     <string name="settings_danmu_switch">弹幕开关</string>
     <string name="settings_danmu_api">弹幕 API</string>
     <string name="settings_long_press_speed">长按倍速</string>

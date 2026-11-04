@@ -34,6 +34,7 @@ import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import androidx.media3.exoplayer.util.EventLogger
 import androidx.media3.exoplayer.video.VideoFrameMetadataListener
+import com.github.tvbox.osc.ad.audio.AdAudioFingerprintRuntime
 import com.github.tvbox.osc.player.PlayerDecodeKind
 import com.github.tvbox.osc.player.RetryPolicy
 import com.github.tvbox.osc.player.SlowOpenSignal
@@ -255,6 +256,11 @@ class PlayerEngine(
     }
 
     init {
+        // 注册音频指纹广告跳过回调
+        AdAudioFingerprintRuntime.attachSeek { ms ->
+            val exo = internalPlayer ?: return@attachSeek
+            exo.seekTo(ms)
+        }
         val exo = createPlayer()
         internalPlayer = exo
         applyPlaybackParameters()
@@ -502,6 +508,7 @@ class PlayerEngine(
             it.clearMediaItems()
         }
         resetSessionFlags()
+        AdAudioFingerprintRuntime.reset()
     }
 
     fun release() {
@@ -519,6 +526,9 @@ class PlayerEngine(
         outputSurfacePresent = false
         speedPlaybackParameters = null
         config.videoCodecObserver?.onCodecReleased()
+        // 释放音频指纹
+        AdAudioFingerprintRuntime.stopListening()
+        AdAudioFingerprintRuntime.attachSeek(null)
     }
 
     val isPlaying: Boolean

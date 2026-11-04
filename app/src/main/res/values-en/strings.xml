@@ -498,6 +498,8 @@
     <string name="settings_nav_live_hidden">Hide Live in Navigation Bar</string>
     <string name="settings_auto_switch_line">Auto Switch Line</string>
     <string name="settings_m3u8_purify">M3U8 Purify</string>
+    <string name="settings_ad_block">Ad Blocker</string>
+    <string name="settings_ad_audio_fingerprint">Audio Fingerprint Ad Detection</string>
     <string name="settings_danmu_switch">Danmaku Switch</string>
     <string name="settings_danmu_api">Danmaku API</string>
     <string name="settings_long_press_speed">Long-press Speed</string>

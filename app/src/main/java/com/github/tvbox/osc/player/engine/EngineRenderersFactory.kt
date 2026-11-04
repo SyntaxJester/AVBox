@@ -14,8 +14,12 @@ import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.text.TextOutput
 import androidx.media3.exoplayer.video.MediaCodecVideoRenderer
 import androidx.media3.exoplayer.video.VideoRendererEventListener
+import com.github.tvbox.osc.ad.audio.AdAudioFingerprintRuntime
+import com.github.tvbox.osc.ad.audio.AdAudioTapProcessor
 import com.github.tvbox.osc.player.VideoCodecObserver
 import com.github.tvbox.osc.player.effect.ReplayableCacheVideoRenderer
+import com.github.tvbox.osc.util.HawkConfig
+import com.github.tvbox.osc.util.KV
 import com.github.tvbox.osc.util.LOG
 import java.lang.reflect.InvocationHandler
 import java.lang.reflect.InvocationTargetException
@@ -107,6 +111,37 @@ class EngineRenderersFactory(
             eventListener,
             out,
         )
+
+        // 注入音频指纹处理器（仅 Exo 内核、开关开启且有规则时）
+        if (KV.get(HawkConfig.AD_AUDIO_FINGERPRINT_ENABLED, false)
+            && AdAudioFingerprintRuntime.hasRules()
+        ) {
+            // 查找 AudioSink（通常在 MediaCodecAudioRenderer 内部）
+            for (i in firstRendererIndex until out.size) {
+                val renderer = out[i]
+                if (renderer is MediaCodecAudioRenderer) {
+                    audioRenderer = renderer
+                    // 使用反射注入 AudioProcessor
+                    try {
+                        val tapProcessor = AdAudioTapProcessor()
+                        val processorField = MediaCodecAudioRenderer::class.java.getDeclaredField("audioProcessors")
+                        processorField.isAccessible = true
+                        val processors = processorField.get(renderer) as? java.util.List<*>
+                        if (processors != null) {
+                            val newList = processors.toMutableList()
+                            newList.add(tapProcessor)
+                            processorField.set(renderer, newList)
+                            LOG.i("echo-player-audio-fingerprint: processor injected")
+                        }
+                    } catch (e: Throwable) {
+                        LOG.e("echo-player-audio-fingerprint: inject failed: " + e.message)
+                    }
+                    LOG.i("echo-player-audio-renderer: bound ${renderer.javaClass.simpleName}")
+                    return
+                }
+            }
+        }
+
         for (i in firstRendererIndex until out.size) {
             val renderer = out[i]
             if (renderer is MediaCodecAudioRenderer) {

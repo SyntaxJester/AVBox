@@ -172,6 +172,22 @@ fun PreferenceSettingsScreen(onNavigateBack: () -> Unit, vm: SettingsViewModel =
                 }
                 SettingsCard(SettingsCardPosition.MIDDLE) {
                     SettingsSwitchRow(
+                        title = stringResource(R.string.settings_ad_block),
+                        leadingIconRes = R.drawable.ic_pref_ad_block,
+                        checked = state.adBlockEnabled,
+                        onCheckedChange = { vm.put(HawkConfig.AD_BLOCK_ENABLED, it) },
+                    )
+                }
+                SettingsCard(SettingsCardPosition.MIDDLE) {
+                    SettingsSwitchRow(
+                        title = stringResource(R.string.settings_ad_audio_fingerprint),
+                        leadingIconRes = R.drawable.ic_pref_ad_audio_fingerprint,
+                        checked = state.adAudioFingerprintEnabled,
+                        onCheckedChange = { vm.put(HawkConfig.AD_AUDIO_FINGERPRINT_ENABLED, it) },
+                    )
+                }
+                SettingsCard(SettingsCardPosition.MIDDLE) {
+                    SettingsSwitchRow(
                         title = stringResource(R.string.settings_danmu_switch),
                         leadingIconRes = R.drawable.ic_pref_danmu,
                         checked = state.danmuOpen,

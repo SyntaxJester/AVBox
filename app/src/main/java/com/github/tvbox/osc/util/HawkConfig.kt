@@ -141,4 +141,6 @@ object HawkConfig {
     const val SITE_PROXY_OVERRIDE = "site_proxy_override"
     const val SITE_PROXY_OVERRIDE_API = "site_proxy_override_api"
     const val SITE_EXT_OVERRIDE = "site_ext_override"
+    const val AD_BLOCK_ENABLED = "ad_block_enabled"
+    const val AD_AUDIO_FINGERPRINT_ENABLED = "ad_audio_fingerprint_enabled"
 }
