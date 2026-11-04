@@ -765,9 +765,6 @@ fun HomePage(
         TextEditDialog(
             title = stringResource(R.string.home_site_ext),
             initialText = extValue,
-            placeholder = stringResource(R.string.home_site_ext_hint),
-            singleLine = false,
-            fieldHeight = 132.dp,
             onDismiss = { extDialog = false },
             onConfirm = { text ->
                 extDialog = false
@@ -785,7 +782,6 @@ fun HomePage(
         TextEditDialog(
             title = stringResource(R.string.settings_proxy_url),
             initialText = SiteProxy.configuredUrl(),
-            placeholder = SiteProxy.DEFAULT_URL,
             onDismiss = { proxyUrlDialog = false },
             onConfirm = { text ->
                 proxyUrlDialog = false
