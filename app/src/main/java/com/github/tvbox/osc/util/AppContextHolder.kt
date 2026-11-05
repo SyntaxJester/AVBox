@@ -1,13 +1,18 @@
 package com.github.tvbox.osc.util
 
-import android.app.Application
+import android.content.Context
 
-/** 单例 Application Context，供 ad/audio 指纹模块等非 Activity 场景使用。 */
 object AppContextHolder {
-    var context: android.content.Context? = null
-        private set
+    @Volatile
+    private var appContext: Context? = null
 
-    fun init(context: android.content.Context) {
-        this.context = context.applicationContext
+    @JvmStatic
+    fun install(context: Context) {
+        appContext = context.applicationContext
+    }
+
+    @JvmStatic
+    fun context(): Context? {
+        return appContext
     }
 }

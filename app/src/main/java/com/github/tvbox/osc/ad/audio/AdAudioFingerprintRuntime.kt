@@ -2,6 +2,7 @@ package com.github.tvbox.osc.ad.audio
 
 import android.os.Handler
 import android.os.Looper
+import com.github.tvbox.osc.util.AppContextHolder
 import com.github.tvbox.osc.util.HawkConfig
 import com.github.tvbox.osc.util.KV
 import com.github.tvbox.osc.util.LOG
@@ -112,13 +113,20 @@ object AdAudioFingerprintRuntime {
             }
             return
         }
-        val created = AdAudioFingerprintHelper(AppContextHolderHolder.context())
+        val ctx = AppContextHolder.context()
+        if (ctx == null) {
+            LOG.i("echo-ad-audio-fingerprint: app context not ready")
+            return
+        }
+        val created = AdAudioFingerprintHelper(ctx)
         created.setMatchListener(object : AdAudioFingerprintHelper.MatchListener {
             override fun onMatchStart(ruleId: String, startTimeMs: Long, endTimeMs: Long) {
-                // 只在完整命中后跳转，避免误报
+                // 命中广告起始：立即跳到广告结束位置
+                onAdMatched(ruleId, startTimeMs, endTimeMs)
             }
 
             override fun onMatchFull(ruleId: String, startTimeMs: Long, endTimeMs: Long) {
+                // 完整序列命中：用于校验，重复命中会被 lastSkippedEndMs 过滤
                 onAdMatched(ruleId, startTimeMs, endTimeMs)
             }
 
