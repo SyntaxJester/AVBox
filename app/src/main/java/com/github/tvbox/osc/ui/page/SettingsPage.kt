@@ -213,6 +213,15 @@ fun SettingsPage(
 ) {
     val navStart = contentPadding.calculateStartPadding(LocalLayoutDirection.current)
     val navBottom = contentPadding.calculateBottomPadding()
+n    fun <T> put(key: String, value: T) {
+        KV.put(key, value)
+        _state.value = _state.value.copy(
+            mediaBadgesShow = if (key == HawkConfig.MEDIA_BADGES_SHOW) value as Boolean else _state.value.mediaBadgesShow,
+            mediaBadgesDisplayMode = if (key == HawkConfig.MEDIA_BADGES_DISPLAY_MODE) value as Int else _state.value.mediaBadgesDisplayMode,
+            mediaBadgesLinkMode = if (key == HawkConfig.MEDIA_BADGES_LINK_MODE) value as Int else _state.value.mediaBadgesLinkMode,
+            mediaBadgesCustomLink = if (key == HawkConfig.MEDIA_BADGES_CUSTOM_LINK) value as String else _state.value.mediaBadgesCustomLink
+        )
+    }
     val state by vm.state
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         vm.refreshState()
