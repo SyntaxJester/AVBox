@@ -143,4 +143,8 @@ object HawkConfig {
     const val SITE_EXT_OVERRIDE = "site_ext_override"
     const val AD_BLOCK_ENABLED = "ad_block_enabled"
     const val AD_AUDIO_FINGERPRINT_ENABLED = "ad_audio_fingerprint_enabled"
+    const val MEDIA_BADGES_SHOW = "media_badges_show"
+    const val MEDIA_BADGES_DISPLAY_MODE = "media_badges_display_mode"
+    const val MEDIA_BADGES_LINK_MODE = "media_badges_link_mode"
+    const val MEDIA_BADGES_CUSTOM_LINK = "media_badges_custom_link"
 }

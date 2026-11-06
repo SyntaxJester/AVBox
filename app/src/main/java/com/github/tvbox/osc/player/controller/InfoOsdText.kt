@@ -93,6 +93,58 @@ internal object InfoOsdText {
         state.infoOsdLeft = left
         state.infoOsdRight = right
         state.infoOsdFooter = footer
+        state.mediaBadges = mediaBadgeLines(context, video, exo)
+    }
+
+    /**
+     * 媒体徽章：按真实解码的画面和音轨计算。
+     * 仅当用户开启显示时返回，否则返回空列表。
+     * 每个徽章为 Pair<名称, 类型>，类型用于 UI 区分显示方式。
+     */
+    private fun mediaBadgeLines(context: Context, video: Format?, exo: ExoPlayer?): List<Pair<String, String>> {
+        if (!(KV.get(HawkConfig.MEDIA_BADGES_SHOW, true) == true)) return emptyList()
+        val mode = KV.get(HawkConfig.MEDIA_BADGES_DISPLAY_MODE, 0) ?: 0
+        if (mode == 2) return emptyList()
+        val badges = ArrayList<Pair<String, String>>()
+        if (video != null) {
+            val width = video.width
+            val height = video.height
+            if (width >= 3800 || height >= 2100) {
+                badges.add(context.getString(R.string.badge_4k) to "video")
+            } else if (width >= 2500 || height >= 1400) {
+                badges.add(context.getString(R.string.badge_2k) to "video")
+            } else if (width >= 1900 || height >= 1000) {
+                badges.add(context.getString(R.string.badge_1080p) to "video")
+            }
+            when (video.sampleMimeType) {
+                MimeTypes.VIDEO_H265 -> badges.add(context.getString(R.string.badge_hevc) to "video")
+                MimeTypes.VIDEO_H264 -> badges.add(context.getString(R.string.badge_avc) to "video")
+                MimeTypes.VIDEO_AV1 -> badges.add(context.getString(R.string.badge_av1) to "video")
+                MimeTypes.VIDEO_VP9 -> badges.add(context.getString(R.string.badge_vp9) to "video")
+            }
+            val hdrType = videoHdrType(video)
+            if (hdrType != null) badges.add(context.getString(hdrType) to "video")
+        }
+        val audio = exo?.selectedAudioFormat
+        if (audio != null) {
+            when (audio.sampleMimeType) {
+                "audio/ac3" -> badges.add(context.getString(R.string.badge_dolby_digital) to "audio")
+                "audio/eac3", "audio/eac3-joc" -> badges.add(context.getString(R.string.badge_dolby_digital_plus) to "audio")
+                "audio/true-hd" -> badges.add(context.getString(R.string.badge_dolby_truehd) to "audio")
+                "audio/dts" -> badges.add(context.getString(R.string.badge_dts) to "audio")
+                "audio/dts-hd", "audio/dts-x" -> badges.add(context.getString(R.string.badge_dts_hd) to "audio")
+            }
+            val channels = audio.channelCount
+            if (channels >= 8) badges.add(context.getString(R.string.badge_7_1) to "audio")
+            else if (channels >= 6) badges.add(context.getString(R.string.badge_5_1) to "audio")
+        }
+        return badges
+    }
+
+    private fun videoHdrType(format: Format): Int? {
+        val colorInfo = format.colorInfo ?: return null
+        if (!androidx.media3.common.ColorInfo.isTransferHdr(colorInfo)) return null
+        return if (colorInfo.colorTransfer == androidx.media3.common.C.COLOR_TRANSFER_ST2084) R.string.badge_hdr10_plus else R.string.badge_hdr10
     }
 
     private fun videoText(format: Format?, exo: ExoPlayer?): String {
@@ -339,3 +391,4 @@ internal object InfoOsdText {
         }
     }
 }
+

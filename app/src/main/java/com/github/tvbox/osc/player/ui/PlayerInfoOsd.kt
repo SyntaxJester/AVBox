@@ -4,6 +4,7 @@ import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -32,10 +33,13 @@ import androidx.compose.ui.unit.dp
 import com.github.tvbox.osc.R
 import com.github.tvbox.osc.player.state.PlayerActions
 import com.github.tvbox.osc.player.state.PlayerUiState
+import com.github.tvbox.osc.util.HawkConfig
+import com.github.tvbox.osc.util.KV
 
 private const val OSD_BG_ALPHA = 0.82f
 private const val OSD_LABEL_ALPHA = 0.6f
 private const val OSD_VALUE_MAX_LINES = 3
+private const val OSD_BADGE_BG = 0xFF3F51B5
 private val OSD_SAFE_INSET = 40.dp
 
 @Composable
@@ -97,6 +101,46 @@ fun BoxScope.PlayerInfoOsd(state: PlayerUiState, actions: PlayerActions, maxWidt
             OsdGroup(state.infoOsdRight, rightLabelWidth, labelGap, gap, lineSize, groupLimit)
         }
         state.infoOsdFooter?.let { OsdFooterLine(it, leftLabelWidth, labelGap, lineSize, contentLimit) }
+        if (state.mediaBadges.isNotEmpty()) {
+            OsdMediaBadges(state.mediaBadges, lineSize, gap)
+        }
+    }
+}
+
+@Composable
+private fun OsdMediaBadges(badges: List<Pair<String, String>>, size: TextUnit, gap: Dp) {
+    val textColor = Color(0xFFFAFAFA)
+    val baseStyle = LocalTextStyle.current
+    val badgeStyle = baseStyle.copy(color = textColor, fontSize = size)
+    when (KV.get(HawkConfig.MEDIA_BADGES_DISPLAY_MODE, 0)) {
+        1 -> Text(
+            text = badges.joinToString(" · ") { it.first },
+            style = badgeStyle,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        else -> Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+            badges.forEach { badge ->
+                Box(
+                    modifier = Modifier
+                        .background(
+                            Color(OSD_BADGE_BG),
+                            RoundedCornerShape(playerDim(R.dimen.vs_4)),
+                        )
+                        .padding(
+                            horizontal = playerDim(R.dimen.vs_8),
+                            vertical = playerDim(R.dimen.vs_3),
+                        ),
+                ) {
+                    Text(
+                        text = badge.first,
+                        style = badgeStyle,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
     }
 }
 

@@ -32,6 +32,7 @@ import com.github.tvbox.osc.ui.components.SettingsCard
 import com.github.tvbox.osc.ui.components.SettingsCardPosition
 import com.github.tvbox.osc.ui.components.SettingsGroup
 import com.github.tvbox.osc.ui.components.SettingsOptionMenuRow
+import com.github.tvbox.osc.ui.components.SettingsRow
 import com.github.tvbox.osc.ui.components.SettingsSliderRow
 import com.github.tvbox.osc.ui.components.SettingsSwitchRow
 import com.github.tvbox.osc.ui.components.TopBarActionBox
@@ -48,6 +49,7 @@ fun PlaySettingsScreen(onNavigateBack: () -> Unit, vm: SettingsViewModel = viewM
     val state by vm.state
     val context = LocalContext.current
     var showPrewarmWarning by remember { mutableStateOf(false) }
+    var showBadgeLinkDialog by remember { mutableStateOf(false) }
     var sliderPreloadDuration by remember(state.preloadDuration) { mutableStateOf(state.preloadDuration) }
     var sliderCacheSize by remember(state.exoCacheSizeMb) { mutableStateOf(state.exoCacheSizeMb) }
 
@@ -261,8 +263,80 @@ fun PlaySettingsScreen(onNavigateBack: () -> Unit, vm: SettingsViewModel = viewM
                 }
             }
 
+            Spacer(Modifier.height(28.dp))
+
+            SettingsGroup(title = stringResource(R.string.settings_group_media_badges)) {
+                SettingsCard(SettingsCardPosition.FIRST) {
+                    SettingsSwitchRow(
+                        title = stringResource(R.string.settings_media_badges),
+                        leadingIconRes = R.drawable.ic_play_decode,
+                        subtitle = stringResource(R.string.settings_media_badges_show_subtitle),
+                        checked = state.mediaBadgesShow,
+                        onCheckedChange = { vm.put(HawkConfig.MEDIA_BADGES_SHOW, it) },
+                    )
+                }
+                SettingsCard(SettingsCardPosition.MIDDLE) {
+                    SettingsOptionMenuRow(
+                        title = stringResource(R.string.settings_media_badges_display_mode),
+                        leadingIconRes = R.drawable.ic_play_render,
+                        subtitle = stringResource(R.string.settings_media_badges_display_mode_subtitle),
+                        valueText = badgeDisplayModeLabel(state.mediaBadgesDisplayMode),
+                        options = listOf(
+                            stringResource(R.string.settings_media_badges_mode_badge),
+                            stringResource(R.string.settings_media_badges_mode_text),
+                            stringResource(R.string.settings_media_badges_mode_hide),
+                        ),
+                        selectedIndex = state.mediaBadgesDisplayMode,
+                        onSelect = { idx -> vm.put(HawkConfig.MEDIA_BADGES_DISPLAY_MODE, idx) },
+                    )
+                }
+                SettingsCard(if (state.mediaBadgesLinkMode == 1) SettingsCardPosition.MIDDLE else SettingsCardPosition.LAST) {
+                    SettingsOptionMenuRow(
+                        title = stringResource(R.string.settings_media_badges_link_mode),
+                        leadingIconRes = R.drawable.ic_play_cache,
+                        subtitle = stringResource(R.string.settings_media_badges_link_mode_subtitle),
+                        valueText = if (state.mediaBadgesLinkMode == 1) {
+                            stringResource(R.string.settings_media_badges_link_custom)
+                        } else {
+                            stringResource(R.string.settings_media_badges_link_none)
+                        },
+                        options = listOf(
+                            stringResource(R.string.settings_media_badges_link_none),
+                            stringResource(R.string.settings_media_badges_link_custom),
+                        ),
+                        selectedIndex = state.mediaBadgesLinkMode,
+                        onSelect = { idx -> vm.put(HawkConfig.MEDIA_BADGES_LINK_MODE, idx) },
+                    )
+                }
+                if (state.mediaBadgesLinkMode == 1) {
+                    SettingsCard(SettingsCardPosition.LAST) {
+                        SettingsRow(
+                            title = stringResource(R.string.settings_media_badges_custom_link),
+                            subtitle = stringResource(R.string.settings_media_badges_custom_link_subtitle),
+                            valueText = state.mediaBadgesCustomLink.ifBlank {
+                                stringResource(R.string.settings_media_badges_custom_link_empty)
+                            },
+                            leadingIconRes = R.drawable.ic_play_scale,
+                            onClick = { showBadgeLinkDialog = true },
+                        )
+                    }
+                }
+            }
+
             Spacer(Modifier.height(64.dp))
         }
+    }
+
+    if (showBadgeLinkDialog) {
+        TextEditDialog(
+            title = stringResource(R.string.settings_media_badges_custom_link),
+            initialText = state.mediaBadgesCustomLink,
+            onDismiss = { showBadgeLinkDialog = false },
+            onConfirm = { link ->
+                vm.put(HawkConfig.MEDIA_BADGES_CUSTOM_LINK, link)
+                showBadgeLinkDialog = false
+            },
+        )
     }
 
     if (showPrewarmWarning) {
@@ -290,4 +364,14 @@ fun PlaySettingsScreen(onNavigateBack: () -> Unit, vm: SettingsViewModel = viewM
             },
         )
     }
+}
+
+@Composable
+private fun badgeDisplayModeLabel(mode: Int): String {
+    val res = when (mode) {
+        0 -> R.string.settings_media_badges_mode_badge
+        1 -> R.string.settings_media_badges_mode_text
+        else -> R.string.settings_media_badges_mode_hide
+    }
+    return stringResource(res)
 }

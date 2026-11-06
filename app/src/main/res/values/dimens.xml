@@ -8,6 +8,8 @@
     <dimen name="ts_30">30mm</dimen>
 
     <dimen name="vs_2">2mm</dimen>
+    <dimen name="vs_3">3mm</dimen>
+    <dimen name="vs_4">4mm</dimen>
     <dimen name="vs_5">5mm</dimen>
     <dimen name="vs_8">8mm</dimen>
     <dimen name="vs_10">10mm</dimen>
