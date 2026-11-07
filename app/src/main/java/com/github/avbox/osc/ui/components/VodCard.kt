@@ -21,7 +21,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.github.avbox.osc.bean.Movie
-import com.github.avbox.osc.ui.components.marqueeOnOverflow
 
 enum class VodCardStyle { Overlay, Stacked }
 
@@ -54,7 +53,6 @@ fun VodCard(
                 textAlign = TextAlign.Center,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .marqueeOnOverflow()
                     .padding(top = 6.dp),
             )
         }
@@ -89,9 +87,6 @@ fun VodCard(
                     color = Color.White,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .marqueeOnOverflow(),
                 )
                 val meta = buildString {
                     if (video.year > 0) append(video.year)
@@ -102,7 +97,6 @@ fun VodCard(
                 }
                 if (meta.isNotEmpty()) {
                     Text(
-                        modifier = Modifier.marqueeOnOverflow(),
                         text = meta,
                         style = MaterialTheme.typography.bodyMedium,
                         fontSize = 12.sp,
@@ -136,20 +130,20 @@ private val RATING_SCORE_REGEX = Regex("评分[:：]?\\s*(\\d+(?:\\.\\d+)?)") //
 private val RATING_SCORE_SUFFIX_REGEX = Regex("^(\\d+(?:\\.\\d+)?)\\s*分$") // i18n: keep(源备注评分提取)
 
 internal fun ratingBadgeText(note: String?): String? {
-    val scoreText = note?.trim().orEmpty()
-    if (scoreText.isEmpty()) return null
-    val scoreMatch = RATING_SCORE_REGEX.find(scoreText)
-        ?: RATING_SCORE_SUFFIX_REGEX.find(scoreText)
-    if (scoreMatch != null) {
-        val num = scoreMatch.groupValues[1]
+    val n = note?.trim().orEmpty()
+    if (n.isEmpty()) return null
+    val m = RATING_SCORE_REGEX.find(n)
+        ?: RATING_SCORE_SUFFIX_REGEX.find(n)
+    if (m != null) {
+        val num = m.groupValues[1]
         return if (num.toFloatOrNull() == 0f) null else num
     }
-    return scoreText.takeIf { it.toFloatOrNull() != 0f }
+    return n.takeIf { it.toFloatOrNull() != 0f }
 }
 
 internal fun isRatingNote(note: String?): Boolean {
-    val scoreText = note?.trim().orEmpty()
-    if (scoreText.isEmpty()) return false
-    if (scoreText.toFloatOrNull() != null) return true
-    return ratingBadgeText(scoreText) != scoreText
+    val n = note?.trim().orEmpty()
+    if (n.isEmpty()) return false
+    if (n.toFloatOrNull() != null) return true
+    return ratingBadgeText(n) != n
 }

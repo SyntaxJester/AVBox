@@ -1,25 +1,25 @@
 package com.github.avbox.osc.player.engine.iso
 
-import com.github.avbox.osc.util.KVKeys
+import com.github.avbox.osc.util.HawkConfig
 import com.github.avbox.osc.util.KV
 
 object IsoSettings {
 
-    var lpcmEnabled: Boolean
-        get() = KV.get(KVKeys.ISO_LPCM, KVKeys.ISO_LPCM_DEFAULT)
-        set(value) {
-            KV.put(KVKeys.ISO_LPCM, value)
-        }
+    fun lpcmEnabled(): Boolean = KV.get(HawkConfig.ISO_LPCM, HawkConfig.ISO_LPCM_DEFAULT)
 
-    var trueHdCoreEnabled: Boolean
-        get() = KV.get(KVKeys.ISO_TRUEHD_CORE, KVKeys.ISO_TRUEHD_CORE_DEFAULT)
-        set(value) {
-            KV.put(KVKeys.ISO_TRUEHD_CORE, value)
-        }
+    fun setLpcmEnabled(value: Boolean) {
+        KV.put(HawkConfig.ISO_LPCM, value)
+    }
 
-    var pgsEnabled: Boolean
-        get() = KV.get(KVKeys.ISO_PGS, KVKeys.ISO_PGS_DEFAULT)
-        set(value) {
-            KV.put(KVKeys.ISO_PGS, value)
-        }
+    fun trueHdCoreEnabled(): Boolean = KV.get(HawkConfig.ISO_TRUEHD_CORE, HawkConfig.ISO_TRUEHD_CORE_DEFAULT)
+
+    fun setTrueHdCoreEnabled(value: Boolean) {
+        KV.put(HawkConfig.ISO_TRUEHD_CORE, value)
+    }
+
+    fun pgsEnabled(): Boolean = KV.get(HawkConfig.ISO_PGS, HawkConfig.ISO_PGS_DEFAULT)
+
+    fun setPgsEnabled(value: Boolean) {
+        KV.put(HawkConfig.ISO_PGS, value)
+    }
 }

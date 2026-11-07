@@ -5,8 +5,8 @@ import androidx.media3.common.C
 import androidx.media3.datasource.BaseDataSource
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
-import com.github.avbox.osc.player.core.HttpHeaders
-import com.github.avbox.osc.player.core.OkHttpDataSource
+import com.github.avbox.osc.player.engine.MediaSources
+import com.github.avbox.osc.player.engine.OkHttpDataSource
 import com.github.avbox.osc.util.AppLog
 import java.io.IOException
 import java.net.ProtocolException
@@ -222,7 +222,7 @@ class IsoDataSource internal constructor(
             onSelection: ((IsoSelection) -> Unit)? = null,
             seekMs: Long = 0L,
         ): Factory {
-            val requestHeaders = HttpHeaders.toRequestHeaders(headers)
+            val requestHeaders = MediaSources.toRequestHeaders(headers)
             var userAgent: String? = null
             val defaultHeaders = HashMap<String, String>()
             for ((key, value) in requestHeaders) {
@@ -261,7 +261,7 @@ internal class IsoTargetProvider(
             seekMs,
         )
         IsoPlaylistState.update(info.selection)
-        IsoThroughput.targetLength = info.selection.totalLength
+        IsoThroughput.setTarget(info.selection.totalLength)
         onSelection(info.selection)
         val target = info.selection.withPlaylistTargets().first()
         resolved.compareAndSet(null, target)

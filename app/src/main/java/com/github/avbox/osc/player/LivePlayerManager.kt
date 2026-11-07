@@ -1,50 +1,86 @@
 package com.github.avbox.osc.player
 
-import com.github.avbox.osc.util.KVKeys
+import com.github.avbox.osc.util.HawkConfig
 import com.github.avbox.osc.util.KV
 import com.github.avbox.osc.util.AppLog
 import org.json.JSONException
 import org.json.JSONObject
 
 class LivePlayerManager {
+    @JvmField
+    var defaultPlayerConfig: JSONObject = JSONObject()
 
-    private var sessionDecode: String? = null
+    @JvmField
+    var currentPlayerConfig: JSONObject? = null
 
-    fun init(videoView: PlayerKernelView) {
-        defaultLiveChannelPlayer(videoView)
-    }
-
-    fun defaultLiveChannelPlayer(videoView: PlayerKernelView) {
-        KernelConfigApplier.applyConfig(videoView, buildConfig())
-    }
-
-    private fun effectiveDecode(): String = sessionDecode ?: KV.get(KVKeys.EXO_DECODE, "硬解码") // i18n: keep
-
-    val livePlayerType: Int
-        get() = if ("软解码" == effectiveDecode()) 1 else 0 // i18n: keep
-
-    val livePlayerScale: Int
-        get() = KV.get(KVKeys.LIVE_PLAY_SCALE, 0)
-
-    fun changeLivePlayerType(videoView: PlayerKernelView, playerType: Int) {
-        sessionDecode = if (playerType == 1) "软解码" else "硬解码" // i18n: keep
-        KernelConfigApplier.applyConfig(videoView, buildConfig())
-    }
-
-    fun changeLivePlayerScale(videoView: PlayerKernelView, playerScale: Int) {
-        videoView.setScreenScaleType(playerScale)
-        KV.put(KVKeys.LIVE_PLAY_SCALE, playerScale)
-    }
-
-    private fun buildConfig(): JSONObject {
-        val cfg = JSONObject()
+    fun init(videoView: MyVideoView) {
         try {
-            cfg.put("exo", effectiveDecode()) // i18n: keep
-            cfg.put("pr", KV.get(KVKeys.PLAY_RENDER, 1))
-            cfg.put("sc", KV.get(KVKeys.LIVE_PLAY_SCALE, 0))
+            defaultPlayerConfig.put("exo", KV.get(HawkConfig.EXO_DECODE, "硬解码")) // i18n: keep
+            defaultPlayerConfig.put("pr", KV.get(HawkConfig.PLAY_RENDER, 1))
+            defaultPlayerConfig.put("sc", KV.get(HawkConfig.LIVE_PLAY_SCALE, 0))
         } catch (e: JSONException) {
             AppLog.e("LivePlayerManager", e)
         }
-        return cfg
+        getDefaultLiveChannelPlayer(videoView)
+    }
+
+    fun getDefaultLiveChannelPlayer(videoView: MyVideoView) {
+        PlayerHelper.updateCfg(videoView, defaultPlayerConfig)
+        try {
+            currentPlayerConfig = JSONObject(defaultPlayerConfig.toString())
+        } catch (e: JSONException) {
+            AppLog.e("LivePlayerManager", e)
+        }
+    }
+
+    private fun currentOrDefaultConfig(): JSONObject {
+        return currentPlayerConfig ?: defaultPlayerConfig
+    }
+
+    val livePlayerType: Int
+        get() {
+            val decode = currentOrDefaultConfig().optString("exo", KV.get(HawkConfig.EXO_DECODE, "硬解码")) // i18n: keep
+            return if ("软解码" == decode) 1 else 0 // i18n: keep
+        }
+
+    val livePlayerScale: Int
+        get() = currentOrDefaultConfig().optInt("sc", 0)
+
+    fun changeLivePlayerType(videoView: MyVideoView, playerType: Int) {
+        var playerConfig: JSONObject
+        try {
+            playerConfig = JSONObject(currentOrDefaultConfig().toString())
+        } catch (e: JSONException) {
+            playerConfig = JSONObject()
+        }
+        try {
+            val decode = if (playerType == 1) "软解码" else "硬解码" // i18n: keep
+            playerConfig.put("exo", decode) // i18n: keep
+            defaultPlayerConfig.put("exo", decode) // i18n: keep
+        } catch (e: JSONException) {
+            AppLog.e("LivePlayerManager", e)
+        }
+        PlayerHelper.updateCfg(videoView, playerConfig)
+        currentPlayerConfig = playerConfig
+    }
+
+    fun changeLivePlayerScale(videoView: MyVideoView, playerScale: Int) {
+        videoView.setScreenScaleType(playerScale)
+        KV.put(HawkConfig.LIVE_PLAY_SCALE, playerScale)
+
+        var playerConfig: JSONObject
+        try {
+            playerConfig = JSONObject(currentOrDefaultConfig().toString())
+        } catch (e: JSONException) {
+            playerConfig = JSONObject()
+        }
+        try {
+            playerConfig.put("sc", playerScale)
+            defaultPlayerConfig.put("sc", playerScale)
+        } catch (e: JSONException) {
+            AppLog.e("LivePlayerManager", e)
+        }
+
+        currentPlayerConfig = playerConfig
     }
 }

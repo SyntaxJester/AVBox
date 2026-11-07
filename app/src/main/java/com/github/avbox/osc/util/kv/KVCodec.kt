@@ -10,7 +10,7 @@ object KVCodec {
     private val DECODER = KVDecoder()
 
     init {
-        KVLog.setSink(AppLog::e)
+        KVLog.setSink(LOG::e)
         DECODER.setRegistry(KVKeySpec())
         AppLog.i("echo-kv type-registry keys=" + KVKeySpec.registeredCount())
     }

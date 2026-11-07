@@ -44,7 +44,7 @@ import java.nio.charset.Charset
 import java.util.ArrayList
 import java.util.TreeMap
 
-import com.github.avbox.osc.player.core.KernelPlayer
+import com.github.avbox.osc.player.KernelPlayer
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -52,16 +52,16 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 class DefaultSubtitleEngine : SubtitleEngine {
-    private var workHandler: Handler? = null
-    private var loadedSubtitles: MutableList<Subtitle>? = null
-    private var uiRenderTask: UIRenderTask? = null
-    private var attachedPlayer: KernelPlayer? = null
-    private var onSubtitlePreparedListener: SubtitleEngine.OnSubtitlePreparedListener? = null
-    private var subtitleChangeListener: SubtitleEngine.OnSubtitleChangeListener? = null
-    var mergeSameTime: Boolean = false
+    private var mWorkHandler: Handler? = null
+    private var mSubtitles: MutableList<Subtitle>? = null
+    private var mUIRenderTask: UIRenderTask? = null
+    private var mMediaPlayer: KernelPlayer? = null
+    private var mOnSubtitlePreparedListener: SubtitleEngine.OnSubtitlePreparedListener? = null
+    private var mOnSubtitleChangeListener: SubtitleEngine.OnSubtitleChangeListener? = null
+    private var mergeSameTime: Boolean = false
 
     override fun bindToMediaPlayer(mediaPlayer: KernelPlayer?) {
-        attachedPlayer = mediaPlayer
+        mMediaPlayer = mediaPlayer
     }
 
     override fun setSubtitlePath(path: String?) {
@@ -73,32 +73,32 @@ class DefaultSubtitleEngine : SubtitleEngine {
         }
         val p = path
 
-        val loadSeq = loadGeneration
+        val loadSeq = mLoadSeq
         SubtitleLoader.loadSubtitle(p, object : SubtitleLoader.Callback {
             override fun onSuccess(result: SubtitleLoadSuccessResult?) {
-                if (loadSeq != loadGeneration) {
+                if (loadSeq != mLoadSeq) {
                     AppLog.i("echo-sub drop stale: " + (if (p.startsWith("data:")) "inline" else p))
                     return
                 }
                 if (result == null) {
-                    AppLog.d(TAG, "onSuccess: subtitleLoadSuccessResult is null.")
+                    Log.d(TAG, "onSuccess: subtitleLoadSuccessResult is null.")
                     return
                 }
                 val timedTextObject = result.timedTextObject
                 if (timedTextObject == null) {
-                    AppLog.d(TAG, "onSuccess: timedTextObject is null.")
+                    Log.d(TAG, "onSuccess: timedTextObject is null.")
                     return
                 }
                 val captions = timedTextObject.captions
                 if (captions == null) {
-                    AppLog.d(TAG, "onSuccess: captions is null.")
+                    Log.d(TAG, "onSuccess: captions is null.")
                     return
                 }
                 val subtitles = buildSubtitles(captions)
-                loadedSubtitles = subtitles
+                mSubtitles = subtitles
                 AppLog.i("echo-sub ready: lines=" + subtitles.size +
                         " src=" + (if (p.startsWith("data:")) "inline" else p))
-                setSubtitleDelay(SubtitleHelper.timeDelay)
+                setSubtitleDelay(SubtitleHelper.getTimeDelay())
                 notifyPrepared()
 
                 val subtitlePath = result.subtitlePath ?: ""
@@ -126,12 +126,16 @@ class DefaultSubtitleEngine : SubtitleEngine {
             }
 
             override fun onError(exception: Exception?) {
-                if (loadSeq != loadGeneration) return
+                if (loadSeq != mLoadSeq) return
                 val e = exception
                 Log.e(TAG, "onError: " + e?.message)
                 AppLog.e("echo-sub fail: " + (if (p.startsWith("data:")) "inline" else p) + " -> " + e?.message)
             }
         })
+    }
+
+    fun setMergeSameTime(mergeSameTime: Boolean) {
+        this.mergeSameTime = mergeSameTime
     }
 
     private fun buildSubtitles(captions: TreeMap<Int, Subtitle>): MutableList<Subtitle> {
@@ -174,11 +178,11 @@ class DefaultSubtitleEngine : SubtitleEngine {
         if (milliseconds == 0) {
             return
         }
-        val currentSubtitles = loadedSubtitles
+        val currentSubtitles = mSubtitles
         if (currentSubtitles == null || currentSubtitles.isEmpty()) {
             return
         }
-        loadedSubtitles = null
+        mSubtitles = null
         val ms = requireNotNull(milliseconds) { "subtitle delay is not set" }
         for (i in currentSubtitles.indices) {
             val subtitle = currentSubtitles[i]
@@ -195,12 +199,12 @@ class DefaultSubtitleEngine : SubtitleEngine {
             subtitle.start = start
             subtitle.end = end
         }
-        loadedSubtitles = currentSubtitles
+        mSubtitles = currentSubtitles
     }
 
     private var playSubtitleCacheKey: String? = null
 
-    private var loadGeneration: Int = 0
+    private var mLoadSeq: Int = 0
 
     override fun setPlaySubtitleCacheKey(cacheKey: String?) {
         playSubtitleCacheKey = cacheKey
@@ -212,14 +216,14 @@ class DefaultSubtitleEngine : SubtitleEngine {
 
     override fun reset() {
         stop()
-        loadedSubtitles = null
-        uiRenderTask = null
-        loadGeneration++
+        mSubtitles = null
+        mUIRenderTask = null
+        mLoadSeq++
     }
 
     override fun start() {
-        AppLog.d(TAG, "start: ")
-        if (attachedPlayer == null) {
+        Log.d(TAG, "start: ")
+        if (mMediaPlayer == null) {
             Log.w(TAG, "MediaPlayer is not bind, You must bind MediaPlayer to " +
                     SubtitleEngine::class.java.simpleName +
                     " before start() method be called," +
@@ -228,7 +232,7 @@ class DefaultSubtitleEngine : SubtitleEngine {
             return
         }
         stop()
-        workHandler?.sendEmptyMessageDelayed(MSG_REFRESH, REFRESH_INTERVAL.toLong())
+        mWorkHandler?.sendEmptyMessageDelayed(MSG_REFRESH, REFRESH_INTERVAL.toLong())
     }
 
     override fun pause() {
@@ -240,31 +244,31 @@ class DefaultSubtitleEngine : SubtitleEngine {
     }
 
     override fun stop() {
-        workHandler?.removeMessages(MSG_REFRESH)
+        mWorkHandler?.removeMessages(MSG_REFRESH)
     }
 
     override fun destroy() {
-        AppLog.d(TAG, "destroy: ")
+        Log.d(TAG, "destroy: ")
         stopWorkThread()
         reset()
     }
 
     private fun initWorkThread() {
         stopWorkThread()
-        workHandler = Handler(Looper.getMainLooper(), Handler.Callback { msg: Message ->
+        mWorkHandler = Handler(Looper.getMainLooper(), Handler.Callback { msg: Message ->
             try {
                 var delay: Long = REFRESH_INTERVAL.toLong()
-                val mediaPlayer = attachedPlayer
+                val mediaPlayer = mMediaPlayer
                 if (mediaPlayer != null && mediaPlayer.isPlaying) {
                     val position = mediaPlayer.currentPosition
-                    val subtitle = SubtitleFinder.find(position, loadedSubtitles)
+                    val subtitle = SubtitleFinder.find(position, mSubtitles)
                     notifyRefreshUI(subtitle)
                     val subtitleEnd = subtitle?.end
                     if (subtitleEnd != null) {
                         delay = subtitleEnd.mseconds - position
                     }
                 }
-                workHandler?.sendEmptyMessageDelayed(MSG_REFRESH, delay)
+                mWorkHandler?.sendEmptyMessageDelayed(MSG_REFRESH, delay)
             } catch (e: Exception) {
                 AppLog.d("DefaultSubtitleEngine", "subtitle refresh tick failed")
             }
@@ -273,25 +277,25 @@ class DefaultSubtitleEngine : SubtitleEngine {
     }
 
     private fun stopWorkThread() {
-        workHandler?.removeCallbacksAndMessages(null)
-        workHandler = null
+        mWorkHandler?.removeCallbacksAndMessages(null)
+        mWorkHandler = null
     }
 
     private fun notifyRefreshUI(subtitle: Subtitle?) {
-        val renderTask = uiRenderTask ?: UIRenderTask(subtitleChangeListener).also { uiRenderTask = it }
+        val renderTask = mUIRenderTask ?: UIRenderTask(mOnSubtitleChangeListener).also { mUIRenderTask = it }
         renderTask.execute(subtitle)
     }
 
     private fun notifyPrepared() {
-        onSubtitlePreparedListener?.onSubtitlePrepared(loadedSubtitles)
+        mOnSubtitlePreparedListener?.onSubtitlePrepared(mSubtitles)
     }
 
     override fun setOnSubtitlePreparedListener(listener: SubtitleEngine.OnSubtitlePreparedListener?) {
-        onSubtitlePreparedListener = listener
+        mOnSubtitlePreparedListener = listener
     }
 
     override fun setOnSubtitleChangeListener(listener: SubtitleEngine.OnSubtitleChangeListener?) {
-        subtitleChangeListener = listener
+        mOnSubtitleChangeListener = listener
     }
 
     companion object {

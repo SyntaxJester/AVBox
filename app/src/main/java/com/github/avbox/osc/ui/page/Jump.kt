@@ -3,8 +3,8 @@ package com.github.avbox.osc.ui.page
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import com.github.avbox.osc.ui.DetailActivity
-import com.github.avbox.osc.ui.SearchActivity
+import com.github.avbox.osc.ui.activity.DetailActivity
+import com.github.avbox.osc.ui.activity.SearchActivity
 
 fun Context.jumpToDetail(id: String?, sourceKey: String?, title: String?, picture: String?, collect: Boolean = false) {
     val bundle = Bundle()

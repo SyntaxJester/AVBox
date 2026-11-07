@@ -13,10 +13,10 @@ import java.util.regex.Pattern
 object DefaultConfig {
 
     @JvmStatic
-    fun appVersionCode(hostContext: Context): Int {
-        val pm = hostContext.packageManager
+    fun getAppVersionCode(mContext: Context): Int {
+        val pm = mContext.packageManager
         try {
-            val packageInfo = pm.getPackageInfo(hostContext.packageName, 0)
+            val packageInfo = pm.getPackageInfo(mContext.packageName, 0)
             return packageInfo.versionCode
         } catch (e: PackageManager.NameNotFoundException) {
             AppLog.e("DefaultConfig", e)
@@ -25,10 +25,10 @@ object DefaultConfig {
     }
 
     @JvmStatic
-    fun appVersionName(hostContext: Context): String? {
-        val pm = hostContext.packageManager
+    fun getAppVersionName(mContext: Context): String? {
+        val pm = mContext.packageManager
         try {
-            val packageInfo = pm.getPackageInfo(hostContext.packageName, 0)
+            val packageInfo = pm.getPackageInfo(mContext.packageName, 0)
             return packageInfo.versionName
         } catch (e: PackageManager.NameNotFoundException) {
             AppLog.e("DefaultConfig", e)
@@ -37,7 +37,7 @@ object DefaultConfig {
     }
 
     @JvmStatic
-    fun fileSuffix(name: String?): String {
+    fun getFileSuffix(name: String?): String {
         if (TextUtils.isEmpty(name)) {
             return ""
         }
@@ -47,7 +47,7 @@ object DefaultConfig {
     }
 
     @JvmStatic
-    fun filePrefixName(fileName: String?): String {
+    fun getFilePrefixName(fileName: String?): String {
         if (TextUtils.isEmpty(fileName)) {
             return ""
         }

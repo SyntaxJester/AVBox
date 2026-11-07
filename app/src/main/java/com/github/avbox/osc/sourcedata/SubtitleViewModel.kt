@@ -4,9 +4,9 @@ import android.text.TextUtils
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 
-import com.github.avbox.osc.bean.SourceSubtitle
+import com.github.avbox.osc.bean.Subtitle
 import com.github.avbox.osc.bean.SubtitleData
-import com.github.avbox.osc.net.HttpClients
+import com.github.avbox.osc.net.OkGoHelper
 import com.github.avbox.osc.util.AppLog
 import com.github.avbox.osc.util.net.Http
 
@@ -32,7 +32,7 @@ import okhttp3.Response
 class SubtitleViewModel : ViewModel() {
 
     fun interface SubtitleLoader {
-        fun loadSubtitle(subtitle: SourceSubtitle)
+        fun loadSubtitle(subtitle: Subtitle)
     }
 
     val searchResult = SourceChannel<SubtitleData?>()
@@ -41,15 +41,15 @@ class SubtitleViewModel : ViewModel() {
         viewModelScope.launch { searchResultFromAssrt(title, page) }
     }
 
-    fun searchResultSubtitleUrls(subtitle: SourceSubtitle) {
+    fun getSearchResultSubtitleUrls(subtitle: Subtitle) {
         viewModelScope.launch {
             val (files, error) = fetchSubtitleFiles(subtitle)
             setSearchListData(files, true, error)
         }
     }
 
-    fun getSubtitleUrl(subtitle: SourceSubtitle, subtitleLoader: SubtitleLoader) {
-        subtitleUrlFromAssrt(subtitle, subtitleLoader, null)
+    fun getSubtitleUrl(subtitle: Subtitle, subtitleLoader: SubtitleLoader) {
+        getSubtitleUrlFromAssrt(subtitle, subtitleLoader, null)
     }
 
     fun pickEpisodeSubtitle(releaseUrl: String?, episodeName: String?, fileNameHint: String?,
@@ -59,7 +59,7 @@ class SubtitleViewModel : ViewModel() {
             return
         }
         viewModelScope.launch {
-            val release = SourceSubtitle()
+            val release = Subtitle()
             release.url = releaseUrl
             val (files, error) = fetchSubtitleFiles(release)
             if (error || files == null || files.isEmpty()) {
@@ -73,11 +73,11 @@ class SubtitleViewModel : ViewModel() {
                 if (onFailed != null) onFailed.run()
                 return@launch
             }
-            subtitleUrlFromAssrt(files[index], onPicked, onFailed)
+            getSubtitleUrlFromAssrt(files[index], onPicked, onFailed)
         }
     }
 
-    private fun setSearchListData(data: List<SourceSubtitle>?, isNew: Boolean, isZip: Boolean) {
+    private fun setSearchListData(data: List<Subtitle>?, isNew: Boolean, isZip: Boolean) {
         try {
             val subtitleData = SubtitleData()
             subtitleData.subtitleList = data
@@ -110,12 +110,12 @@ class SubtitleViewModel : ViewModel() {
                 try {
                     val doc = Jsoup.parse(content)
                     val items = doc.select(".resultcard .sublist_box_title a.introtitle")
-                    val data = ArrayList<SourceSubtitle>()
+                    val data = ArrayList<Subtitle>()
                     for (item in items) {
                         val subtitleTitle = item.attr("title")
                         val href = item.attr("href")
                         if (TextUtils.isEmpty(href) || !containsSearchWord(subtitleTitle, title)) continue
-                        val one = SourceSubtitle()
+                        val one = Subtitle()
                         one.name = subtitleTitle
                         one.url = "https://assrt.net" + href
                         one.isZip = true
@@ -145,13 +145,13 @@ class SubtitleViewModel : ViewModel() {
 
     private val regexShooterFileOnclick = Pattern.compile("onthefly\\(\"(\\d+)\",\"(\\d+)\",\"([\\s\\S]*)\"\\)")
 
-    private suspend fun fetchSubtitleFiles(subtitle: SourceSubtitle): Pair<List<SourceSubtitle>?, Boolean> {
+    private suspend fun fetchSubtitleFiles(subtitle: Subtitle): Pair<List<Subtitle>?, Boolean> {
         val url = subtitle.url ?: return null to true
         return try {
             val content = Http.get(url)
             withContext(Dispatchers.IO) {
                 try {
-                    val data = ArrayList<SourceSubtitle>()
+                    val data = ArrayList<Subtitle>()
                     val doc = Jsoup.parse(content)
                     val items = doc.select("#detail-filelist .waves-effect")
                     if (items.size > 0) {
@@ -163,7 +163,7 @@ class SubtitleViewModel : ViewModel() {
                                 val fileName = matcher.group(3)
                                 if (!isSupportedSubtitleFile(fileName)) continue
                                 val downloadUrl = String.format("https://secure.assrt.net/download/%s/-/%s/%s", matcher.group(1), matcher.group(2), matcher.group(3))
-                                val one = SourceSubtitle()
+                                val one = Subtitle()
                                 val name = item.selectFirst("#filelist-name")
                                 one.name = if (name == null) fileName else name.text()
                                 one.url = downloadUrl
@@ -182,7 +182,7 @@ class SubtitleViewModel : ViewModel() {
                                 null to false
                             } else {
                                 val downloadUrl = "https://assrt.net" + href
-                                val one = SourceSubtitle()
+                                val one = Subtitle()
                                 val title = href.substring(href.lastIndexOf("/") + 1)
                                 one.name = URLDecoder.decode(title)
                                 one.url = downloadUrl
@@ -219,7 +219,7 @@ class SubtitleViewModel : ViewModel() {
             lower.endsWith(".ttml")
     }
 
-    private fun subtitleUrlFromAssrt(subtitle: SourceSubtitle, subtitleLoader: SubtitleLoader, onFailed: Runnable?) {
+    private fun getSubtitleUrlFromAssrt(subtitle: Subtitle, subtitleLoader: SubtitleLoader, onFailed: Runnable?) {
         val ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.54 Safari/537.36"
         val request = Request.Builder()
             .url(requireNotNull(subtitle.url) { "subtitle url missing" })
@@ -227,8 +227,8 @@ class SubtitleViewModel : ViewModel() {
             .addHeader("Referer", "https://secure.assrt.net")
             .addHeader("User-Agent", ua)
             .build()
-        val base = HttpClients.defaultClient
-        val builder = if (base != null) base.newBuilder() else OkHttpClient.Builder().proxySelector(HttpClients.proxySelector()).proxyAuthenticator(HttpClients.proxyAuthenticator())
+        val base = OkGoHelper.getDefaultClient()
+        val builder = if (base != null) base.newBuilder() else OkHttpClient.Builder().proxySelector(OkGoHelper.proxySelector()).proxyAuthenticator(OkGoHelper.proxyAuthenticator())
         builder.readTimeout(15, TimeUnit.SECONDS)
         builder.writeTimeout(15, TimeUnit.SECONDS)
         builder.connectTimeout(15, TimeUnit.SECONDS)

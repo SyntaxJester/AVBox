@@ -1,9 +1,8 @@
 package com.github.avbox.osc.net
 
 import com.github.avbox.osc.bean.SourceBean
-import com.github.avbox.osc.util.KVKeys
+import com.github.avbox.osc.util.HawkConfig
 import com.github.avbox.osc.util.KV
-import com.github.avbox.osc.util.SearchSettingsState
 
 object SearchHelper {
 
@@ -12,18 +11,20 @@ object SearchHelper {
 
     @JvmStatic
     fun getSourcesForSearch(): HashMap<String, String>? {
-        var checkSources: HashMap<String, String>? = null
+        var mCheckSources: HashMap<String, String>? = null
         try {
-            val api = KV.get(KVKeys.API_URL, "")
+            val api = KV.get(HawkConfig.API_URL, "")
             if (api.isEmpty()) return null
-            checkSources = SearchSettingsState.config.sourcesForSearch[api]
+            val mCheckSourcesForApi: HashMap<String, HashMap<String, String>> =
+                    KV.get(HawkConfig.SOURCES_FOR_SEARCH, HashMap())
+            mCheckSources = mCheckSourcesForApi[api]
         } catch (e: Exception) {
             return null
         }
-        if (checkSources == null || checkSources.isEmpty()) {
-            checkSources = getSources()
+        if (mCheckSources == null || mCheckSources.isEmpty()) {
+            mCheckSources = getSources()
         }
-        return checkSources
+        return mCheckSources
     }
 
     @JvmStatic
@@ -47,15 +48,15 @@ object SearchHelper {
 
     @JvmStatic
     fun getSources(): HashMap<String, String> {
-        val checkSources = HashMap<String, String>()
+        val mCheckSources = HashMap<String, String>()
         for (bean in liveSourcesProvider?.invoke().orEmpty()) {
             if (!bean.isSearchable()) {
                 continue
             }
             val key = bean.key ?: continue
-            checkSources[key] = "1"
+            mCheckSources[key] = "1"
         }
-        return checkSources
+        return mCheckSources
     }
 
 }

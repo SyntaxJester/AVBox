@@ -5,17 +5,17 @@ import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebView
 import android.widget.Toast
-import com.github.avbox.osc.bean.VodInfo
-import com.github.avbox.osc.player.KernelConfigApplier
-import com.github.avbox.osc.player.core.KernelPlayer
+import com.github.avbox.osc.player.KernelDecision
+import com.github.avbox.osc.player.KernelPlayer
+import com.github.avbox.osc.player.KernelReusePolicy
 import com.github.avbox.osc.player.engine.MediaSources
 import com.github.avbox.osc.player.PreloadCoordinator
 import com.github.avbox.osc.player.PlaybackHostApi
 import com.github.avbox.osc.player.PlaybackViewBridge
-import com.github.avbox.osc.player.core.VideoCodecInfo
+import com.github.avbox.osc.player.PlayerHelper
+import com.github.avbox.osc.player.VideoCodecInfo
 import com.github.avbox.osc.player.host.EngineTextureRenderViewFactory
-import com.github.avbox.osc.player.core.PlayState
-import com.github.avbox.osc.player.thirdparty.ExternalPlayerLauncher
+import com.github.avbox.osc.player.state.PlayState
 import com.github.avbox.osc.util.AppLog
 import com.github.avbox.osc.util.PermissionHelper
 import org.json.JSONObject
@@ -26,7 +26,7 @@ class PlayContainerViewBridge(private val container: PlayContainer) : PlaybackVi
     override fun isPageAlive(): Boolean = container.isAttached()
 
     override fun runOnUi(action: Runnable) {
-        val activity = container.attachedActivity
+        val activity = container.mActivity
         if (container.isAttached() && activity != null) activity.runOnUiThread(action)
     }
 
@@ -42,22 +42,22 @@ class PlayContainerViewBridge(private val container: PlayContainer) : PlaybackVi
         container.hideTipOnUiThread()
     }
 
-    override fun playState(): PlayState = container.kernelView?.playState ?: PlayState.IDLE
+    override fun playState(): PlayState = container.mVideoView?.playState ?: PlayState.IDLE
 
-    override fun currentPosition(): Long = container.kernelView?.currentPosition ?: 0L
+    override fun currentPosition(): Long = container.mVideoView?.currentPosition ?: 0L
 
-    override fun isPlaying(): Boolean = container.kernelView?.isPlaying == true
+    override fun isPlaying(): Boolean = container.mVideoView?.isPlaying == true
 
-    override fun duration(): Long = container.kernelView?.duration ?: 0L
+    override fun duration(): Long = container.mVideoView?.duration ?: 0L
 
-    override fun mediaPlayer(): KernelPlayer? = container.kernelView?.mediaPlayer
+    override fun mediaPlayer(): KernelPlayer? = container.mVideoView?.mediaPlayer
 
-    override fun isKernelErrored(): Boolean = container.kernelView?.isKernelErrored() == true
+    override fun isKernelErrored(): Boolean = container.mVideoView?.isKernelErrored() == true
 
-    override fun currentUrl(): String? = container.kernelView?.currentUrl
+    override fun currentUrl(): String? = container.mVideoView?.currentUrl
 
-    override fun onSessionVodUpdated(vod: VodInfo) {
-        container.syncSessionVod()
+    override fun onContentUrlSet(url: String?) {
+        container.mController?.onContentUrlSet(url)
     }
 
     override fun context(): Context = container.context
@@ -65,8 +65,8 @@ class PlayContainerViewBridge(private val container: PlayContainer) : PlaybackVi
     override fun playbackHost(): PlaybackHostApi = container
 
     override fun requestNotificationPermission() {
-        val host = container.pageHostRef
-        val activity = container.attachedActivity
+        val host = container.mPageHost
+        val activity = container.mActivity
         if (host != null) {
             host.requestNotificationPermission()
         } else if (activity != null) {
@@ -75,24 +75,30 @@ class PlayContainerViewBridge(private val container: PlayContainer) : PlaybackVi
     }
 
     override fun switchRenderToTexture() {
-        val view = container.kernelView
+        val view = container.mVideoView
         if (view != null && view.renderIsSurface) view.switchRenderToTexture()
     }
 
     override fun ensureRenderViewMatchesConfig() {
-        container.kernelView?.ensureRenderViewMatchesConfig()
+        container.mVideoView?.ensureRenderViewMatchesConfig()
     }
+
+    override fun setAudioOnlyMode(audioOnly: Boolean) {
+        container.setAudioOnlyMode(audioOnly)
+    }
+
+    override fun isAudioOnlyMode(): Boolean = container.isAudioOnlyMode()
 
     override fun releasePlayer() {
         container.releasePlayerKernel()
     }
 
     override fun setTitle(title: String) {
-        container.playerController?.setTitle(title)
+        container.mController?.setTitle(title)
     }
 
     override fun stopOtherPlayers() {
-        container.playerController?.stopOther()
+        container.mController?.stopOther()
     }
 
     override fun resetDanmu() {
@@ -108,30 +114,30 @@ class PlayContainerViewBridge(private val container: PlayContainer) : PlaybackVi
     }
 
     override fun clearArtwork() {
-        container.kernelView?.clearArtwork()
+        container.mVideoView?.clearArtwork()
     }
 
     override fun clearVideoFrame() {
-        container.kernelView?.clearVideoFrame()
+        container.mVideoView?.clearVideoFrame()
     }
 
     override fun setSubtitleViewVisible(visible: Boolean) {
-        val controller = container.playerController ?: return
+        val controller = container.mController ?: return
         controller.getSubtitleView().visibility = if (visible) View.VISIBLE else View.GONE
     }
 
     override fun onNewPlayStarted(sameContent: Boolean) {
-        container.previewExiting = false
-        container.playerController?.onNewPlayStarted(sameContent)
+        container.mExitingPreview = false
+        container.mController?.onNewPlayStarted(sameContent)
     }
 
-    override fun applyPlayerConfigToView() {
-        val view = container.kernelView ?: return
-        KernelConfigApplier.applyConfig(view, requireNotNull(container.scheduler.playerCfg()) { "player cfg missing in bridge" })
+    override fun applyPlayerConfigToView(forceKernel: Int) {
+        val view = container.mVideoView ?: return
+        PlayerHelper.updateCfg(view, requireNotNull(container.scheduler.playerCfg()) { "player cfg missing in bridge" })
     }
 
     override fun useTextureRenderForAudio() {
-        container.kernelView?.setRenderViewFactory(EngineTextureRenderViewFactory.create())
+        container.mVideoView?.setRenderViewFactory(EngineTextureRenderViewFactory.create())
     }
 
     override fun playExternalPlayer(
@@ -142,8 +148,8 @@ class PlayContainerViewBridge(private val container: PlayContainer) : PlaybackVi
         headers: HashMap<String, String>?,
         progress: Long,
     ): Boolean {
-        val activity = container.attachedActivity ?: return false
-        return ExternalPlayerLauncher.launch(
+        val activity = container.mActivity ?: return false
+        return PlayerHelper.runExternalPlayer(
             playerType,
             activity,
             url,
@@ -155,7 +161,7 @@ class PlayContainerViewBridge(private val container: PlayContainer) : PlaybackVi
     }
 
     override fun playM3u8(url: String, headers: HashMap<String, String>) {
-        container.playerController?.playM3u8(url, headers)
+        container.mController?.playM3u8(url, headers)
     }
 
     override fun playM3u8(url: String, headers: HashMap<String, String>?, gen: Int) {
@@ -163,7 +169,7 @@ class PlayContainerViewBridge(private val container: PlayContainer) : PlaybackVi
             AppLog.i("echo-ignore stale m3u8 result")
             return
         }
-        container.playerController?.playM3u8(url, headers)
+        container.mController?.playM3u8(url, headers)
     }
 
     override fun startVideoPlayback(
@@ -171,21 +177,46 @@ class PlayContainerViewBridge(private val container: PlayContainer) : PlaybackVi
         headers: HashMap<String, String>?,
         forceExoPlayer: Boolean,
     ) {
-        val view = container.kernelView ?: return
-        container.playerController?.hidePauseRoot()
-        val reusePlayer = container.scheduler.startVideoPlayback(
-            view,
-            url,
-            headers,
-            forceExoPlayer,
-            releaseKernel = { container.releasePlayerKernel() },
-            trackMemoryKey = container.trackMemoryKey(),
-            renderRebuildGuard = { true },
-            startLineTimeoutIso = MediaSources.isoHeaders(headers),
-        )
+        val view = container.mVideoView ?: return
+        container.mController?.hidePauseRoot()
+        if (view.mediaPlayer != null && view.needsRenderRebuild(view.factoryRenderType())) {
+            view.requireKernelRebuild()
+            AppLog.i("echo-render-changed: rebuild kernel on next start")
+        }
+        if (view.isKernelErrored()) {
+            view.requireKernelRebuild()
+            AppLog.i("echo-kernel-error: rebuild errored kernel on start")
+        }
+        val rebuildKernel = view.consumeKernelRebuildRequired()
+        val kernelPresent = view.mediaPlayer != null
+        val reusePlayer =
+            KernelReusePolicy.decide(kernelPresent, rebuildKernel, forceExoPlayer, true) == KernelDecision.REUSE
         if (!reusePlayer) container.hideTip()
-        container.playerController?.adoptCurrentContent()
-        container.playerController?.resetSpeed()
+        val sameContent = reusePlayer && container.scheduler.isSameStartedContent()
+        if (!reusePlayer && kernelPresent) {
+            container.releasePlayerKernel()
+        } else if (sameContent) {
+            view.saveCurrentProgress()
+        }
+        view.setProgressKey(container.scheduler.progressKey())
+        view.setTrackMemoryKey(container.trackMemoryKey())
+        container.scheduler.markContentStarted()
+        if (headers != null) {
+            view.setUrl(url, headers)
+        } else {
+            view.setUrl(url)
+        }
+        // 记录本轮内容地址：播放器切换完成前仍会返回上一部影片的进度，进度回调靠它判陈旧。
+        container.mController?.onContentUrlSet(url)
+        container.scheduler.startSwitchLinePlayTimeout(MediaSources.isoHeaders(headers))
+        if (reusePlayer) {
+            val base = container.scheduler.playTimeoutBasePosition()
+            view.skipPositionWhenPlay((if (sameContent) view.resumePositionForReplay(base) else base).toInt())
+            view.replay(false)
+        } else {
+            view.start()
+        }
+        container.mController?.resetSpeed()
     }
 
     override fun buildPreloadSnapshot(): PreloadCoordinator.Snapshot? = container.buildPreloadSnapshot()
@@ -199,14 +230,14 @@ class PlayContainerViewBridge(private val container: PlayContainer) : PlaybackVi
     }
 
     override fun firstUrlByArray(url: String): String =
-        container.playerController?.firstUrlByArray(url) ?: url
+        container.mController?.firstUrlByArray(url) ?: url
 
     override fun setArtwork(url: String) {
-        container.kernelView?.setArtwork(url)
+        container.mVideoView?.setArtwork(url)
     }
 
     override fun showParse(show: Boolean) {
-        container.playerController?.showParse(show)
+        container.mController?.showParse(show)
     }
 
     override fun checkDanmu(danmaku: String, onFailed: Runnable?) {
@@ -214,16 +245,16 @@ class PlayContainerViewBridge(private val container: PlayContainer) : PlaybackVi
     }
 
     override fun encodeUrl(url: String): String =
-        container.playerController?.encodeUrl(url) ?: url
+        container.mController?.encodeUrl(url) ?: url
 
     override fun evaluateScript(url: String, webView: WebView?) {
-        container.playerController?.evaluateScript(container.scheduler.sourceBean(), url, webView)
+        container.mController?.evaluateScript(container.scheduler.sourceBean(), url, webView)
     }
 
     override fun newSniffWebView(): WebView = container.MyWebView(container.context)
 
     override fun attachSniffWebView(webView: WebView) {
-        val activity = container.attachedActivity
+        val activity = container.mActivity
         if (container.isAttached() && activity != null) {
             activity.addContentView(webView, ViewGroup.LayoutParams(1, 1))
         }
@@ -234,17 +265,17 @@ class PlayContainerViewBridge(private val container: PlayContainer) : PlaybackVi
     }
 
     override fun switchPlayerKernel(): Boolean =
-        container.playerController != null && container.playerController.switchPlayer()
+        container.mController != null && container.mController.switchPlayer()
 
     override fun applyPlayerConfig(cfg: JSONObject) {
-        container.playerController?.setPlayerConfig(cfg)
+        container.mController?.setPlayerConfig(cfg)
     }
 
     override fun videoCodecInfo(): VideoCodecInfo =
         container.engine?.videoCodec?.value ?: VideoCodecInfo()
 
     override fun onLinesExhausted(): Boolean {
-        val host = container.pageHostRef ?: return false
+        val host = container.mPageHost ?: return false
         return host.onPlaybackLinesExhausted()
     }
 }

@@ -29,32 +29,32 @@ import java.util.concurrent.Executor
 
 class AppTaskExecutor private constructor() : TaskExecutor() {
 
-    private var delegate: TaskExecutor
-    private var defaultTaskExecutor: TaskExecutor
+    private var mDelegate: TaskExecutor
+    private var mDefaultTaskExecutor: TaskExecutor
 
     init {
-        defaultTaskExecutor = DefaultTaskExecutor()
-        delegate = defaultTaskExecutor
+        mDefaultTaskExecutor = DefaultTaskExecutor()
+        mDelegate = mDefaultTaskExecutor
     }
 
     fun setDelegate(taskExecutor: TaskExecutor?) {
-        delegate = taskExecutor ?: defaultTaskExecutor
+        mDelegate = taskExecutor ?: mDefaultTaskExecutor
     }
 
     override fun executeOnDeskIO(task: Runnable) {
-        delegate.executeOnDeskIO(task)
+        mDelegate.executeOnDeskIO(task)
     }
 
     override fun executeOnMainThread(task: Runnable) {
-        delegate.executeOnMainThread(task)
+        mDelegate.executeOnMainThread(task)
     }
 
     override fun postToMainThread(task: Runnable) {
-        delegate.postToMainThread(task)
+        mDelegate.postToMainThread(task)
     }
 
     override fun isMainThread(): Boolean {
-        return delegate.isMainThread()
+        return mDelegate.isMainThread()
     }
 
     companion object {

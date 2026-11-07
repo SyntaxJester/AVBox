@@ -120,7 +120,7 @@ object IsoThroughput {
     private val sessionBytes = AtomicLong()
 
     @Volatile
-    var targetLength = 0L
+    private var targetLength = 0L
 
     @Volatile
     private var sessionStart = 0L
@@ -131,6 +131,10 @@ object IsoThroughput {
         sessionBytes.set(0L)
         sessionStart = 0L
         targetLength = 0L
+    }
+
+    fun setTarget(length: Long) {
+        targetLength = length
     }
 
     fun onRead(bytes: Int) {

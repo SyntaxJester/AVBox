@@ -6,16 +6,16 @@ import android.text.TextUtils
 import android.util.Base64
 
 import com.github.catvod.crawler.JarLoader
-import com.github.catvod.crawler.HtmlSpider
 import com.github.catvod.crawler.JsLoader
 import com.github.catvod.crawler.Spider
+import com.github.catvod.crawler.HtmlSpider
 import com.github.catvod.crawler.python.IPyLoader
 import com.github.avbox.osc.R
 import com.github.avbox.osc.base.App
 import com.github.avbox.osc.bean.SourceBean
 import com.github.avbox.osc.io.FileUtils
-import com.github.avbox.osc.net.HttpClients
-import com.github.avbox.osc.boot.BootGuard
+import com.github.avbox.osc.net.OkGoHelper
+import com.github.avbox.osc.util.BootGuard
 import com.github.avbox.osc.util.DefaultConfig
 import com.github.avbox.osc.util.AppLog
 import com.github.avbox.osc.util.LanguageManager
@@ -33,9 +33,6 @@ import java.nio.charset.Charset
 import java.util.HashSet
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-
-import kotlin.coroutines.resume
-import kotlinx.coroutines.suspendCancellableCoroutine
 
 class SpiderLoader {
 
@@ -59,24 +56,24 @@ class SpiderLoader {
     private val userAgent = "okhttp/3.15"
 
     var spider: String? = null
-    var liveSpider: String = ""
+    private var liveSpider: String = ""
     var currentLiveSpider: String? = null
         private set
     var currentPyKey: String? = ""
     var currentLivePyKey: String? = ""
         private set
-    var jarCache: String = "true"
+    private var jarCache: String = "true"
 
-    suspend fun loadJar(useCache: Boolean, spider: String): String? = suspendCancellableCoroutine { cont ->
-        loadJar(useCache, spider, object : ApiConfig.LoadConfigCallback {
-            override fun success() {
-                cont.resume(null)
-            }
+    fun setLiveSpider(liveSpider: String) {
+        this.liveSpider = liveSpider
+    }
 
-            override fun error(msg: String?) {
-                cont.resume(msg)
-            }
-        }, 0, jarLoadEpoch.current())
+    fun setJarCache(jarCache: String) {
+        this.jarCache = jarCache
+    }
+
+    fun loadJar(useCache: Boolean, spider: String, callback: ApiConfig.LoadConfigCallback) {
+        loadJar(useCache, spider, callback, 0, jarLoadEpoch.current())
     }
 
     fun invalidateJarLoads() {
@@ -146,7 +143,7 @@ class SpiderLoader {
                         .url(url)
                         .header("User-Agent", userAgent)
                         .build()
-                var client: okhttp3.OkHttpClient? = HttpClients.defaultClient
+                var client: okhttp3.OkHttpClient? = OkGoHelper.getDefaultClient()
                 if (client == null) client = com.github.catvod.net.OkHttp.client()
                 val jarCall = client.newCall(request)
                 call = jarCall
@@ -249,7 +246,7 @@ class SpiderLoader {
         }
 
         if (!md5.isEmpty() || useCache) {
-            if (cache.exists() && (useCache || MD5.fileMd5(cache).equals(md5, ignoreCase = true))) {
+            if (cache.exists() && (useCache || MD5.getFileMd5(cache).equals(md5, ignoreCase = true))) {
                 if (cache.exists()) {
                     loadJarAsync(cache, object : JarLoadCallback {
                         override fun complete(success: Boolean) {
@@ -349,18 +346,14 @@ class SpiderLoader {
     }
 
     fun getCSP(sourceBean: SourceBean): Spider {
-        val api = sourceBean.api ?: ""
-        // 宿主内置 Csp（如 Csp_Nostr）优先：命中注册表就走我们自己的实现，
-        // 不查外部 jar；注册表里没有的 api 仍照旧往下走。
-        if (com.github.avbox.osc.spider.BuiltinSpiders.match(api)) {
+        // type 6 = html 脚本，必须先看 type 再看后缀：
+        // 在线录入的 url 常常不带 .html 结尾（如 https://x.com/spider?a=1），
+        // 只看后缀会被当成 jar 去下载，必然失败 —— 这就是「url 的 html 打不开」。
+        if (sourceBean.type == TYPE_HTML) {
             currentPyKey = ""
-            return com.github.avbox.osc.spider.BuiltinSpiders.create(
-                sourceBean.key,
-                sourceBean.homePage,
-                sourceBean.ext,
-                sourceBean.proxy,
-            )
+            return HtmlSpider(sourceBean.key, sourceBean.api, sourceBean.ext)
         }
+        val api = sourceBean.api ?: ""
         if (api.endsWith(".js") || api.contains(".js?")) {
             currentPyKey = ""
             return jsLoader.getSpider(sourceBean.key, sourceBean.api, sourceBean.ext, sourceBean.jar)
@@ -369,14 +362,10 @@ class SpiderLoader {
             pyLoader.setRecentPyKey(currentPyKey)
             return pyLoader.getSpider(requireNotNull(sourceBean.key) { "source key missing" }, sourceBean.api, sourceBean.ext)
         } else if (api.endsWith(".html") || api.contains(".html?")) {
-            // 本地/在线 html：交给内置 Csp 处理，页面地址即 api 本身。
+            // type 6：html 脚本。与 js/py 走同一套 Spider 接口，
+            // 数据由脚本 return 回来，WebView 只负责跑脚本。
             currentPyKey = ""
-            return com.github.avbox.osc.spider.BuiltinSpiders.create(
-                sourceBean.key,
-                sourceBean.api,
-                sourceBean.ext,
-                sourceBean.proxy,
-            )
+            return HtmlSpider(sourceBean.key, sourceBean.api, sourceBean.ext)
         } else {
             currentPyKey = ""
             return jarLoader.getSpider(sourceBean.key, sourceBean.api, sourceBean.ext, sourceBean.jar)

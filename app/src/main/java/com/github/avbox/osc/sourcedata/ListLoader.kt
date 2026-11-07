@@ -2,7 +2,6 @@ package com.github.avbox.osc.sourcedata
 
 import android.text.TextUtils
 import android.util.Base64
-import com.github.catvod.crawler.SpiderReaper
 import com.github.avbox.osc.api.ApiConfig
 import com.github.avbox.osc.bean.AbsXml
 import com.github.avbox.osc.bean.Movie
@@ -10,6 +9,7 @@ import com.github.avbox.osc.bean.MovieSort
 import com.github.avbox.osc.bean.SourceBean
 import com.github.avbox.osc.util.BoundedCall
 import com.github.avbox.osc.util.AppLog
+import com.github.avbox.osc.util.SpiderReaper
 import com.google.gson.Gson
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -42,22 +42,22 @@ class ListLoader(
         }
         val type = sourceBean.type
         if (type == 3) {
-            listFromSpider(sourceBean, sortData, page)
+            getListFromSpider(sourceBean, sortData, page)
         } else if (type == 0 || type == 1) {
-            listFromApi(sourceBean, sortData, page)
+            getListFromApi(sourceBean, sortData, page)
         } else if (type == 4) {
-            listFromExtendedApi(sourceBean, sortData, page)
+            getListFromExtendedApi(sourceBean, sortData, page)
         } else {
             listResult.postValue(null)
         }
     }
 
-    private suspend fun listFromSpider(sourceBean: SourceBean, sortData: MovieSort.SortData, page: Int) {
+    private suspend fun getListFromSpider(sourceBean: SourceBean, sortData: MovieSort.SortData, page: Int) {
         val json = withContext(Dispatchers.IO) {
             BoundedCall.call(Callable<String> {
                 val sp = ApiConfig.get().getCSP(sourceBean)
                 SpiderReaper.track(sp) { sp.categoryContent(sortData.id, page.toString(), true, sortData.filterSelect) }
-            }, sourceBean.playTimeoutSeconds() * 1000L, "echo--getList--" + sourceBean.key)
+            }, sourceBean.getPlayTimeoutSeconds() * 1000L, "echo--getList--" + sourceBean.key)
         }
         if (json != null) {
             withContext(Dispatchers.IO) { resultParser.json(listResult, json, sourceBean.key) }
@@ -67,7 +67,7 @@ class ListLoader(
         }
     }
 
-    private suspend fun listFromApi(sourceBean: SourceBean, sortData: MovieSort.SortData, page: Int) {
+    private suspend fun getListFromApi(sourceBean: SourceBean, sortData: MovieSort.SortData, page: Int) {
         val type = sourceBean.type
 
         try {
@@ -100,11 +100,11 @@ class ListLoader(
         }
     }
 
-    private suspend fun listFromExtendedApi(sourceBean: SourceBean, sortData: MovieSort.SortData, page: Int) {
+    private suspend fun getListFromExtendedApi(sourceBean: SourceBean, sortData: MovieSort.SortData, page: Int) {
 
         var ext = ""
         val extend = withContext(Dispatchers.IO) {
-            SourceHelper.getFixUrl(extendCache, gson, sourceBean.ext, sourceBean.playTimeoutSeconds().toLong())
+            SourceHelper.getFixUrl(extendCache, gson, sourceBean.ext, sourceBean.getPlayTimeoutSeconds().toLong())
         }
         if (sortData.filterSelect.size > 0) {
             try {
@@ -140,14 +140,14 @@ class ListLoader(
         }
     }
 
-    suspend fun homeRecList(sourceBean: SourceBean, ids: ArrayList<String?>?): MutableList<Movie.Video>? {
+    suspend fun getHomeRecList(sourceBean: SourceBean, ids: ArrayList<String?>?): MutableList<Movie.Video>? {
         val type = sourceBean.type
         if (type == 3) {
             val sortJson = withContext(Dispatchers.IO) {
                 BoundedCall.call(Callable<String> {
                     val sp = ApiConfig.get().getCSP(sourceBean)
                     SpiderReaper.track(sp) { sp.homeVideoContent() }
-                }, sourceBean.playTimeoutSeconds() * 1000L, "echo--homeRecList--" + sourceBean.key)
+                }, sourceBean.getPlayTimeoutSeconds() * 1000L, "echo--getHomeRecList--" + sourceBean.key)
             }
             if (sortJson == null) return null
             return withContext(Dispatchers.IO) { resultParser.json(null, sortJson, sourceBean.key)?.movie?.videoList }

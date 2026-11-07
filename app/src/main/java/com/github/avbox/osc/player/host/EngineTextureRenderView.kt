@@ -7,7 +7,7 @@ import android.graphics.SurfaceTexture
 import android.view.Surface
 import android.view.TextureView
 import android.view.View
-import com.github.avbox.osc.player.core.KernelPlayer
+import com.github.avbox.osc.player.KernelPlayer
 import com.github.avbox.osc.util.AppLog
 
 @SuppressLint("ViewConstructor")

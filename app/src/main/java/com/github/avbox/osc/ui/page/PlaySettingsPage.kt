@@ -19,13 +19,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.github.avbox.osc.R
-import com.github.avbox.osc.player.BasePlayerView
 import com.github.avbox.osc.player.PlaybackService
-import com.github.avbox.osc.player.controller.PlayerTextFormat
+import com.github.avbox.osc.player.PlayerHelper
 import com.github.avbox.osc.player.effect.anime4k.Anime4kTier
-import com.github.avbox.osc.player.state.PlaybackSettingsState
-import com.github.avbox.osc.player.thirdparty.PlayerCatalog
 import com.github.avbox.osc.ui.components.AVBoxAlertDialog
 import com.github.avbox.osc.ui.components.AppTopBarScaffold
 import com.github.avbox.osc.ui.components.LocalSheetDismiss
@@ -34,27 +32,26 @@ import com.github.avbox.osc.ui.components.SettingsCard
 import com.github.avbox.osc.ui.components.SettingsCardPosition
 import com.github.avbox.osc.ui.components.SettingsGroup
 import com.github.avbox.osc.ui.components.SettingsOptionMenuRow
+import com.github.avbox.osc.ui.components.SettingsRow
 import com.github.avbox.osc.ui.components.SettingsSliderRow
 import com.github.avbox.osc.ui.components.SettingsSwitchRow
 import com.github.avbox.osc.ui.components.TopBarActionBox
-import com.github.avbox.osc.ui.settings.UiSettingsState
+import com.github.avbox.osc.util.HawkConfig
+import com.github.avbox.osc.util.MusicSettings
 import kotlin.math.roundToInt
-import com.github.avbox.osc.util.KV
-import com.github.avbox.osc.util.KVKeys
+import com.github.avbox.osc.player.AppPlayerView
 
 private const val DecodeHard = "硬解码" // i18n: keep
 private const val DecodeSoft = "软解码" // i18n: keep
 
 @Composable
-fun PlaySettingsScreen(onNavigateBack: () -> Unit) {
-    val config = PlaybackSettingsState.config
+fun PlaySettingsScreen(onNavigateBack: () -> Unit, vm: SettingsViewModel = viewModel()) {
+    val state by vm.state
     val context = LocalContext.current
     var showPrewarmWarning by remember { mutableStateOf(false) }
-    var detailPagePlay by remember { mutableStateOf(KV.get(KVKeys.DETAIL_PAGE_PLAY, KVKeys.DETAIL_PAGE_PLAY_DEFAULT)) }
-    var pipEnabled by remember { mutableStateOf(KV.get(KVKeys.PLAY_PIP_ENABLED, KVKeys.PLAY_PIP_ENABLED_DEFAULT)) }
-    var followSystem by remember { mutableStateOf(KV.get(KVKeys.ORIENTATION_FOLLOW_SYSTEM, KVKeys.ORIENTATION_FOLLOW_SYSTEM_DEFAULT)) }
-    var sliderPreloadDuration by remember(config.preloadDuration) { mutableStateOf(config.preloadDuration) }
-    var sliderCacheSize by remember(config.exoCacheSizeMb) { mutableStateOf(config.exoCacheSizeMb) }
+    var showBadgeLinkDialog by remember { mutableStateOf(false) }
+    var sliderPreloadDuration by remember(state.preloadDuration) { mutableStateOf(state.preloadDuration) }
+    var sliderCacheSize by remember(state.exoCacheSizeMb) { mutableStateOf(state.exoCacheSizeMb) }
 
     val listState = rememberScrollState()
     AppTopBarScaffold(
@@ -78,53 +75,53 @@ fun PlaySettingsScreen(onNavigateBack: () -> Unit) {
         ) {
             Spacer(Modifier.height(topPad + 8.dp))
 
-            val playerTypes = PlayerCatalog.all().sortedDescending()
-            val currentPlayType = if (playerTypes.contains(config.playType)) config.playType else 2
+            val playerTypes = PlayerHelper.getExistPlayerTypes().sortedDescending()
+            val currentPlayType = if (playerTypes.contains(state.playType)) state.playType else 2
             SettingsGroup(title = stringResource(R.string.settings_group_play_picture)) {
                 SettingsCard(SettingsCardPosition.FIRST) {
                     SettingsOptionMenuRow(
                         title = stringResource(R.string.settings_play_kernel),
                         leadingIconRes = R.drawable.ic_play_kernel,
-                        valueText = PlayerCatalog.name(currentPlayType),
-                        options = playerTypes.map { PlayerCatalog.name(it) },
+                        valueText = PlayerHelper.getPlayerName(currentPlayType),
+                        options = playerTypes.map { PlayerHelper.getPlayerName(it) },
                         selectedIndex = playerTypes.indexOf(currentPlayType).coerceAtLeast(0),
-                        onSelect = { idx -> PlaybackSettingsState.playType = playerTypes[idx] },
+                        onSelect = { idx -> vm.put(HawkConfig.PLAY_TYPE, playerTypes[idx]) },
                     )
                 }
                 SettingsCard(SettingsCardPosition.MIDDLE) {
                     SettingsOptionMenuRow(
                         title = stringResource(R.string.settings_play_render),
                         leadingIconRes = R.drawable.ic_play_render,
-                        valueText = PlayerTextFormat.renderName(config.playRender),
+                        valueText = PlayerHelper.getRenderName(state.playRender),
                         options = listOf("SurfaceView", "TextureView"),
-                        selectedIndex = 1 - config.playRender,
+                        selectedIndex = 1 - state.playRender,
                         onSelect = { idx ->
                             val render = 1 - idx
-                            if (render == 0 && config.playTunnel) PlaybackSettingsState.playTunnel = false
-                            PlaybackSettingsState.playRender = render
+                            if (render == 0 && state.playTunnel) vm.put(HawkConfig.PLAY_TUNNEL, false)
+                            vm.put(HawkConfig.PLAY_RENDER, render)
                         },
                     )
                 }
                 SettingsCard(SettingsCardPosition.MIDDLE) {
                     val scales = listOf(
-                        BasePlayerView.SCREEN_SCALE_DEFAULT to stringResource(R.string.common_default),
-                        BasePlayerView.SCREEN_SCALE_16_9 to "16:9",
-                        BasePlayerView.SCREEN_SCALE_4_3 to "4:3",
-                        BasePlayerView.SCREEN_SCALE_MATCH_PARENT to stringResource(R.string.player_scale_fill),
-                        BasePlayerView.SCREEN_SCALE_ORIGINAL to stringResource(R.string.player_scale_origin),
-                        BasePlayerView.SCREEN_SCALE_CENTER_CROP to stringResource(R.string.player_scale_crop),
+                        AppPlayerView.SCREEN_SCALE_DEFAULT to stringResource(R.string.common_default),
+                        AppPlayerView.SCREEN_SCALE_16_9 to "16:9",
+                        AppPlayerView.SCREEN_SCALE_4_3 to "4:3",
+                        AppPlayerView.SCREEN_SCALE_MATCH_PARENT to stringResource(R.string.player_scale_fill),
+                        AppPlayerView.SCREEN_SCALE_ORIGINAL to stringResource(R.string.player_scale_origin),
+                        AppPlayerView.SCREEN_SCALE_CENTER_CROP to stringResource(R.string.player_scale_crop),
                     )
                     SettingsOptionMenuRow(
                         title = stringResource(R.string.settings_play_scale),
                         leadingIconRes = R.drawable.ic_play_scale,
-                        valueText = PlayerTextFormat.scaleName(config.playScale),
+                        valueText = PlayerHelper.getScaleName(state.playScale),
                         options = scales.map { it.second },
-                        selectedIndex = scales.indexOfFirst { it.first == config.playScale },
-                        onSelect = { idx -> PlaybackSettingsState.playScale = scales[idx].first },
+                        selectedIndex = scales.indexOfFirst { it.first == state.playScale },
+                        onSelect = { idx -> vm.put(HawkConfig.PLAY_SCALE, scales[idx].first) },
                     )
                 }
                 SettingsCard(SettingsCardPosition.MIDDLE) {
-                    val codec = config.exoDecode
+                    val codec = state.exoDecode
                     val decodeLabels = listOf(
                         stringResource(R.string.player_decode_hard),
                         stringResource(R.string.player_decode_soft),
@@ -140,13 +137,13 @@ fun PlaySettingsScreen(onNavigateBack: () -> Unit) {
                         enabled = currentPlayType == 2,
                         options = decodeLabels,
                         selectedIndex = if (codec == DecodeSoft) 1 else 0,
-                        onSelect = { idx -> PlaybackSettingsState.exoDecode = if (idx == 1) DecodeSoft else DecodeHard },
+                        onSelect = { idx -> vm.put(HawkConfig.EXO_DECODE, if (idx == 1) DecodeSoft else DecodeHard) },
                     )
                 }
                 SettingsCard(SettingsCardPosition.LAST) {
                     val tiers = Anime4kTier.entries
                     val labels = tiers.map { stringResource(it.labelRes) }
-                    val selected = tiers.indexOfFirst { it.name == config.anime4kTier }.coerceAtLeast(0)
+                    val selected = tiers.indexOf(state.anime4kTier).coerceAtLeast(0)
                     SettingsOptionMenuRow(
                         title = stringResource(R.string.settings_play_anime4k),
                         leadingIconRes = R.drawable.ic_play_anime4k,
@@ -154,7 +151,7 @@ fun PlaySettingsScreen(onNavigateBack: () -> Unit) {
                         enabled = currentPlayType == 2,
                         options = labels,
                         selectedIndex = selected,
-                        onSelect = { idx -> PlaybackSettingsState.anime4kTier = tiers[idx].name },
+                        onSelect = { idx -> vm.put(HawkConfig.ANIME4K_TIER, tiers[idx].name) },
                     )
                 }
             }
@@ -167,12 +164,12 @@ fun PlaySettingsScreen(onNavigateBack: () -> Unit) {
                         title = stringResource(R.string.settings_play_kernel_prewarm),
                         leadingIconRes = R.drawable.ic_play_prewarm,
                         subtitle = stringResource(R.string.settings_play_kernel_prewarm_subtitle),
-                        checked = config.kernelPrewarm,
+                        checked = state.kernelPrewarm,
                         onCheckedChange = { checked ->
                             if (checked) {
                                 showPrewarmWarning = true
                             } else {
-                                PlaybackSettingsState.kernelPrewarm = false
+                                vm.put(HawkConfig.KERNEL_PREWARM, false)
                                 PlaybackService.onPrewarmPreferenceChanged(context, false)
                             }
                         },
@@ -182,10 +179,10 @@ fun PlaySettingsScreen(onNavigateBack: () -> Unit) {
                     SettingsSwitchRow(
                         title = stringResource(R.string.settings_play_tunnel),
                         leadingIconRes = R.drawable.ic_play_tunnel,
-                        checked = config.playTunnel,
+                        checked = state.playTunnel,
                         onCheckedChange = { checked ->
-                            if (checked && config.playRender != 1) PlaybackSettingsState.playRender = 1
-                            PlaybackSettingsState.playTunnel = checked
+                            if (checked && state.playRender != 1) vm.put(HawkConfig.PLAY_RENDER, 1)
+                            vm.put(HawkConfig.PLAY_TUNNEL, checked)
                         },
                     )
                 }
@@ -193,52 +190,19 @@ fun PlaySettingsScreen(onNavigateBack: () -> Unit) {
                     SettingsSwitchRow(
                         title = stringResource(R.string.settings_play_prefer_aac),
                         leadingIconRes = R.drawable.ic_play_aac,
-                        checked = config.preferAac,
-                        onCheckedChange = { PlaybackSettingsState.preferAac = it },
-                    )
-                }
-                SettingsCard(SettingsCardPosition.MIDDLE) {
-                    SettingsSwitchRow(
-                        title = stringResource(R.string.settings_music_page),
-                        leadingIconRes = R.drawable.ic_music_page,
-                        subtitle = stringResource(R.string.settings_music_page_subtitle),
-                        checked = UiSettingsState.config.musicAutoOpenPage,
-                        onCheckedChange = { UiSettingsState.musicAutoOpenPage = it },
-                    )
-                }
-                SettingsCard(SettingsCardPosition.MIDDLE) {
-                    SettingsSwitchRow(
-                        title = stringResource(R.string.settings_play_auto_landscape),
-                        leadingIconRes = R.drawable.ic_player_rotate,
-                        subtitle = stringResource(R.string.settings_play_auto_landscape_subtitle),
-                        checked = detailPagePlay,
-                        onCheckedChange = {
-                            KV.put(KVKeys.DETAIL_PAGE_PLAY, it)
-                            detailPagePlay = it
-                        },
-                    )
-                }
-                SettingsCard(SettingsCardPosition.MIDDLE) {
-                    SettingsSwitchRow(
-                        title = stringResource(R.string.settings_play_pip),
-                        leadingIconRes = R.drawable.ic_player_pip,
-                        subtitle = stringResource(R.string.settings_play_pip_subtitle),
-                        checked = pipEnabled,
-                        onCheckedChange = {
-                            KV.put(KVKeys.PLAY_PIP_ENABLED, it)
-                            pipEnabled = it
-                        },
+                        checked = state.preferAac,
+                        onCheckedChange = { vm.put(HawkConfig.PLAY_PREFER_AAC, it) },
                     )
                 }
                 SettingsCard(SettingsCardPosition.LAST) {
                     SettingsSwitchRow(
-                        title = stringResource(R.string.settings_orientation_follow_system),
-                        leadingIconRes = R.drawable.ic_player_rotate,
-                        subtitle = stringResource(R.string.settings_orientation_follow_system_subtitle),
-                        checked = followSystem,
+                        title = stringResource(R.string.settings_music_page),
+                        leadingIconRes = R.drawable.ic_music_page,
+                        subtitle = stringResource(R.string.settings_music_page_subtitle),
+                        checked = state.musicPlayerPage,
                         onCheckedChange = {
-                            KV.put(KVKeys.ORIENTATION_FOLLOW_SYSTEM, it)
-                            followSystem = it
+                            MusicSettings.setAutoOpenPage(it)
+                            vm.refresh()
                         },
                     )
                 }
@@ -252,8 +216,8 @@ fun PlaySettingsScreen(onNavigateBack: () -> Unit) {
                         title = stringResource(R.string.preload_next_episode),
                         leadingIconRes = R.drawable.ic_preload_next,
                         subtitle = stringResource(R.string.preload_next_episode_subtitle),
-                        checked = config.preloadNextEpisode,
-                        onCheckedChange = { PlaybackSettingsState.preloadNextEpisode = it },
+                        checked = state.preloadNextEpisode,
+                        onCheckedChange = { vm.put(HawkConfig.PRELOAD_NEXT_EPISODE, it) },
                     )
                 }
                 SettingsCard(SettingsCardPosition.MIDDLE) {
@@ -266,8 +230,8 @@ fun PlaySettingsScreen(onNavigateBack: () -> Unit) {
                         steps = 9,
                         onValueChange = { sliderPreloadDuration = ((it - 20) / 10).roundToInt() * 10 + 20 },
                         onValueChangeFinished = {
-                            if (sliderPreloadDuration != config.preloadDuration) {
-                                PlaybackSettingsState.preloadDuration = sliderPreloadDuration
+                            if (sliderPreloadDuration != state.preloadDuration) {
+                                vm.put(HawkConfig.PRELOAD_DURATION, sliderPreloadDuration)
                             }
                         },
                     )
@@ -277,8 +241,8 @@ fun PlaySettingsScreen(onNavigateBack: () -> Unit) {
                         title = stringResource(R.string.preload_play_cache),
                         leadingIconRes = R.drawable.ic_play_cache,
                         subtitle = stringResource(R.string.preload_play_cache_subtitle),
-                        checked = config.playCache,
-                        onCheckedChange = { PlaybackSettingsState.playCache = it },
+                        checked = state.playCache,
+                        onCheckedChange = { vm.put(HawkConfig.PLAY_CACHE, it) },
                     )
                 }
                 SettingsCard(SettingsCardPosition.LAST) {
@@ -291,16 +255,88 @@ fun PlaySettingsScreen(onNavigateBack: () -> Unit) {
                         steps = 30,
                         onValueChange = { sliderCacheSize = ((it - 128) / 128).roundToInt() * 128 + 128 },
                         onValueChangeFinished = {
-                            if (sliderCacheSize != config.exoCacheSizeMb) {
-                                PlaybackSettingsState.exoCacheSizeMb = sliderCacheSize
+                            if (sliderCacheSize != state.exoCacheSizeMb) {
+                                vm.put(HawkConfig.EXO_CACHE_SIZE_MB, sliderCacheSize)
                             }
                         },
                     )
                 }
             }
 
+            Spacer(Modifier.height(28.dp))
+
+            SettingsGroup(title = stringResource(R.string.settings_group_media_badges)) {
+                SettingsCard(SettingsCardPosition.FIRST) {
+                    SettingsSwitchRow(
+                        title = stringResource(R.string.settings_media_badges),
+                        leadingIconRes = R.drawable.ic_play_decode,
+                        subtitle = stringResource(R.string.settings_media_badges_show_subtitle),
+                        checked = state.mediaBadgesShow,
+                        onCheckedChange = { vm.put(HawkConfig.MEDIA_BADGES_SHOW, it) },
+                    )
+                }
+                SettingsCard(SettingsCardPosition.MIDDLE) {
+                    SettingsOptionMenuRow(
+                        title = stringResource(R.string.settings_media_badges_display_mode),
+                        leadingIconRes = R.drawable.ic_play_render,
+                        subtitle = stringResource(R.string.settings_media_badges_display_mode_subtitle),
+                        valueText = badgeDisplayModeLabel(state.mediaBadgesDisplayMode),
+                        options = listOf(
+                            stringResource(R.string.settings_media_badges_mode_badge),
+                            stringResource(R.string.settings_media_badges_mode_text),
+                            stringResource(R.string.settings_media_badges_mode_hide),
+                        ),
+                        selectedIndex = state.mediaBadgesDisplayMode,
+                        onSelect = { idx -> vm.put(HawkConfig.MEDIA_BADGES_DISPLAY_MODE, idx) },
+                    )
+                }
+                SettingsCard(if (state.mediaBadgesLinkMode == 1) SettingsCardPosition.MIDDLE else SettingsCardPosition.LAST) {
+                    SettingsOptionMenuRow(
+                        title = stringResource(R.string.settings_media_badges_link_mode),
+                        leadingIconRes = R.drawable.ic_play_cache,
+                        subtitle = stringResource(R.string.settings_media_badges_link_mode_subtitle),
+                        valueText = if (state.mediaBadgesLinkMode == 1) {
+                            stringResource(R.string.settings_media_badges_link_custom)
+                        } else {
+                            stringResource(R.string.settings_media_badges_link_none)
+                        },
+                        options = listOf(
+                            stringResource(R.string.settings_media_badges_link_none),
+                            stringResource(R.string.settings_media_badges_link_custom),
+                        ),
+                        selectedIndex = state.mediaBadgesLinkMode,
+                        onSelect = { idx -> vm.put(HawkConfig.MEDIA_BADGES_LINK_MODE, idx) },
+                    )
+                }
+                if (state.mediaBadgesLinkMode == 1) {
+                    SettingsCard(SettingsCardPosition.LAST) {
+                        SettingsRow(
+                            title = stringResource(R.string.settings_media_badges_custom_link),
+                            subtitle = stringResource(R.string.settings_media_badges_custom_link_subtitle),
+                            valueText = state.mediaBadgesCustomLink.ifBlank {
+                                stringResource(R.string.settings_media_badges_custom_link_empty)
+                            },
+                            leadingIconRes = R.drawable.ic_play_scale,
+                            onClick = { showBadgeLinkDialog = true },
+                        )
+                    }
+                }
+            }
+
             Spacer(Modifier.height(64.dp))
         }
+    }
+
+    if (showBadgeLinkDialog) {
+        TextEditDialog(
+            title = stringResource(R.string.settings_media_badges_custom_link),
+            initialText = state.mediaBadgesCustomLink,
+            onDismiss = { showBadgeLinkDialog = false },
+            onConfirm = { link ->
+                vm.put(HawkConfig.MEDIA_BADGES_CUSTOM_LINK, link)
+                showBadgeLinkDialog = false
+            },
+        )
     }
 
     if (showPrewarmWarning) {
@@ -318,7 +354,7 @@ fun PlaySettingsScreen(onNavigateBack: () -> Unit) {
                 val dismissThen = LocalSheetDismissThen.current
                 TextButton(onClick = {
                     dismissThen {
-                        PlaybackSettingsState.kernelPrewarm = true
+                        vm.put(HawkConfig.KERNEL_PREWARM, true)
                         PlaybackService.onPrewarmPreferenceChanged(context, true)
                         showPrewarmWarning = false
                     }
@@ -328,4 +364,14 @@ fun PlaySettingsScreen(onNavigateBack: () -> Unit) {
             },
         )
     }
+}
+
+@Composable
+private fun badgeDisplayModeLabel(mode: Int): String {
+    val res = when (mode) {
+        0 -> R.string.settings_media_badges_mode_badge
+        1 -> R.string.settings_media_badges_mode_text
+        else -> R.string.settings_media_badges_mode_hide
+    }
+    return stringResource(res)
 }

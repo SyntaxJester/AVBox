@@ -3,24 +3,18 @@ package com.github.avbox.osc.player.thirdparty
 import android.app.Activity
 import android.text.TextUtils
 
-import com.github.avbox.osc.net.HttpClients
+import com.github.avbox.osc.net.OkGoHelper
+import com.github.avbox.osc.server.RemoteServer
 import com.github.avbox.osc.util.AppContextHolder
-import com.github.avbox.osc.util.KVKeys
+import com.github.avbox.osc.util.HawkConfig
 import com.github.avbox.osc.util.KV
 import com.github.avbox.osc.util.AppLog
-import com.github.avbox.osc.util.LocalIPAddress
 
 import java.io.IOException
 import java.net.URLEncoder
 import java.util.HashMap
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
-
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.launch
 
 import okhttp3.Call
 import okhttp3.FormBody
@@ -32,7 +26,7 @@ object RemoteTVBox {
 
     @JvmStatic
     fun run(activity: Activity, url: String, title: String, subtitle: String, headers: HashMap<String, String>?): Boolean {
-        val actionUrl = availableActionUrl()
+        val actionUrl = getAvalibleActionUrl()
         if (TextUtils.isEmpty(actionUrl)) {
             return false
         }
@@ -72,62 +66,73 @@ object RemoteTVBox {
     }
 
     @JvmStatic
-    fun searchAvailable(): Flow<String> = callbackFlow {
-        launch(Dispatchers.IO) {
-            val localIp = AppContextHolder.context()?.let { LocalIPAddress.getLocalIPAddress(it) }.orEmpty()
-            val divisionIp = if (TextUtils.isEmpty(localIp)) -1 else localIp.lastIndexOf(".")
-            if (divisionIp <= 0) {
-                close()
-                return@launch
+    fun searchAvalible(callback: Callback) {
+        val localIp = RemoteServer.getLocalIPAddress(AppContextHolder.context())
+        val divisionIp = if (TextUtils.isEmpty(localIp)) -1 else localIp.lastIndexOf(".")
+        if (divisionIp <= 0) {
+            callback.fail(true, true)
+            return
+        }
+        val prefix = localIp.substring(0, divisionIp + 1)
+        val port = 9978
+        val finishedNum = AtomicInteger(0)
+        val foundNum = AtomicInteger(0)
+        val total = 254
+        for (i in 1..255) {
+            val ip = prefix + i
+            if (ip == localIp) {
+                continue
             }
-            val prefix = localIp.substring(0, divisionIp + 1)
-            val port = 9978
-            val finishedNum = AtomicInteger(0)
-            val total = 254
-            for (i in 1..255) {
-                val ip = prefix + i
-                if (ip == localIp) {
-                    continue
-                }
-                val actionUrl = "http://" + ip + ":" + port + "/action"
-                val viewHost = ip + ":" + port
-                try {
-                    post(actionUrl, null, object : okhttp3.Callback {
-                        override fun onFailure(call: Call, e: IOException) {
-                            if (finishedNum.incrementAndGet() == total) close()
-                        }
+            val actionUrl = "http://" + ip + ":" + port + "/action"
+            val viewHost = ip + ":" + port
+            try {
+                post(actionUrl, null, object : okhttp3.Callback {
+                    override fun onFailure(call: Call, e: IOException) {
+                        notifySearchFail(callback, foundNum, finishedNum, total)
+                    }
 
-                        override fun onResponse(call: Call, response: Response) {
-                            try {
-                                val result = if (response.body == null) "" else response.body.string()
-                                if ("ok".equals(result, ignoreCase = true)) trySend(viewHost)
-                            } finally {
-                                response.close()
+                    override fun onResponse(call: Call, response: Response) {
+                        try {
+                            val result = if (response.body == null) "" else response.body.string()
+                            val end = finishedNum.incrementAndGet() == total
+                            if ("ok".equals(result, ignoreCase = true)) {
+                                foundNum.incrementAndGet()
+                                callback.found(viewHost, end)
+                            } else {
+                                callback.fail(foundNum.get() == 0 && end, end)
                             }
-                            if (finishedNum.incrementAndGet() == total) close()
+                        } finally {
+                            response.close()
                         }
-                    })
-                } catch (e: Exception) {
-                    if (finishedNum.incrementAndGet() == total) close()
-                }
+                    }
+                })
+            } catch (e: Exception) {
+                notifySearchFail(callback, foundNum, finishedNum, total)
             }
         }
-        awaitClose { }
+    }
+
+    private fun notifySearchFail(callback: Callback, foundNum: AtomicInteger, finishedNum: AtomicInteger, total: Int) {
+        val end = finishedNum.incrementAndGet() == total
+        callback.fail(foundNum.get() == 0 && end, end)
     }
 
     @JvmStatic
-    var avalible: String?
-        get() = KV.get<String>(KVKeys.REMOTE_TVBOX, null)
-        set(value) {
-            KV.put(KVKeys.REMOTE_TVBOX, value)
-        }
+    fun getAvalible(): String? {
+        return KV.get<String>(HawkConfig.REMOTE_TVBOX, null)
+    }
 
     @JvmStatic
-    fun availableActionUrl(): String {
-        if (avalible == null) {
+    fun getAvalibleActionUrl(): String {
+        if (getAvalible() == null) {
             return ""
         }
-        return "http://" + avalible + "/action"
+        return "http://" + getAvalible() + "/action"
+    }
+
+    @JvmStatic
+    fun setAvalible(viewHost: String) {
+        KV.put(HawkConfig.REMOTE_TVBOX, viewHost)
     }
 
     @JvmStatic
@@ -137,8 +142,8 @@ object RemoteTVBox {
 
     @JvmStatic
     fun post(url: String?, params: Map<String, String>?, headers: Map<String, String>?, callback: okhttp3.Callback) {
-        val base = HttpClients.defaultClient
-        val builder = if (base != null) base.newBuilder() else OkHttpClient.Builder().proxySelector(HttpClients.proxySelector()).proxyAuthenticator(HttpClients.proxyAuthenticator())
+        val base = OkGoHelper.getDefaultClient()
+        val builder = if (base != null) base.newBuilder() else OkHttpClient.Builder().proxySelector(OkGoHelper.proxySelector()).proxyAuthenticator(OkGoHelper.proxyAuthenticator())
         builder.readTimeout(1000, TimeUnit.MILLISECONDS)
         builder.writeTimeout(1000, TimeUnit.MILLISECONDS)
         builder.connectTimeout(1000, TimeUnit.MILLISECONDS)
@@ -167,6 +172,11 @@ object RemoteTVBox {
         return "content-type".equals(name, ignoreCase = true)
                 || "content-length".equals(name, ignoreCase = true)
                 || "host".equals(name, ignoreCase = true)
+    }
+
+    abstract class Callback {
+        abstract fun found(viewHost: String?, end: Boolean)
+        abstract fun fail(all: Boolean, end: Boolean)
     }
 
 }

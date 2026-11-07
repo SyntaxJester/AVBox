@@ -2,7 +2,6 @@
 
 package com.github.avbox.osc.ui.page
 
-import com.github.avbox.osc.api.AppBootstrap
 import android.app.Activity
 import android.content.Intent
 import android.os.Build
@@ -43,8 +42,10 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,32 +61,33 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.rememberLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.github.avbox.osc.R
 import com.github.avbox.osc.server.ControlManager
-import com.github.avbox.osc.ui.LivePlayActivity
+import com.github.avbox.osc.ui.activity.LivePlayActivity
 import com.github.avbox.osc.ui.components.AVBoxAlertDialog
 import com.github.avbox.osc.ui.components.LocalTopBarGlassPauseRecording
 import com.github.avbox.osc.ui.components.LocalSheetDismissThen
 import com.github.avbox.osc.ui.components.LocalSheetHost
+import com.github.avbox.osc.ui.components.SheetHost
 import com.github.avbox.osc.ui.components.SheetHostState
-import com.github.avbox.osc.ui.components.TopLayerSheetHost
 import com.github.avbox.osc.ui.currentWindowWidthClass
 import com.github.avbox.osc.ui.navbar.FloatingNavBar
 import com.github.avbox.osc.ui.navbar.GlassTabItem
 import com.github.avbox.osc.ui.navbar.NavAxis
 import com.github.avbox.osc.ui.navbar.NavMetrics
-import com.github.avbox.osc.ui.settings.UiSettingsState
 import com.github.avbox.osc.ui.theme.LiquidGlassState
 import com.github.avbox.osc.util.ActivityStack
-import com.github.avbox.osc.boot.BootGuard
+import com.github.avbox.osc.util.BootGuard
+import com.github.avbox.osc.util.HawkConfig
 import com.github.avbox.osc.util.HomeSettings
-import com.github.avbox.osc.util.HomeTabRequest
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.github.avbox.osc.util.KV
 import kotlinx.coroutines.launch
 
 private enum class AppTab(@StringRes val labelRes: Int, @DrawableRes val icon: Int) {
@@ -135,25 +137,17 @@ private fun MainContent() {
     val scope = rememberCoroutineScope()
     val pagerState = rememberPagerState(pageCount = { AppTab.entries.size })
     val homeViewModel: HomeViewModel = viewModel()
-    val homeTabToken = HomeTabRequest.token
-
-    LaunchedEffect(homeTabToken) {
-        if (homeTabToken > 0) {
-            withFrameNanos { }
-            pagerState.scrollToPage(0)
-        }
-    }
 
     LaunchedEffect(Unit) {
         if (homeViewModel.defaultLiveLaunched) return@LaunchedEffect
         AppBootstrap.state.collect { boot ->
             if (boot is AppBootstrap.Boot.Ready && !homeViewModel.defaultLiveLaunched) {
-                homeViewModel.markDefaultLiveLaunched()
+                homeViewModel.defaultLiveLaunched = true
                 val disabled = BootGuard.takeSafeDisabledNotice()
                 if (disabled.isNotEmpty()) {
                     Toast.makeText(context, context.getString(R.string.toast_source_auto_disabled), Toast.LENGTH_LONG).show()
                 }
-                if (UiSettingsState.config.defaultLoadLive) {
+                if (KV.get(HawkConfig.DEFAULT_LOAD_LIVE, false)) {
                     context.startActivity(Intent(context, LivePlayActivity::class.java))
                 }
             }
@@ -168,19 +162,28 @@ private fun MainContent() {
     }
 
     BackHandler {
-        if (homeViewModel.onBackPressedOnce()) {
+        val now = System.currentTimeMillis()
+        if (now - homeViewModel.lastBackTime < 2000) {
             ActivityStack.getInstance().finishAllActivity()
             ControlManager.get().stopServer()
             (context as? Activity)?.finishAffinity()
         } else {
+            homeViewModel.lastBackTime = now
             Toast.makeText(context, context.getString(R.string.toast_press_again_to_exit), Toast.LENGTH_SHORT).show()
         }
     }
 
     val sheetHost = remember { SheetHostState() }
-    val navConfig = UiSettingsState.config
-    val navAnimationEnabled = !navConfig.navAnimationDisabled
-    val navLiveHidden = navConfig.navLiveHidden
+    var navAnimationEnabled by remember {
+        mutableStateOf(!KV.get(HawkConfig.NAV_ANIMATION_DISABLED, false))
+    }
+    var navLiveHidden by remember {
+        mutableStateOf(KV.get(HawkConfig.NAV_LIVE_HIDDEN, false))
+    }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        navAnimationEnabled = !KV.get(HawkConfig.NAV_ANIMATION_DISABLED, false)
+        navLiveHidden = KV.get(HawkConfig.NAV_LIVE_HIDDEN, false)
+    }
 
     val selectTab: (Int) -> Unit = { index ->
         scope.launch {
@@ -409,7 +412,7 @@ private fun MainContent() {
                     }
                 }
             }
-            TopLayerSheetHost(sheetHost)
+            SheetHost(sheetHost)
         }
     }
 }

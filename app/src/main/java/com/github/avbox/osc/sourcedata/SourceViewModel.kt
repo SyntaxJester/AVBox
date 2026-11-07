@@ -2,12 +2,12 @@ package com.github.avbox.osc.sourcedata
 
 import android.text.TextUtils
 import androidx.lifecycle.ViewModel
-import com.github.catvod.crawler.SpiderReaper
 import com.github.avbox.osc.api.ApiConfig
 import com.github.avbox.osc.bean.AbsSortXml
 import com.github.avbox.osc.bean.AbsXml
 import com.github.avbox.osc.bean.MovieSort
 import com.github.avbox.osc.util.AppLog
+import com.github.avbox.osc.util.SpiderReaper
 import com.google.gson.Gson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

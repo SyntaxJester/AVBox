@@ -125,7 +125,7 @@ class HtmlSpider(
                 }
                 starter.startActivity(launch)
             } catch (th: Throwable) {
-                LOG.e(TAG, th)
+                AppLog.e(TAG, th)
             }
         }
     }

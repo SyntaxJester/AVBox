@@ -130,7 +130,7 @@ internal object BdavProbe {
                 AppLog.i("echo-iso-bdav-probe:empty:$total")
                 return BdavVerdict.Miss
             }
-            IsoThroughput.targetLength = total
+            IsoThroughput.setTarget(total)
             IsoSessionSignal.markEscalated()
             AppLog.i("echo-iso-bdav-probe:192:$total")
             BdavVerdict.Hit(IsoPlayTarget(0, total, ""))

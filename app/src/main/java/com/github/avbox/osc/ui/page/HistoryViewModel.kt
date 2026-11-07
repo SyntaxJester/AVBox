@@ -1,105 +1,83 @@
 package com.github.avbox.osc.ui.page
 
-import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.github.avbox.osc.api.AppBootstrap
 import com.github.avbox.osc.api.ApiConfig
-import com.github.avbox.osc.api.TmdbPoster
-import com.github.avbox.osc.bean.TmdbPosterCache
 import com.github.avbox.osc.bean.VodInfo
-import com.github.avbox.osc.event.UiChange
-import com.github.avbox.osc.event.UiEvents
 import com.github.avbox.osc.data.AppGraph
 import com.github.avbox.osc.data.EpisodeTotals
 import com.github.avbox.osc.data.HistoryRepository
 import com.github.avbox.osc.data.PlaybackProgress
 import com.github.avbox.osc.data.WatchProgressStore
-import com.github.avbox.osc.ui.settings.UiSettingsState
-import com.github.avbox.osc.util.KVKeys
+import com.github.avbox.osc.event.RefreshEvent
+import com.github.avbox.osc.util.HawkConfig
 import com.github.avbox.osc.util.HistoryHelper
 import com.github.avbox.osc.util.KV
-import com.github.avbox.osc.util.SearchSettingsState
 import com.github.avbox.osc.util.TrackMemory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
+import org.greenrobot.eventbus.EventBus
+import org.greenrobot.eventbus.Subscribe
+import org.greenrobot.eventbus.ThreadMode
 
 class HistoryViewModel(
     private val history: HistoryRepository = AppGraph.historyRepository,
-) : ViewModel(), TmdbPosterCache {
+) : ViewModel() {
+    val loading = MutableStateFlow(true)
+    val items = MutableStateFlow<List<VodInfo>>(emptyList())
+    val episodeTotals = MutableStateFlow<Map<String, Int>>(emptyMap())
+    val playedPercents = MutableStateFlow<Map<String, Int>>(emptyMap())
 
-    override fun tmdbCachedPoster(name: String?, year: Int, altName: String?): String? =
-        TmdbPoster.cachedPoster(name, year, altName)
+    val incognito = MutableStateFlow(HistoryHelper.isIncognito())
 
-    private val _loading = MutableStateFlow(true)
-    val loading = _loading.asStateFlow()
-    private val _items = MutableStateFlow<List<VodInfo>>(emptyList())
-    val items = _items.asStateFlow()
-    private val _episodeTotals = MutableStateFlow<Map<String, Int>>(emptyMap())
-    val episodeTotals = _episodeTotals.asStateFlow()
-    private val _playedPercents = MutableStateFlow<Map<String, Int>>(emptyMap())
-    val playedPercents = _playedPercents.asStateFlow()
-
-    private val _incognito = MutableStateFlow(HistoryHelper.isIncognito())
-    val incognito = _incognito.asStateFlow()
+    private val reloadTick = MutableStateFlow(0)
 
     init {
-        observeUiEvents()
+        EventBus.getDefault().register(this)
         viewModelScope.launch(Dispatchers.IO) {
-            combine(
-                AppBootstrap.subscriptionCid.flatMapLatest { cid ->
-                    snapshotFlow { HistoryHelper.getHisNum(SearchSettingsState.config.historyNumIndex) }
-                        .distinctUntilChanged()
-                        .flatMapLatest { limit -> history.observeVodRecords(cid, limit) }
-                },
-                snapshotFlow { UiSettingsState.config.incognito }.distinctUntilChanged(),
-            ) { list, hidden -> list to hidden }
-                .collect { (list, hidden) ->
-                    _incognito.value = hidden
-                    _items.value = if (hidden) emptyList() else list
-                    _episodeTotals.value = if (hidden) emptyMap() else EpisodeTotals.snapshot()
+            combine(reloadTick, AppBootstrap.subscriptionCid) { _, cid -> cid }
+                .flatMapLatest { cid -> history.observeVodRecords(cid) }
+                .collect { list ->
+                    val hidden = HistoryHelper.isIncognito()
+                    incognito.value = hidden
+                    items.value = if (hidden) emptyList() else list
+                    episodeTotals.value = if (hidden) emptyMap() else EpisodeTotals.snapshot()
                     resolveSourceNames()
-                    _loading.value = false
+                    loading.value = false
                 }
         }
         viewModelScope.launch {
             PlaybackProgress.percents.collect { map ->
-                _playedPercents.value = if (HistoryHelper.isIncognito()) emptyMap() else map
+                playedPercents.value = if (HistoryHelper.isIncognito()) emptyMap() else map
             }
         }
         viewModelScope.launch {
             AppBootstrap.state.collect { boot ->
-                if (boot is AppBootstrap.Boot.Ready) {
-                    _episodeTotals.value = EpisodeTotals.snapshot()
-                    resolveSourceNames()
-                }
+                if (boot is AppBootstrap.Boot.Ready) reloadTick.value++
             }
         }
     }
 
-    private val _scrollSignal = MutableStateFlow(0)
-    val scrollSignal = _scrollSignal.asStateFlow()
+    override fun onCleared() {
+        EventBus.getDefault().unregister(this)
+    }
 
-    private val _placementAnim = MutableStateFlow(false)
-    val placementAnim = _placementAnim.asStateFlow()
+    val scrollSignal = MutableStateFlow(0)
 
-    private fun observeUiEvents() {
-        viewModelScope.launch {
-            UiEvents.changes.collect { change ->
-                if (change !is UiChange.HistoryChanged) return@collect
-                _placementAnim.value = false
-                _scrollSignal.value++
-                viewModelScope.launch(Dispatchers.IO) {
-                    history.sweepDuplicates()
-                }
-            }
+    val placementAnim = MutableStateFlow(false)
+
+    @Subscribe(threadMode = ThreadMode.MAIN)
+    fun onRefreshEvent(event: RefreshEvent) {
+        if (event.type != RefreshEvent.TYPE_HISTORY_REFRESH) return
+        placementAnim.value = false
+        scrollSignal.value++
+        viewModelScope.launch(Dispatchers.IO) {
+            history.sweepDuplicates()
+            reloadTick.value++
         }
     }
 
@@ -108,13 +86,13 @@ class HistoryViewModel(
     fun resolveSourceNames() {
         resolveJob?.cancel()
         resolveJob = viewModelScope.launch(Dispatchers.IO) {
-            val list = _items.value
+            val list = items.value
             if (list.isEmpty()) return@launch
             if (AppBootstrap.state.value !is AppBootstrap.Boot.Ready) return@launch
-            val cache = KV.get(KVKeys.SOURCE_NAME_CACHE, HashMap<String, String>())
+            val cache = KV.get(HawkConfig.SOURCE_NAME_CACHE, HashMap<String, String>())
             var cacheChanged = false
             var listChanged = false
-            val resolvedItems = list.mapIndexed { position, info ->
+            list.forEach { info ->
                 val key = info.sourceKey
                 val bean = if (key.isNullOrEmpty()) null else ApiConfig.get().getSource(key)
                 val resolved = if (key.isNullOrEmpty()) {
@@ -131,46 +109,24 @@ class HistoryViewModel(
                         cache[key] ?: key
                     }
                 }
-                val unavailable = !key.isNullOrEmpty() && bean == null
-                if (info.sourceName == resolved && info.sourceUnavailable == unavailable) {
-                    info
-                } else {
+                if (info.sourceName != resolved) {
+                    info.sourceName = resolved
                     listChanged = true
-                    info.copy(sourceName = resolved, sourceUnavailable = unavailable)
+                }
+                val unavailable = !key.isNullOrEmpty() && bean == null
+                if (info.sourceUnavailable != unavailable) {
+                    info.sourceUnavailable = unavailable
+                    listChanged = true
                 }
             }
-            if (cacheChanged) KV.put(KVKeys.SOURCE_NAME_CACHE, cache)
-            if (listChanged) _items.value = resolvedItems.toList()
+            if (cacheChanged) KV.put(HawkConfig.SOURCE_NAME_CACHE, cache)
+            if (listChanged) items.value = list.toList()
         }
-    }
-
-    private val _editMode = MutableStateFlow(false)
-    val editMode: StateFlow<Boolean> = _editMode.asStateFlow()
-    private val _selected = MutableStateFlow<Set<String>>(emptySet())
-    val selected: StateFlow<Set<String>> = _selected.asStateFlow()
-
-    fun enterEdit() {
-        _editMode.value = true
-    }
-
-    fun exitEdit() {
-        _editMode.value = false
-        _selected.value = emptySet()
-    }
-
-    fun toggleSelected(key: String) {
-        _selected.value = if (key in _selected.value) _selected.value - key else _selected.value + key
-    }
-
-    fun pruneSelection(keys: Set<String>) {
-        val pruned = _selected.value.intersect(keys)
-        if (pruned.size != _selected.value.size) _selected.value = pruned
-        if (keys.isEmpty()) _editMode.value = false
     }
 
     fun deleteSelected(list: List<VodInfo>) {
         if (list.isEmpty()) return
-        _placementAnim.value = true
+        placementAnim.value = true
         viewModelScope.launch(Dispatchers.IO) {
             list.forEach { item ->
                 history.deleteVodRecord(item.sourceKey, item)
@@ -181,7 +137,7 @@ class HistoryViewModel(
     }
 
     fun deleteAll() {
-        _placementAnim.value = false
+        placementAnim.value = false
         viewModelScope.launch(Dispatchers.IO) {
             history.deleteVodRecordAll()
             WatchProgressStore.clearAll()

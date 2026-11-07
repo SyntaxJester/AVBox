@@ -1,10 +1,8 @@
 package com.github.avbox.osc.util
 
-import com.github.avbox.osc.util.AppLog
-
 import com.github.avbox.osc.bean.ProxyRule
 import com.github.avbox.osc.bean.SourceBean
-import com.github.avbox.osc.net.HttpClients
+import com.github.avbox.osc.net.OkGoHelper
 import com.google.gson.JsonParser
 
 import java.util.HashMap
@@ -31,7 +29,7 @@ object SiteProxy {
 
     private fun overrides(): MutableMap<String, Boolean> {
         return try {
-            KV.get(KVKeys.SITE_PROXY_OVERRIDE, HashMap<String, Boolean>())
+            KV.get(HawkConfig.SITE_PROXY_OVERRIDE, HashMap<String, Boolean>())
         } catch (th: Throwable) {
             HashMap()
         }
@@ -40,7 +38,7 @@ object SiteProxy {
     /** 覆盖项登记时的站点 api；旧数据没有记录，按“不限制”处理以保持兼容 */
     private fun overrideApis(): MutableMap<String, String> {
         return try {
-            KV.get(KVKeys.SITE_PROXY_OVERRIDE_API, HashMap<String, String>())
+            KV.get(HawkConfig.SITE_PROXY_OVERRIDE_API, HashMap<String, String>())
         } catch (th: Throwable) {
             HashMap()
         }
@@ -58,13 +56,13 @@ object SiteProxy {
 
     /** 设置里填写的代理地址 */
     fun configuredUrl(): String {
-        val url = KV.get(KVKeys.PROXY_URL, DEFAULT_URL)
+        val url = KV.get(HawkConfig.PROXY_URL, DEFAULT_URL)
         val trim = url?.trim() ?: ""
         return if (trim.isEmpty()) DEFAULT_URL else trim
     }
 
     fun setConfiguredUrl(url: String) {
-        KV.put(KVKeys.PROXY_URL, url.trim())
+        KV.put(HawkConfig.PROXY_URL, url.trim())
     }
 
     /**
@@ -128,8 +126,8 @@ object SiteProxy {
             next[key] = enabled
             nextApi[key] = api ?: ""
         }
-        KV.put(KVKeys.SITE_PROXY_OVERRIDE, next)
-        KV.put(KVKeys.SITE_PROXY_OVERRIDE_API, nextApi)
+        KV.put(HawkConfig.SITE_PROXY_OVERRIDE, next)
+        KV.put(HawkConfig.SITE_PROXY_OVERRIDE_API, nextApi)
     }
 
     /** 首页代理图标：临时切换并立即生效 */
@@ -159,7 +157,7 @@ object SiteProxy {
      */
     fun suspendInfra() {
         try {
-            HttpClients.proxySelector().suspendSiteProxy = true
+            OkGoHelper.proxySelector().suspendSiteProxy = true
         } catch (th: Throwable) {
             AppLog.d(TAG, "suspend infra skipped | " + th.message)
         }
@@ -167,7 +165,7 @@ object SiteProxy {
 
     fun resumeInfra() {
         try {
-            HttpClients.proxySelector().suspendSiteProxy = false
+            OkGoHelper.proxySelector().suspendSiteProxy = false
         } catch (th: Throwable) {
             AppLog.d(TAG, "resume infra skipped | " + th.message)
         }
@@ -177,7 +175,7 @@ object SiteProxy {
         resumeInfra()
         if (url.isEmpty()) {
             try {
-                HttpClients.setProxyList(null)
+                OkGoHelper.setProxyList(null)
             } catch (th: Throwable) {
                 AppLog.e(TAG, th)
             }
@@ -192,7 +190,7 @@ object SiteProxy {
             // 代理等于没开。hosts 用空串：contains("") 恒真，且不依赖正则。
             val json = "[{\"name\":\"site_proxy\",\"hosts\":[\"\"],\"urls\":[\"" + url + "\"]}]"
             val array = JsonParser.parseString(json).asJsonArray
-            HttpClients.setProxyList(ProxyRule.arrayFrom(array))
+            OkGoHelper.setProxyList(ProxyRule.arrayFrom(array))
         } catch (th: Throwable) {
             AppLog.e(TAG, th)
         }

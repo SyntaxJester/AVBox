@@ -6,7 +6,7 @@ import android.database.Cursor
 import android.net.Uri
 import android.os.Environment
 import android.provider.DocumentsContract
-import com.github.avbox.osc.util.KVKeys
+import com.github.avbox.osc.util.HawkConfig
 import com.github.avbox.osc.util.KV
 import com.github.avbox.osc.util.AppLog
 import java.io.InputStream
@@ -23,13 +23,13 @@ object LocalSourceTree {
         val trees = ArrayList(remembered(context))
         if (!trees.contains(tree.toString())) {
             trees.add(tree.toString())
-            KV.put(KVKeys.LOCAL_SOURCE_TREES, trees)
+            KV.put(HawkConfig.LOCAL_SOURCE_TREES, trees)
         }
         return path
     }
 
     fun remembered(context: Context): List<String> =
-        KV.get(KVKeys.LOCAL_SOURCE_TREES, arrayListOf<String>())
+        KV.get(HawkConfig.LOCAL_SOURCE_TREES, arrayListOf<String>())
 
     fun serves(context: Context, path: String): Boolean = remembered(context).any { text ->
         val tree = treePath(context, Uri.parse(text)) ?: return@any false

@@ -42,12 +42,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.github.avbox.osc.R
 import com.github.avbox.osc.bean.Movie
-import com.github.avbox.osc.bean.TMDB_SOURCE_KEY
 import com.github.avbox.osc.util.AppLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import com.github.avbox.osc.ui.components.marqueeOnOverflow
 
 private const val HERO_SPOTLIGHT_PAGES_PER_SET = 100_000
 
@@ -67,21 +65,9 @@ private val HeroSpotlightMinHeight = 360.dp
 
 private val HeroSpotlightMaxHeight = 560.dp
 
-private val HeroSpotlightLandscapeMinHeight = 120.dp
-
-private const val HERO_LANDSCAPE_HEIGHT_RATIO = 0.42f
-
-internal fun heroSpotlightHeight(screenHeightDp: Int, screenWidthDp: Int = 0): Dp {
-    val raw = (screenHeightDp * HERO_SPOTLIGHT_HEIGHT_RATIO).dp
-    // 横屏时屏幕"高度"其实只有 390dp 上下，继续套 360dp 下限会让 Hero 独占整屏，
-    // 下面的宫格连一行都露不出来。横屏改按屏高比例压缩，给宫格让出空间。
-    if (screenWidthDp > screenHeightDp) {
-        return raw
-            .coerceAtMost((screenHeightDp * HERO_LANDSCAPE_HEIGHT_RATIO).dp)
-            .coerceAtLeast(HeroSpotlightLandscapeMinHeight)
-    }
-    return raw.coerceIn(HeroSpotlightMinHeight, HeroSpotlightMaxHeight)
-}
+internal fun heroSpotlightHeight(screenHeightDp: Int): Dp =
+    (screenHeightDp * HERO_SPOTLIGHT_HEIGHT_RATIO).dp
+        .coerceIn(HeroSpotlightMinHeight, HeroSpotlightMaxHeight)
 
 @Composable
 fun HeroSpotlight(
@@ -99,8 +85,7 @@ fun HeroSpotlight(
         initialPage = count * (HERO_SPOTLIGHT_PAGES_PER_SET / 2),
         pageCount = { count * HERO_SPOTLIGHT_PAGES_PER_SET },
     )
-    val heroCfg = LocalConfiguration.current
-    val heroHeight = heroSpotlightHeight(heroCfg.screenHeightDp, heroCfg.screenWidthDp)
+    val heroHeight = heroSpotlightHeight(LocalConfiguration.current.screenHeightDp)
     val current = videos[pagerState.currentPage % count]
     val scope = rememberCoroutineScope()
     var pendingPic by remember { mutableStateOf<String?>(null) }
@@ -113,15 +98,14 @@ fun HeroSpotlight(
     val settledVideo = videos[settledPage % count]
     val settledPic = settledVideo.pic
     val heroSize = rememberHeroImageSizes().poster
-    val settledTmdbPath = if (settledVideo.sourceKey == TMDB_SOURCE_KEY) {
-        null
-    } else {
-        LocalTmdbPosterLookup.current(settledVideo.name, settledVideo.year, settledVideo.en)
-    }
-    val settledUrl = settledTmdbPath
-        ?.takeIf { it.isNotEmpty() }
-        ?.let { tmdbUrlOf(it, heroSize) }
-        ?: settledPic
+    val settledUrl = tmdbPosterUrl(
+        settledVideo.name,
+        settledVideo.year,
+        settledVideo.sourceKey,
+        size = heroSize,
+        cacheOnly = true,
+        altName = settledVideo.en,
+    ) ?: settledPic
 
     LaunchedEffect(settledPage, settledUrl) {
         val hit = HomeBackdrop.has(settledPic)
@@ -239,7 +223,6 @@ private fun HeroSpotlightCaption(video: Movie.Video) {
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier
             .fillMaxWidth()
-            .marqueeOnOverflow()
             .padding(start = 24.dp, end = 24.dp),
     )
     val rating = ratingBadgeText(video.note)

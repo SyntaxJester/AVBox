@@ -7,29 +7,28 @@ import com.github.avbox.osc.util.LocalAddress
 import java.io.IOException
 
 class ControlManager private constructor() {
-    @Volatile
-    private var httpServer: RemoteServer? = null
+    private var mServer: RemoteServer? = null
 
     fun getAddress(local: Boolean): String {
-        if (httpServer?.isStarting() != true) {
+        if (mServer?.isStarting() != true) {
             startServer()
         }
-        val server = httpServer ?: return ""
+        val server = mServer ?: return ""
         if (!server.isStarting()) return ""
-        return if (local) server.loadAddress() else server.serverAddress()
+        return if (local) server.getLoadAddress() else server.getServerAddress()
     }
 
     fun startServer() {
-        if (httpServer?.isStarting() == true) {
+        if (mServer?.isStarting() == true) {
             return
         }
-        val context = requireNotNull(hostContext) { "control manager context not initialized" }
+        val context = requireNotNull(mContext) { "control manager context not initialized" }
         do {
             val server = RemoteServer(RemoteServer.serverPort, context)
-            httpServer = server
+            mServer = server
             try {
                 server.start()
-                onProxyPortReady?.invoke(RemoteServer.serverPort)
+                com.github.catvod.Proxy.set(RemoteServer.serverPort)
                 break
             } catch (ex: IOException) {
                 RemoteServer.serverPort++
@@ -38,15 +37,11 @@ class ControlManager private constructor() {
         } while (RemoteServer.serverPort < 9999)
     }
 
-    fun startedPort(): Int {
-        return if (httpServer?.isStarting() == true) RemoteServer.serverPort else 0
-    }
-
     fun stopServer() {
-        httpServer?.let {
+        mServer?.let {
             if (it.isStarting()) it.stop()
         }
-        httpServer = null
+        mServer = null
     }
 
     companion object {
@@ -54,10 +49,7 @@ class ControlManager private constructor() {
         private var instance: ControlManager? = null
 
         @JvmField
-        var hostContext: Context? = null
-
-        @Volatile
-        var onProxyPortReady: ((Int) -> Unit)? = null
+        var mContext: Context? = null
 
         @JvmStatic
         fun get(): ControlManager {
@@ -73,7 +65,7 @@ class ControlManager private constructor() {
 
         @JvmStatic
         fun init(context: Context) {
-            hostContext = context
+            mContext = context
             LocalAddress.provider = { get().getAddress(true) }
         }
     }

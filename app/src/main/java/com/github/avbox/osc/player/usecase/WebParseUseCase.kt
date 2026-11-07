@@ -28,7 +28,7 @@ class WebParseUseCase {
     fun evaluateScript(sourceBean: SourceBean?, url: String?, webView: WebView?) {
         if (sourceBean == null || url == null) return
         var clickSelector = sourceBean.clickSelector?.trim { it <= ' ' } ?: ""
-        clickSelector = if (clickSelector.isEmpty()) VideoParseRuler.hostScript(url) else clickSelector
+        clickSelector = if (clickSelector.isEmpty()) VideoParseRuler.getHostScript(url) else clickSelector
         if (clickSelector.isNotEmpty()) {
             val selector: String
             if (clickSelector.contains(";") && !clickSelector.endsWith(";")) {

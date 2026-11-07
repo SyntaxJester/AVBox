@@ -2,7 +2,7 @@ package com.github.avbox.osc.player.effect.anime4k
 
 import androidx.annotation.StringRes
 import com.github.avbox.osc.R
-import com.github.avbox.osc.util.KVKeys
+import com.github.avbox.osc.util.HawkConfig
 import com.github.avbox.osc.util.KV
 
 internal const val ANIME4K_ASSET_DIR = "Anime4K/"
@@ -36,9 +36,10 @@ enum class Anime4kTier(
 
         val default: Anime4kTier = Standard
 
-        fun current(): Anime4kTier = byName(KV.get(KVKeys.ANIME4K_TIER, default.name))
-
-        fun byName(name: String): Anime4kTier = entries.firstOrNull { it.name == name } ?: default
+        fun current(): Anime4kTier {
+            val name = KV.get(HawkConfig.ANIME4K_TIER, default.name)
+            return entries.firstOrNull { it.name == name } ?: default
+        }
     }
 }
 
@@ -49,13 +50,21 @@ object Anime4kSettings {
     @Volatile
     private var sharpenCached = -1f
 
-    fun enabled(): Boolean = KV.get(KVKeys.ANIME4K_ENABLED, false)
+    fun enabled(): Boolean = KV.get(HawkConfig.ANIME4K_ENABLED, false)
 
-    fun deblur(): Boolean = KV.get(KVKeys.ANIME4K_DEBLUR, false)
+    fun setEnabled(enabled: Boolean) {
+        KV.put(HawkConfig.ANIME4K_ENABLED, enabled)
+    }
+
+    fun deblur(): Boolean = KV.get(HawkConfig.ANIME4K_DEBLUR, false)
+
+    fun setDeblur(enabled: Boolean) {
+        KV.put(HawkConfig.ANIME4K_DEBLUR, enabled)
+    }
 
     fun sharpen(): Float {
         if (sharpenCached < 0f) {
-            sharpenCached = KV.get(KVKeys.ANIME4K_SHARPEN, DEFAULT_SHARPEN).coerceIn(0f, 1f)
+            sharpenCached = KV.get(HawkConfig.ANIME4K_SHARPEN, DEFAULT_SHARPEN).coerceIn(0f, 1f)
         }
         return sharpenCached
     }
@@ -63,7 +72,7 @@ object Anime4kSettings {
     fun setSharpen(value: Float) {
         val clamped = value.coerceIn(0f, 1f)
         sharpenCached = clamped
-        KV.put(KVKeys.ANIME4K_SHARPEN, clamped)
+        KV.put(HawkConfig.ANIME4K_SHARPEN, clamped)
     }
 }
 
@@ -83,8 +92,11 @@ object Anime4kStatus {
     }
 
     @Volatile
-    var bypassed = false
+    private var bypassed = false
 
     fun bypass(): Boolean = bypassed
 
+    fun setBypass(value: Boolean) {
+        bypassed = value
+    }
 }

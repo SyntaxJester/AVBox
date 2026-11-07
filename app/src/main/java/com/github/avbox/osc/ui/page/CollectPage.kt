@@ -45,18 +45,106 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 import com.github.avbox.osc.R
+import com.github.avbox.osc.api.ApiConfig
 import com.github.avbox.osc.data.AppGraph
+import com.github.avbox.osc.data.CollectRepository
 import com.github.avbox.osc.data.VodCollect
+import com.github.avbox.osc.event.RefreshEvent
 import com.github.avbox.osc.ui.WindowSize
 import com.github.avbox.osc.ui.components.LoadState
 import com.github.avbox.osc.ui.components.LoadStateBox
 import com.github.avbox.osc.ui.components.VodPoster
-import com.github.avbox.osc.ui.settings.UiSettingsState
+import com.github.avbox.osc.util.HawkConfig
+import com.github.avbox.osc.util.KV
 import com.github.avbox.osc.util.SubscribeList
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
-import com.github.avbox.osc.ui.components.marqueeOnOverflow
+import org.greenrobot.eventbus.EventBus
+import org.greenrobot.eventbus.Subscribe
+import org.greenrobot.eventbus.ThreadMode
+
+class CollectViewModel(
+    private val collect: CollectRepository = AppGraph.collectRepository,
+) : ViewModel() {
+    val loading = MutableStateFlow(true)
+    val items = MutableStateFlow<List<VodCollect>>(emptyList())
+
+    val columns = MutableStateFlow(KV.get(HawkConfig.COLLECT_COLUMNS, 3))
+
+    val unavailableKeys = MutableStateFlow<Set<String>>(emptySet())
+
+    init {
+        EventBus.getDefault().register(this)
+        viewModelScope.launch(Dispatchers.IO) {
+            AppBootstrap.subscriptionCid.drop(1).collect { recomputeUnavailableNow() }
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            collect.observeAll().collect { list ->
+                items.value = list
+                recomputeUnavailableNow()
+                loading.value = false
+            }
+        }
+        viewModelScope.launch {
+            AppBootstrap.state.collect { boot ->
+                if (boot is AppBootstrap.Boot.Ready) {
+                    viewModelScope.launch(Dispatchers.IO) { recomputeUnavailableNow() }
+                }
+            }
+        }
+    }
+
+    override fun onCleared() {
+        EventBus.getDefault().unregister(this)
+    }
+
+    val placementAnim = MutableStateFlow(false)
+
+    private fun recomputeUnavailableNow() {
+        if (AppBootstrap.state.value !is AppBootstrap.Boot.Ready) return
+        unavailableKeys.value = computeUnavailable(items.value)
+    }
+
+    private fun computeUnavailable(list: List<VodCollect>): Set<String> {
+        val current = collect.currentCid()
+        val known = SubscribeList.vodUrls()
+        return list.filter { item ->
+            val cid = item.cid.orEmpty()
+            if (cid.isNotEmpty() && !known.contains(cid)) {
+                true
+            } else {
+                (cid.isEmpty() || cid == current) && ApiConfig.get().getSource(item.sourceKey) == null
+            }
+        }.mapNotNull { it.sourceKey }.toSet()
+    }
+
+    @Subscribe(threadMode = ThreadMode.MAIN)
+    fun onRefreshEvent(event: RefreshEvent) {
+        if (event.type == RefreshEvent.TYPE_COLLECT_LAYOUT_CHANGE) {
+            columns.value = KV.get(HawkConfig.COLLECT_COLUMNS, 3)
+        }
+    }
+
+    fun deleteSelected(list: List<VodCollect>) {
+        if (list.isEmpty()) return
+        placementAnim.value = true
+        viewModelScope.launch(Dispatchers.IO) {
+            list.forEach { item -> collect.deleteVodCollect(item.id) }
+        }
+    }
+
+    fun deleteAll() {
+        viewModelScope.launch(Dispatchers.IO) {
+            collect.deleteVodCollectAll()
+        }
+    }
+}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -76,7 +164,7 @@ internal fun CollectTab(
     val loading by vm.loading.collectAsStateWithLifecycle()
     val placementAnim by vm.placementAnim.collectAsStateWithLifecycle()
     val unavailableKeys by vm.unavailableKeys.collectAsStateWithLifecycle()
-    val columns = UiSettingsState.config.collectColumns
+    val columns by vm.columns.collectAsStateWithLifecycle()
 
     when {
         loading -> Box(
@@ -234,7 +322,6 @@ private fun CollectCard(
             textAlign = TextAlign.Center,
             modifier = Modifier
                 .fillMaxWidth()
-                .marqueeOnOverflow()
                 .padding(top = 6.dp),
         )
     }

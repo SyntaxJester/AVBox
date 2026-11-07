@@ -8,7 +8,7 @@ object VideoParseRuler {
 
     private val HOSTS_RULE = HashMap<String, ArrayList<ArrayList<String>>>()
     private val HOSTS_FILTER = HashMap<String, ArrayList<ArrayList<String>>>()
-    internal val hostsRegex = HashMap<String, ArrayList<String>>()
+    private val HOSTS_REGEX = HashMap<String, ArrayList<String>>()
     private val HOSTS_SCRIPT = HashMap<String, ArrayList<String>>()
     private val HOSTS_EXCLUDE = HashMap<String, ArrayList<String>>()
 
@@ -16,7 +16,7 @@ object VideoParseRuler {
     fun clearRule() {
         HOSTS_RULE.clear()
         HOSTS_FILTER.clear()
-        hostsRegex.clear()
+        HOSTS_REGEX.clear()
         HOSTS_SCRIPT.clear()
         HOSTS_EXCLUDE.clear()
     }
@@ -63,10 +63,15 @@ object VideoParseRuler {
     fun addHostRegex(host: String, regex: ArrayList<String>?) {
         if (regex == null || regex.size == 0) return
         var temp = ArrayList<String>()
-        val existing = hostsRegex[host]
+        val existing = HOSTS_REGEX[host]
         if (existing != null && existing.size > 0) temp = existing
         temp.addAll(regex)
-        hostsRegex[host] = temp
+        HOSTS_REGEX[host] = temp
+    }
+
+    @JvmStatic
+    fun getHostsRegex(): HashMap<String, ArrayList<String>> {
+        return HOSTS_REGEX
     }
 
     @JvmStatic
@@ -181,7 +186,7 @@ object VideoParseRuler {
     }
 
     @JvmStatic
-    fun hostScript(url: String): String {
+    fun getHostScript(url: String): String {
         for ((host, list) in HOSTS_SCRIPT) {
             if (url.contains(host)) {
                 if (list != null && !list.isEmpty()) {
@@ -202,15 +207,15 @@ object VideoParseRuler {
     }
 
     @JvmStatic
-    fun hostExcludes(host: String?): ArrayList<String>? {
+    fun getHostExcludes(host: String?): ArrayList<String>? {
         return HOSTS_EXCLUDE[host]
     }
 
     private fun isExcluded(webUrl: String?, url: String): Boolean {
         if (HOSTS_EXCLUDE.isEmpty() || webUrl == null) return false
         val uri = Uri.parse(webUrl)
-        var excludes = hostExcludes(uri.host)
-        if (excludes == null) excludes = hostExcludes("*")
+        var excludes = getHostExcludes(uri.host)
+        if (excludes == null) excludes = getHostExcludes("*")
         if (excludes == null) return false
         for (exclude in excludes) {
             if (exclude == null || exclude.isEmpty()) continue

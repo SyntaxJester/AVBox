@@ -12,13 +12,8 @@ import android.os.Looper
 import com.google.gson.Gson
 import com.github.avbox.osc.R
 import com.github.avbox.osc.base.App
-import com.github.avbox.osc.bean.CastVideo
 import com.github.avbox.osc.util.AppLog
 import com.github.avbox.osc.util.LanguageManager
-
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 
 import org.fourthline.cling.android.AndroidUpnpService
 import org.fourthline.cling.controlpoint.ControlPoint
@@ -43,13 +38,9 @@ import java.util.concurrent.ConcurrentHashMap
 class DLNACastManager : DefaultRegistryListener(), ServiceConnection {
 
     private val mainHandler = Handler(Looper.getMainLooper())
-    private val deviceMap = ConcurrentHashMap<String, CastDevice>()
-
-    private val _devices = MutableStateFlow<List<CastDevice>>(emptyList())
-
-    val devices: StateFlow<List<CastDevice>> = _devices.asStateFlow()
-
+    private val devices = ConcurrentHashMap<String, CastDevice>()
     private var upnpService: AndroidUpnpService? = null
+    private var deviceListener: DeviceListener? = null
     private var multicastLock: WifiManager.MulticastLock? = null
     private var binding = false
 
@@ -73,8 +64,7 @@ class DLNACastManager : DefaultRegistryListener(), ServiceConnection {
         }
         upnpService = null
         binding = false
-        deviceMap.clear()
-        publishDevices()
+        devices.clear()
         releaseMulticastLock()
     }
 
@@ -101,14 +91,18 @@ class DLNACastManager : DefaultRegistryListener(), ServiceConnection {
         multicastLock = null
     }
 
+    fun setDeviceListener(listener: DeviceListener?) {
+        deviceListener = listener
+    }
+
     fun search() {
         val service = upnpService ?: return
         service.controlPoint.search(STAllHeader())
         loadRegisteredDevices()
     }
 
-    private fun getDevices(): List<CastDevice> {
-        val list = ArrayList(deviceMap.values)
+    fun getDevices(): List<CastDevice> {
+        val list = ArrayList(devices.values)
         list.sortWith(compareBy(nullsLast<String>()) { it.name })
         return list
     }
@@ -145,18 +139,18 @@ class DLNACastManager : DefaultRegistryListener(), ServiceConnection {
 
     private fun addDevice(device: CastDevice) {
         val id = device.id ?: return
-        deviceMap[id] = device
-        publishDevices()
+        devices[id] = device
+        mainHandler.post {
+            deviceListener?.onDeviceChanged()
+        }
     }
 
     private fun removeDevice(device: CastDevice) {
         val id = device.id ?: return
-        deviceMap.remove(id)
-        publishDevices()
-    }
-
-    private fun publishDevices() {
-        _devices.value = getDevices()
+        devices.remove(id)
+        mainHandler.post {
+            deviceListener?.onDeviceChanged()
+        }
     }
 
     fun cast(device: CastDevice, video: CastVideo, callback: CastCallback?) {
@@ -275,6 +269,10 @@ class DLNACastManager : DefaultRegistryListener(), ServiceConnection {
         mainHandler.post {
             callback?.onResult(false, msg ?: str(R.string.toast_cast_failed))
         }
+    }
+
+    interface DeviceListener {
+        fun onDeviceChanged()
     }
 
     interface CastCallback {

@@ -1,6 +1,6 @@
 package com.github.avbox.osc.util.net
 
-import com.github.avbox.osc.net.HttpClients
+import com.github.avbox.osc.net.OkGoHelper
 
 import java.io.IOException
 import java.net.SocketTimeoutException
@@ -27,7 +27,7 @@ object Http {
         return executeWithRetry(HttpRequest(url).apply(init).build(), client())
     }
 
-    suspend fun once(url: String, init: HttpRequest.() -> Unit = {}): String {
+    suspend fun getOnce(url: String, init: HttpRequest.() -> Unit = {}): String {
         return executeChecked(HttpRequest(url).apply(init).build(), client(), retry = false) { it.body.string() }
     }
 
@@ -92,7 +92,7 @@ object Http {
     }
 
     private fun client(): OkHttpClient {
-        return HttpClients.defaultClient ?: throw IllegalStateException("default OkHttpClient not initialized")
+        return OkGoHelper.getDefaultClient() ?: throw IllegalStateException("default OkHttpClient not initialized")
     }
 }
 

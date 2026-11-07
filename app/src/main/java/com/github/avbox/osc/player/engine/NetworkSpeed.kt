@@ -9,7 +9,7 @@ object NetworkSpeed {
     private var lastTimeStamp = 0L
 
     @JvmStatic
-    fun netSpeed(context: Context?): Long {
+    fun getNetSpeed(context: Context?): Long {
         if (context == null) {
             return 0
         }

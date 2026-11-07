@@ -3,12 +3,12 @@ package com.github.avbox.osc.sourcedata
 import android.os.Handler
 import android.os.Looper
 import android.text.TextUtils
-import com.github.catvod.crawler.SpiderReaper
 import com.github.avbox.osc.api.ApiConfig
 import com.github.avbox.osc.bean.SourceBean
 import com.github.avbox.osc.util.BoundedCall
 import com.github.avbox.osc.util.DefaultConfig
 import com.github.avbox.osc.util.AppLog
+import com.github.avbox.osc.util.SpiderReaper
 import com.google.gson.Gson
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -44,14 +44,14 @@ class PlayLoader(
     private var preloadChain = SupervisorJob(rootJob)
 
     fun getPlay(sourceKey: String?, playFlag: String?, progressKey: String?, url: String?, subtitleKey: String?) {
-        playInternal(playRequestSeq, playResult, playChain, sourceKey, playFlag, progressKey, url, subtitleKey)
+        getPlayInternal(playRequestSeq, playResult, playChain, sourceKey, playFlag, progressKey, url, subtitleKey)
     }
 
     fun getPlayForPreload(sourceKey: String?, playFlag: String?, progressKey: String?, url: String?, subtitleKey: String?) {
-        playInternal(preloadRequestSeq, preloadResult, preloadChain, sourceKey, playFlag, progressKey, url, subtitleKey)
+        getPlayInternal(preloadRequestSeq, preloadResult, preloadChain, sourceKey, playFlag, progressKey, url, subtitleKey)
     }
 
-    private fun playInternal(
+    private fun getPlayInternal(
         seqHolder: AtomicInteger,
         resultChannel: SourceChannel<JSONObject?>,
         chain: Job,
@@ -64,14 +64,14 @@ class PlayLoader(
         val requestSeq = seqHolder.incrementAndGet()
         if (Looper.myLooper() === Looper.getMainLooper()) {
             SourceHelper.PREPARE_POOL.execute {
-                playPrepared(seqHolder, resultChannel, requestSeq, chain, sourceKey, playFlag, progressKey, url, subtitleKey)
+                getPlayPrepared(seqHolder, resultChannel, requestSeq, chain, sourceKey, playFlag, progressKey, url, subtitleKey)
             }
             return
         }
-        playPrepared(seqHolder, resultChannel, requestSeq, chain, sourceKey, playFlag, progressKey, url, subtitleKey)
+        getPlayPrepared(seqHolder, resultChannel, requestSeq, chain, sourceKey, playFlag, progressKey, url, subtitleKey)
     }
 
-    private fun playPrepared(
+    private fun getPlayPrepared(
         seqHolder: AtomicInteger,
         resultChannel: SourceChannel<JSONObject?>,
         requestSeq: Int,
@@ -125,12 +125,12 @@ class PlayLoader(
                 if (TextUtils.isEmpty(requestUrl)) return@Callable ""
                 try {
                     AppLog.i("echo--getPlay--id: $requestUrl")
-                    SpiderReaper.track(sp) { sp.playerContent(playFlag, requestUrl, ApiConfig.get().vipParseFlags) }
+                    SpiderReaper.track(sp) { sp.playerContent(playFlag, requestUrl, ApiConfig.get().getVipParseFlags()) }
                 } catch (e: Exception) {
                     AppLog.i("echo--getPlay--error: " + e.message)
                     ""
                 }
-            }, sourceBean.playTimeoutSeconds() * 1000L, "echo--getPlay--" + sourceBean.key)
+            }, sourceBean.getPlayTimeoutSeconds() * 1000L, "echo--getPlay--" + sourceBean.key)
             AppLog.i("echo--getPlay--result:$json")
             if (TextUtils.isEmpty(json)) {
                 postPlayResult(seqHolder, resultChannel, requestSeq, null)
@@ -205,7 +205,7 @@ class PlayLoader(
         playFlag: String?,
         pushUrl: PushUrlParser.PushUrl,
     ) {
-        val extend = SourceHelper.getFixUrl(extendCache, gson, sourceBean.ext, sourceBean.playTimeoutSeconds().toLong())
+        val extend = SourceHelper.getFixUrl(extendCache, gson, sourceBean.ext, sourceBean.getPlayTimeoutSeconds().toLong())
 
         requestScope.launch(chain) {
             val json = try {

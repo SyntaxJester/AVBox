@@ -56,7 +56,6 @@ import com.github.avbox.osc.ui.components.joinedDaysText
 import com.github.avbox.osc.ui.theme.SuccessGreen
 import com.github.avbox.osc.ui.theme.cardContainer
 import kotlin.math.roundToInt
-import com.github.avbox.osc.ui.components.marqueeOnOverflow
 
 private val ScheduleIconSize = 16.dp
 
@@ -157,9 +156,7 @@ internal fun FollowRow(
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .weight(1f)
-                            .marqueeOnOverflow(),
+                        modifier = Modifier.weight(1f),
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     val statusText = stringResource(
@@ -192,7 +189,6 @@ internal fun FollowRow(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        modifier = Modifier.marqueeOnOverflow(),
                         text = scheduleText,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

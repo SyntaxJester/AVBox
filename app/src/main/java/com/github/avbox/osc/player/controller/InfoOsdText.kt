@@ -14,15 +14,15 @@ import androidx.media3.common.Format
 import androidx.media3.common.MimeTypes
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import com.github.avbox.osc.R
-import com.github.avbox.osc.player.BasePlayerView
+import com.github.avbox.osc.player.AppPlayerView
 import com.github.avbox.osc.player.ExoPlayer
-import com.github.avbox.osc.player.core.DecodeKindRule
-import com.github.avbox.osc.player.core.PlayerDecodeKind
+import com.github.avbox.osc.player.PlayerDecodeKind
+import com.github.avbox.osc.player.PlayerHelper
 import com.github.avbox.osc.player.engine.AudioCodecChoice
 import com.github.avbox.osc.player.engine.AudioDecoderLookup
-import com.github.avbox.osc.player.core.PlayState
+import com.github.avbox.osc.player.state.PlayState
 import com.github.avbox.osc.player.state.PlayerUiState
-import com.github.avbox.osc.util.KVKeys
+import com.github.avbox.osc.util.HawkConfig
 import com.github.avbox.osc.util.KV
 import com.github.avbox.osc.util.AppLog
 import java.io.File
@@ -39,7 +39,7 @@ internal object InfoOsdText {
     fun refreshInfoOsd(
         context: Context,
         state: PlayerUiState,
-        videoView: BasePlayerView?,
+        videoView: AppPlayerView?,
         activity: Activity?,
         speed: Long,
     ) {
@@ -59,7 +59,7 @@ internal object InfoOsdText {
         }.getOrDefault(0L)
         left.add(
             context.getString(R.string.osd_network) to
-                (PlayerTextFormat.displaySpeed(speed, true) + " · " + bitrateText(throughput) + marginText(throughput, video))
+                (PlayerHelper.getDisplaySpeed(speed, true) + " · " + bitrateText(throughput) + marginText(throughput, video))
         )
         left.add(context.getString(R.string.osd_memory) to memoryText(context))
         left.add(context.getString(R.string.osd_heap) to heapText())
@@ -90,9 +90,61 @@ internal object InfoOsdText {
             cachedRightActivity = WeakReference(activity)
         }
 
-        state.updateInfoOsdLeft(left)
-        state.updateInfoOsdRight(right)
-        state.updateInfoOsdFooter(footer)
+        state.infoOsdLeft = left
+        state.infoOsdRight = right
+        state.infoOsdFooter = footer
+        state.mediaBadges = mediaBadgeLines(context, video, exo)
+    }
+
+    /**
+     * 媒体徽章：按真实解码的画面和音轨计算。
+     * 仅当用户开启显示时返回，否则返回空列表。
+     * 每个徽章为 Pair<名称, 类型>，类型用于 UI 区分显示方式。
+     */
+    private fun mediaBadgeLines(context: Context, video: Format?, exo: ExoPlayer?): List<Pair<String, String>> {
+        if (!(KV.get(HawkConfig.MEDIA_BADGES_SHOW, true) == true)) return emptyList()
+        val mode = KV.get(HawkConfig.MEDIA_BADGES_DISPLAY_MODE, 0) ?: 0
+        if (mode == 2) return emptyList()
+        val badges = ArrayList<Pair<String, String>>()
+        if (video != null) {
+            val width = video.width
+            val height = video.height
+            if (width >= 3800 || height >= 2100) {
+                badges.add(context.getString(R.string.badge_4k) to "video")
+            } else if (width >= 2500 || height >= 1400) {
+                badges.add(context.getString(R.string.badge_2k) to "video")
+            } else if (width >= 1900 || height >= 1000) {
+                badges.add(context.getString(R.string.badge_1080p) to "video")
+            }
+            when (video.sampleMimeType) {
+                MimeTypes.VIDEO_H265 -> badges.add(context.getString(R.string.badge_hevc) to "video")
+                MimeTypes.VIDEO_H264 -> badges.add(context.getString(R.string.badge_avc) to "video")
+                MimeTypes.VIDEO_AV1 -> badges.add(context.getString(R.string.badge_av1) to "video")
+                MimeTypes.VIDEO_VP9 -> badges.add(context.getString(R.string.badge_vp9) to "video")
+            }
+            val hdrType = videoHdrType(video)
+            if (hdrType != null) badges.add(context.getString(hdrType) to "video")
+        }
+        val audio = exo?.selectedAudioFormat
+        if (audio != null) {
+            when (audio.sampleMimeType) {
+                "audio/ac3" -> badges.add(context.getString(R.string.badge_dolby_digital) to "audio")
+                "audio/eac3", "audio/eac3-joc" -> badges.add(context.getString(R.string.badge_dolby_digital_plus) to "audio")
+                "audio/true-hd" -> badges.add(context.getString(R.string.badge_dolby_truehd) to "audio")
+                "audio/dts" -> badges.add(context.getString(R.string.badge_dts) to "audio")
+                "audio/dts-hd", "audio/dts-x" -> badges.add(context.getString(R.string.badge_dts_hd) to "audio")
+            }
+            val channels = audio.channelCount
+            if (channels >= 8) badges.add(context.getString(R.string.badge_7_1) to "audio")
+            else if (channels >= 6) badges.add(context.getString(R.string.badge_5_1) to "audio")
+        }
+        return badges
+    }
+
+    private fun videoHdrType(format: Format): Int? {
+        val colorInfo = format.colorInfo ?: return null
+        if (!androidx.media3.common.ColorInfo.isTransferHdr(colorInfo)) return null
+        return if (colorInfo.colorTransfer == androidx.media3.common.C.COLOR_TRANSFER_ST2084) R.string.badge_hdr10_plus else R.string.badge_hdr10
     }
 
     private fun videoText(format: Format?, exo: ExoPlayer?): String {
@@ -133,7 +185,7 @@ internal object InfoOsdText {
         parts.add(if (!codecs.isNullOrEmpty()) codecs else format.sampleMimeType?.substringAfter('/')?.uppercase(Locale.US) ?: "-")
         val probe = probeAudioCodec(format, exo)
         if (probe != null) {
-            parts.add(decodeKindText(context, DecodeKindRule.kindOf(probe.choice.name, probe.choice.hardwareAccelerated, probe.choice.softwareOnly)))
+            parts.add(decodeKindText(context, PlayerHelper.decodeKindOf(probe.choice.name, probe.choice.hardwareAccelerated, probe.choice.softwareOnly)))
             parts.add(probe.choice.name)
         }
         if (format.channelCount > 0) parts.add(format.channelCount.toString() + ".0")
@@ -171,7 +223,7 @@ internal object InfoOsdText {
         AppLog.i(
             "echo-player-audio-codec: source=${probe.source} mime=${format.sampleMimeType} name=${choice.name}" +
                 " hw=${choice.hardwareAccelerated} swOnly=${choice.softwareOnly}" +
-                " kind=${DecodeKindRule.kindOf(choice.name, choice.hardwareAccelerated, choice.softwareOnly)}" +
+                " kind=${PlayerHelper.decodeKindOf(choice.name, choice.hardwareAccelerated, choice.softwareOnly)}" +
                 " renderer=${exo?.audioRendererName() ?: "-"}",
         )
     }
@@ -211,15 +263,15 @@ internal object InfoOsdText {
         return String.format(Locale.US, "%02d:%02d", seconds / 60, seconds % 60)
     }
 
-    private fun configText(context: Context, videoView: BasePlayerView?, exo: ExoPlayer?): String {
+    private fun configText(context: Context, videoView: AppPlayerView?, exo: ExoPlayer?): String {
         val parts = ArrayList<String>()
         parts.add(context.getString(R.string.player_exo))
         parts.add(decodeKindText(context, exo?.videoDecodeKind() ?: PlayerDecodeKind.UNKNOWN))
         parts.add(if (videoView?.renderIsSurface == true) "Surface" else "Texture")
         parts.add(context.getString(R.string.osd_tunnel) + " " + onOffText(context, exo?.isTunnelingEnabled == true))
         parts.add(context.getString(R.string.osd_frame_rate_match) + " " + onOffText(context, false))
-        parts.add(context.getString(R.string.osd_preload) + " " + onOffText(context, KV.get(KVKeys.PRELOAD_NEXT_EPISODE, false) == true))
-        parts.add(context.getString(R.string.osd_cache) + " " + onOffText(context, KV.get(KVKeys.PLAY_CACHE, false) == true))
+        parts.add(context.getString(R.string.osd_preload) + " " + onOffText(context, KV.get(HawkConfig.PRELOAD_NEXT_EPISODE, false) == true))
+        parts.add(context.getString(R.string.osd_cache) + " " + onOffText(context, KV.get(HawkConfig.PLAY_CACHE, false) == true))
         return parts.joinToString(" · ")
     }
 
@@ -332,12 +384,11 @@ internal object InfoOsdText {
             val bm = context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
                 ?: return
             val level = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
-            state.updateBatteryPercent(if (level in 0..100) level else -1)
+            state.batteryPercent = if (level in 0..100) level else -1
             val status = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_STATUS)
-            state.updateBatteryCharging(
-                status == BatteryManager.BATTERY_STATUS_CHARGING ||
-                    status == BatteryManager.BATTERY_STATUS_FULL,
-            )
+            state.batteryCharging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
+                    status == BatteryManager.BATTERY_STATUS_FULL
         }
     }
 }
+

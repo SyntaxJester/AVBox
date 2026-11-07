@@ -21,8 +21,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.github.avbox.osc.R
-import com.github.avbox.osc.player.state.PlaybackSettingsState
+import com.github.avbox.osc.event.RefreshEvent
 import com.github.avbox.osc.ui.components.AVBoxAlertDialog
 import com.github.avbox.osc.ui.components.AppTopBarScaffold
 import com.github.avbox.osc.ui.components.LocalSheetDismiss
@@ -35,30 +36,21 @@ import com.github.avbox.osc.ui.components.SettingsRow
 import com.github.avbox.osc.ui.components.SettingsSliderRow
 import com.github.avbox.osc.ui.components.SettingsSwitchRow
 import com.github.avbox.osc.ui.components.TopBarActionBox
-import com.github.avbox.osc.ui.settings.UiSettingsState
-import com.github.avbox.osc.event.UiChange
-import com.github.avbox.osc.event.UiEvents
 import com.github.avbox.osc.util.AppLanguage
-import com.github.avbox.osc.util.DanmuSettingsState
+import com.github.avbox.osc.util.HawkConfig
+import com.github.avbox.osc.util.HistoryMerge
 import com.github.avbox.osc.util.LanguageManager
-import com.github.avbox.osc.util.SearchSettingsState
 import com.github.avbox.osc.util.restartApp
-import com.github.avbox.osc.api.ApiConfig
-import com.github.avbox.osc.util.SiteProxy
 import kotlin.math.roundToInt
+import org.greenrobot.eventbus.EventBus
 
 @Composable
-fun PreferenceSettingsScreen(onNavigateBack: () -> Unit) {
-    val uiConfig = UiSettingsState.config
-    val playbackConfig = PlaybackSettingsState.config
-    val danmuConfig = DanmuSettingsState.config
-    val searchConfig = SearchSettingsState.config
-    var sliderSpeed by remember(uiConfig.longPressSpeed) { mutableStateOf(uiConfig.longPressSpeed) }
-    var sliderBuffer by remember(playbackConfig.bufferTimes) { mutableStateOf(playbackConfig.bufferTimes) }
-    var sliderThreads by remember(searchConfig.searchThreads) { mutableStateOf(searchConfig.searchThreads) }
+fun PreferenceSettingsScreen(onNavigateBack: () -> Unit, vm: SettingsViewModel = viewModel()) {
+    val state by vm.state
+    var sliderSpeed by remember(state.longPressSpeed) { mutableStateOf(state.longPressSpeed) }
+    var sliderBuffer by remember(state.bufferTimes) { mutableStateOf(state.bufferTimes) }
+    var sliderThreads by remember(state.searchThreads) { mutableStateOf(state.searchThreads) }
     var danmuApiDialog by remember { mutableStateOf(false) }
-    var proxyUrlDialog by remember { mutableStateOf(false) }
-    var proxyUrlText by remember { mutableStateOf(SiteProxy.configuredUrl()) }
 
     val listState = rememberScrollState()
     AppTopBarScaffold(
@@ -88,8 +80,11 @@ fun PreferenceSettingsScreen(onNavigateBack: () -> Unit) {
                 }
                 SettingsCard(SettingsCardPosition.LAST) {
                     CollectColumnsRow(
-                        columns = uiConfig.collectColumns,
-                        onSelect = { columns -> UiSettingsState.collectColumns = columns },
+                        columns = state.collectColumns,
+                        onSelect = { columns ->
+                            vm.put(HawkConfig.COLLECT_COLUMNS, columns)
+                            EventBus.getDefault().post(RefreshEvent(RefreshEvent.TYPE_COLLECT_LAYOUT_CHANGE))
+                        },
                     )
                 }
             }
@@ -101,10 +96,11 @@ fun PreferenceSettingsScreen(onNavigateBack: () -> Unit) {
                     SettingsSwitchRow(
                         title = stringResource(R.string.settings_history_merge),
                         leadingIconRes = R.drawable.ic_pref_history_merge,
-                        checked = searchConfig.historyMerge,
+                        checked = state.historyMerge,
                         onCheckedChange = {
-                            SearchSettingsState.historyMerge = it
-                            UiEvents.post(UiChange.HistoryChanged)
+                            HistoryMerge.setEnabled(it)
+                            vm.refresh()
+                            EventBus.getDefault().post(RefreshEvent(RefreshEvent.TYPE_HISTORY_REFRESH))
                         },
                     )
                 }
@@ -112,10 +108,10 @@ fun PreferenceSettingsScreen(onNavigateBack: () -> Unit) {
                     SettingsSwitchRow(
                         title = stringResource(R.string.settings_incognito),
                         leadingIconRes = R.drawable.ic_pref_incognito,
-                        checked = uiConfig.incognito,
+                        checked = state.incognito,
                         onCheckedChange = {
-                            UiSettingsState.incognito = it
-                            UiEvents.post(UiChange.HistoryChanged)
+                            vm.put(HawkConfig.INCOGNITO, it)
+                            EventBus.getDefault().post(RefreshEvent(RefreshEvent.TYPE_HISTORY_REFRESH))
                         },
                     )
                 }
@@ -124,8 +120,8 @@ fun PreferenceSettingsScreen(onNavigateBack: () -> Unit) {
                         title = stringResource(R.string.settings_hide_status_bar),
                         leadingIconRes = R.drawable.ic_pref_hide_status_bar,
                         subtitle = stringResource(R.string.settings_hide_status_bar_subtitle),
-                        checked = uiConfig.hideStatusBar,
-                        onCheckedChange = { UiSettingsState.hideStatusBar = it },
+                        checked = state.hideStatusBar,
+                        onCheckedChange = { vm.put(HawkConfig.HIDE_STATUS_BAR, it) },
                     )
                 }
                 SettingsCard(SettingsCardPosition.MIDDLE) {
@@ -133,24 +129,24 @@ fun PreferenceSettingsScreen(onNavigateBack: () -> Unit) {
                         title = stringResource(R.string.settings_gesture_disable),
                         leadingIconRes = R.drawable.ic_pref_gesture,
                         subtitle = stringResource(R.string.settings_gesture_disable_subtitle),
-                        checked = uiConfig.gestureControlDisabled,
-                        onCheckedChange = { UiSettingsState.gestureControlDisabled = it },
+                        checked = state.gestureControlDisabled,
+                        onCheckedChange = { vm.put(HawkConfig.GESTURE_CONTROL_DISABLED, it) },
                     )
                 }
                 SettingsCard(SettingsCardPosition.MIDDLE) {
                     SettingsSwitchRow(
                         title = stringResource(R.string.settings_nav_animation_disable),
                         leadingIconRes = R.drawable.ic_pref_nav_animation,
-                        checked = uiConfig.navAnimationDisabled,
-                        onCheckedChange = { UiSettingsState.navAnimationDisabled = it },
+                        checked = state.navAnimationDisabled,
+                        onCheckedChange = { vm.put(HawkConfig.NAV_ANIMATION_DISABLED, it) },
                     )
                 }
                 SettingsCard(SettingsCardPosition.LAST) {
                     SettingsSwitchRow(
                         title = stringResource(R.string.settings_nav_live_hidden),
                         leadingIconRes = R.drawable.ic_pref_nav_live_hidden,
-                        checked = uiConfig.navLiveHidden,
-                        onCheckedChange = { UiSettingsState.navLiveHidden = it },
+                        checked = state.navLiveHidden,
+                        onCheckedChange = { vm.put(HawkConfig.NAV_LIVE_HIDDEN, it) },
                     )
                 }
             }
@@ -162,40 +158,48 @@ fun PreferenceSettingsScreen(onNavigateBack: () -> Unit) {
                     SettingsSwitchRow(
                         title = stringResource(R.string.settings_auto_switch_line),
                         leadingIconRes = R.drawable.ic_pref_auto_switch_line,
-                        checked = playbackConfig.autoSwitchLine,
-                        onCheckedChange = { PlaybackSettingsState.autoSwitchLine = it },
+                        checked = state.autoSwitchLine,
+                        onCheckedChange = { vm.put(HawkConfig.AUTO_SWITCH_LINE, it) },
                     )
                 }
                 SettingsCard(SettingsCardPosition.MIDDLE) {
                     SettingsSwitchRow(
                         title = stringResource(R.string.settings_m3u8_purify),
                         leadingIconRes = R.drawable.ic_pref_m3u8_purify,
-                        checked = playbackConfig.m3u8Purify,
-                        onCheckedChange = { PlaybackSettingsState.m3u8Purify = it },
+                        checked = state.m3u8Purify,
+                        onCheckedChange = { vm.put(HawkConfig.M3U8_PURIFY, it) },
+                    )
+                }
+                SettingsCard(SettingsCardPosition.MIDDLE) {
+                    SettingsSwitchRow(
+                        title = stringResource(R.string.settings_ad_block),
+                        leadingIconRes = R.drawable.ic_pref_ad_block,
+                        checked = state.adBlockEnabled,
+                        onCheckedChange = { vm.put(HawkConfig.AD_BLOCK_ENABLED, it) },
+                    )
+                }
+                SettingsCard(SettingsCardPosition.MIDDLE) {
+                    SettingsSwitchRow(
+                        title = stringResource(R.string.settings_ad_audio_fingerprint),
+                        leadingIconRes = R.drawable.ic_pref_ad_audio_fingerprint,
+                        checked = state.adAudioFingerprintEnabled,
+                        onCheckedChange = { vm.put(HawkConfig.AD_AUDIO_FINGERPRINT_ENABLED, it) },
                     )
                 }
                 SettingsCard(SettingsCardPosition.MIDDLE) {
                     SettingsSwitchRow(
                         title = stringResource(R.string.settings_danmu_switch),
                         leadingIconRes = R.drawable.ic_pref_danmu,
-                        checked = danmuConfig.open,
-                        onCheckedChange = { DanmuSettingsState.open = it },
+                        checked = state.danmuOpen,
+                        onCheckedChange = { vm.put(HawkConfig.DANMU_OPEN, it) },
                     )
                 }
                 SettingsCard(SettingsCardPosition.MIDDLE) {
                     SettingsRow(
                         title = stringResource(R.string.settings_danmu_api),
                         leadingIconRes = R.drawable.ic_pref_danmu_api,
-                        valueText = stringResource(if (danmuConfig.api.isEmpty()) R.string.common_not_set else R.string.common_set),
+                        valueText = stringResource(if (state.danmuApi.isEmpty()) R.string.common_not_set else R.string.common_set),
                         onClick = { danmuApiDialog = true },
-                    )
-                }
-                SettingsCard(SettingsCardPosition.MIDDLE) {
-                    SettingsRow(
-                        title = stringResource(R.string.settings_proxy_url),
-                        leadingIconRes = R.drawable.ic_proxy,
-                        valueText = proxyUrlText.ifEmpty { stringResource(R.string.common_not_set) },
-                        onClick = { proxyUrlDialog = true },
                     )
                 }
                 SettingsCard(SettingsCardPosition.MIDDLE) {
@@ -208,8 +212,8 @@ fun PreferenceSettingsScreen(onNavigateBack: () -> Unit) {
                         steps = 7,
                         onValueChange = { sliderSpeed = (it - 2).roundToInt() + 2 },
                         onValueChangeFinished = {
-                            if (sliderSpeed != uiConfig.longPressSpeed) {
-                                UiSettingsState.longPressSpeed = sliderSpeed
+                            if (sliderSpeed != state.longPressSpeed) {
+                                vm.put(HawkConfig.LONG_PRESS_SPEED, sliderSpeed)
                             }
                         },
                     )
@@ -224,8 +228,8 @@ fun PreferenceSettingsScreen(onNavigateBack: () -> Unit) {
                         steps = 8,
                         onValueChange = { sliderBuffer = (it - 1).roundToInt() + 1 },
                         onValueChangeFinished = {
-                            if (sliderBuffer != playbackConfig.bufferTimes) {
-                                PlaybackSettingsState.bufferTimes = sliderBuffer
+                            if (sliderBuffer != state.bufferTimes) {
+                                vm.put(HawkConfig.BUFFER_TIMES, sliderBuffer)
                             }
                         },
                     )
@@ -240,8 +244,8 @@ fun PreferenceSettingsScreen(onNavigateBack: () -> Unit) {
                         steps = 2,
                         onValueChange = { sliderThreads = ((it - 16) / 16).roundToInt() * 16 + 16 },
                         onValueChangeFinished = {
-                            if (sliderThreads != searchConfig.searchThreads) {
-                                SearchSettingsState.searchThreads = sliderThreads
+                            if (sliderThreads != state.searchThreads) {
+                                vm.put(HawkConfig.SEARCH_THREADS, sliderThreads)
                             }
                         },
                     )
@@ -255,25 +259,11 @@ fun PreferenceSettingsScreen(onNavigateBack: () -> Unit) {
     if (danmuApiDialog) {
         TextEditDialog(
             title = stringResource(R.string.settings_danmu_api),
-            initialText = danmuConfig.api,
+            initialText = state.danmuApi,
             onDismiss = { danmuApiDialog = false },
             onConfirm = { text ->
-                DanmuSettingsState.api = text
+                vm.put(HawkConfig.DANMU_API, text)
                 danmuApiDialog = false
-            },
-        )
-    }
-
-    if (proxyUrlDialog) {
-        TextEditDialog(
-            title = stringResource(R.string.settings_proxy_url),
-            initialText = proxyUrlText,
-            onDismiss = { proxyUrlDialog = false },
-            onConfirm = { text ->
-                SiteProxy.setConfiguredUrl(text)
-                proxyUrlText = text
-                SiteProxy.apply(ApiConfig.get().homeSourceBean())
-                proxyUrlDialog = false
             },
         )
     }

@@ -5,10 +5,10 @@ import android.os.Build
 import android.text.TextUtils
 import android.view.View
 import com.github.avbox.osc.api.DanmakuApi
-import com.github.avbox.osc.player.PlayerKernelView
+import com.github.avbox.osc.player.MyVideoView
 import com.github.avbox.osc.player.controller.PlayerControlApi
-import com.github.avbox.osc.player.core.PlayState
-import com.github.avbox.osc.util.DanmuSettingsState
+import com.github.avbox.osc.player.state.PlayState
+import com.github.avbox.osc.util.DanmuHelper
 import com.github.avbox.osc.util.AppLog
 import com.github.avbox.osc.util.PlayerUtils
 import master.flame.danmaku.danmaku.model.BaseDanmaku
@@ -26,7 +26,7 @@ private const val DANMU_PLACEHOLDER_MAX_RETRY = 2
 private const val DANMU_PLACEHOLDER_RETRY_BASE_MS = 3000L
 
 class DanmuLoadController(
-    private var videoView: PlayerKernelView?,
+    private var videoView: MyVideoView?,
     private val controller: PlayerControlApi?,
     private val danmuView: DanmakuView?,
 ) {
@@ -68,7 +68,7 @@ class DanmuLoadController(
         applySettings(false)
     }
 
-    fun setVideoView(videoView: PlayerKernelView?) {
+    fun setVideoView(videoView: MyVideoView?) {
         this.videoView = videoView
         if (videoView != null && danmuView != null) {
             videoView.setDanmuView(danmuView)
@@ -77,26 +77,25 @@ class DanmuLoadController(
 
     fun applySettings(reload: Boolean) {
         if (danmuView == null) return
-        val config = DanmuSettingsState.config
-        if (!config.open) {
+        if (!DanmuHelper.isOpen()) {
             releaseView()
             controller?.setHasDanmu(!TextUtils.isEmpty(danmuText))
             return
         }
         val maxLines = HashMap<Int, Int>()
-        val maxLine = config.maxLine
+        val maxLine = DanmuHelper.getMaxLine()
         maxLines[BaseDanmaku.TYPE_FIX_TOP] = maxLine
         maxLines[BaseDanmaku.TYPE_SCROLL_RL] = maxLine
         maxLines[BaseDanmaku.TYPE_SCROLL_LR] = maxLine
         maxLines[BaseDanmaku.TYPE_FIX_BOTTOM] = 0
         danmakuContext.setMaximumLines(maxLines)
-            .setScrollSpeedFactor(config.speed)
-            .setDanmakuTransparency(config.alpha)
-            .setScaleTextSize(config.sizeScale)
+            .setScrollSpeedFactor(DanmuHelper.getSpeed())
+            .setDanmakuTransparency(DanmuHelper.getAlpha())
+            .setScaleTextSize(DanmuHelper.getSizeScale())
             .setTypeface(danmuTypeface)
         danmakuContext.setDanmakuStyle(IDisplayer.DANMAKU_STYLE_STROKEN, 4f)
             .setDanmakuMargin(danmuMarginPx)
-        if (reload && !TextUtils.isEmpty(danmuText) && config.open) {
+        if (reload && !TextUtils.isEmpty(danmuText) && DanmuHelper.isOpen()) {
             prepare(danmuText)
         }
     }
@@ -119,7 +118,7 @@ class DanmuLoadController(
         releaseView()
         val hasDanmu = !TextUtils.isEmpty(danmuText)
         controller?.setHasDanmu(hasDanmu)
-        if (!hasDanmu || !DanmuSettingsState.config.open) {
+        if (!hasDanmu || !DanmuHelper.isOpen()) {
             setViewVisible(false)
             return
         }
@@ -132,7 +131,7 @@ class DanmuLoadController(
     }
 
     fun startIfReady() {
-        if (pendingPrepare && !TextUtils.isEmpty(danmuText) && DanmuSettingsState.config.open && isVideoReady()) {
+        if (pendingPrepare && !TextUtils.isEmpty(danmuText) && DanmuHelper.isOpen() && isVideoReady()) {
             pendingPrepare = false
             prepare(danmuText)
             return
@@ -182,7 +181,7 @@ class DanmuLoadController(
         startedSeq = -1
         placeholderRetryCount = 0
         releaseView()
-        pendingPrepare = !TextUtils.isEmpty(danmuText) && DanmuSettingsState.config.open
+        pendingPrepare = !TextUtils.isEmpty(danmuText) && DanmuHelper.isOpen()
     }
 
     fun setOverlayHidden(hidden: Boolean) {
@@ -198,7 +197,7 @@ class DanmuLoadController(
     private fun applyVisibility() {
         if (danmuView == null) return
         setViewVisible(
-            DanmuSettingsState.config.open
+            DanmuHelper.isOpen()
                 && !temporarilyClosed
                 && (!TextUtils.isEmpty(danmuText) || pendingPrepare || danmuView.isPrepared)
         )
@@ -224,14 +223,14 @@ class DanmuLoadController(
         pendingPrepare = false
         val seq = loadSeq.incrementAndGet()
         startedSeq = -1
-        AppLog.i("echo-danmu load title: " + safeLog(danmuTitle) + ", episode: " + safeLog(danmuEpisode) + ", source: " + sourceSummary(danmu))
+        AppLog.i("echo-danmu load title: " + safeLog(danmuTitle) + ", episode: " + safeLog(danmuEpisode) + ", source: " + getSourceSummary(danmu))
         var worker = executor
         if (worker == null || worker.isShutdown) {
             worker = Executors.newSingleThreadExecutor()
             executor = worker
         }
         worker.execute {
-            val parser = DanmakuXmlParser(danmu) { seq != loadSeq.get() }
+            val parser = Parser(danmu) { seq != loadSeq.get() }
             if (seq != loadSeq.get()) return@execute
             val danmuCount = parser.getDanmuCount()
             AppLog.i("echo-danmu parsed count: $danmuCount")
@@ -251,7 +250,7 @@ class DanmuLoadController(
                     placeholderRetryCount = 0
                     view.prepare(parser, danmakuContext)
                     clearLoadCallback(seq)
-                    setViewVisible(DanmuSettingsState.config.open)
+                    setViewVisible(DanmuHelper.isOpen())
                     videoView?.startDanmuClock()
                     startIfReady(seq)
                     view.postDelayed({ startIfReady(seq) }, 300)
@@ -300,7 +299,7 @@ class DanmuLoadController(
             || !view.isPlaying
             || danmu == null
             || !danmu.isPrepared
-            || !DanmuSettingsState.config.open
+            || !DanmuHelper.isOpen()
         ) {
             return
         }
@@ -332,7 +331,7 @@ class DanmuLoadController(
         setViewVisible(false)
     }
 
-    private fun sourceSummary(danmu: String?): String {
+    private fun getSourceSummary(danmu: String?): String {
         if (danmu.isNullOrEmpty()) return ""
         if (danmu.startsWith("http") || danmu.startsWith("file")) return danmu
         return "inline xml length=" + danmu.length

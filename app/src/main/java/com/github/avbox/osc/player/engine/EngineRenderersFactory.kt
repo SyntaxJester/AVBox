@@ -14,9 +14,12 @@ import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.text.TextOutput
 import androidx.media3.exoplayer.video.MediaCodecVideoRenderer
 import androidx.media3.exoplayer.video.VideoRendererEventListener
-import com.github.avbox.osc.player.core.CodecPreferences
-import com.github.avbox.osc.player.core.VideoCodecObserver
+import com.github.avbox.osc.ad.audio.AdAudioFingerprintRuntime
+import com.github.avbox.osc.ad.audio.AdAudioTapProcessor
+import com.github.avbox.osc.player.VideoCodecObserver
 import com.github.avbox.osc.player.effect.ReplayableCacheVideoRenderer
+import com.github.avbox.osc.util.HawkConfig
+import com.github.avbox.osc.util.KV
 import com.github.avbox.osc.util.AppLog
 import java.lang.reflect.InvocationHandler
 import java.lang.reflect.InvocationTargetException
@@ -38,7 +41,7 @@ class EngineRenderersFactory(
     companion object {
 
         private val VIDEO_CODEC_SELECTOR = MediaCodecSelector { mimeType, requiresSecureDecoder, requiresTunnelingDecoder ->
-            val preferSoft = CodecPreferences.preferSoftwareDecode
+            val preferSoft = CodecPreferences.isPreferSoftwareDecode()
             val infos: List<MediaCodecInfo> =
                 (if (preferSoft) MediaCodecSelector.PREFER_SOFTWARE else MediaCodecSelector.DEFAULT)
                     .getDecoderInfos(mimeType, requiresSecureDecoder, requiresTunnelingDecoder)
@@ -108,6 +111,37 @@ class EngineRenderersFactory(
             eventListener,
             out,
         )
+
+        // 注入音频指纹处理器（仅 Exo 内核、开关开启且有规则时）
+        if (KV.get(HawkConfig.AD_AUDIO_FINGERPRINT_ENABLED, false)
+            && AdAudioFingerprintRuntime.hasRules()
+        ) {
+            // 查找 AudioSink（通常在 MediaCodecAudioRenderer 内部）
+            for (i in firstRendererIndex until out.size) {
+                val renderer = out[i]
+                if (renderer is MediaCodecAudioRenderer) {
+                    audioRenderer = renderer
+                    // 使用反射注入 AudioProcessor
+                    try {
+                        val tapProcessor = AdAudioTapProcessor()
+                        val processorField = MediaCodecAudioRenderer::class.java.getDeclaredField("audioProcessors")
+                        processorField.isAccessible = true
+                        val processors = processorField.get(renderer) as? java.util.List<*>
+                        if (processors != null) {
+                            val newList = processors.toMutableList()
+                            newList.add(tapProcessor)
+                            processorField.set(renderer, newList)
+                            AppLog.i("echo-player-audio-fingerprint: processor injected")
+                        }
+                    } catch (e: Throwable) {
+                        AppLog.e("echo-player-audio-fingerprint: inject failed: " + e.message)
+                    }
+                    AppLog.i("echo-player-audio-renderer: bound ${renderer.javaClass.simpleName}")
+                    return
+                }
+            }
+        }
+
         for (i in firstRendererIndex until out.size) {
             val renderer = out[i]
             if (renderer is MediaCodecAudioRenderer) {
@@ -178,7 +212,7 @@ class EngineRenderersFactory(
             out[i] = ReplayableCacheVideoRenderer(builder, lateThresholdToDropDecoderInputUs, videoCodecObserver)
             AppLog.i(
                 "echo-exo-video-renderer: replayable cache on, usesExoSelector=true " +
-                    "preferSoft=${CodecPreferences.preferSoftwareDecode}",
+                    "preferSoft=${CodecPreferences.isPreferSoftwareDecode()}",
             )
             return
         }

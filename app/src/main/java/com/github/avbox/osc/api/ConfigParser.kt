@@ -2,7 +2,7 @@ package com.github.avbox.osc.api
 
 import androidx.media3.common.util.UriUtil
 
-import com.github.avbox.osc.bean.SourceDepot
+import com.github.avbox.osc.bean.Depot
 import com.github.avbox.osc.bean.LiveSettingItem
 import com.github.avbox.osc.bean.SourceBean
 import com.github.avbox.osc.util.DefaultConfig
@@ -107,10 +107,14 @@ object ConfigParser {
             sb.key = siteKey
             sb.name = if (obj.has("name")) obj.get("name").asString.trim { it <= ' ' } else siteKey
             sb.type = obj.get("type").asInt
+            // 确保 HTML 类型的站点正确设置
+            if (obj.has("type") && obj.get("type").asInt == 6) {
+                sb.type = TYPE_HTML
+            }
             sb.api = normalizeLocalApi(obj.get("api").asString.trim { it <= ' ' })
-            sb.searchable = DefaultConfig.safeJsonInt(obj, "searchable", 1)
-            sb.quickSearch = DefaultConfig.safeJsonInt(obj, "quickSearch", 1)
-            sb.changeable = DefaultConfig.safeJsonInt(obj, "changeable", 1)
+            sb.setSearchable(DefaultConfig.safeJsonInt(obj, "searchable", 1))
+            sb.setQuickSearch(DefaultConfig.safeJsonInt(obj, "quickSearch", 1))
+            sb.setChangeable(DefaultConfig.safeJsonInt(obj, "changeable", 1))
             if (siteKey.startsWith("py_")) {
                 sb.filterable = 1
             } else {
@@ -119,10 +123,6 @@ object ConfigParser {
             sb.playerUrl = DefaultConfig.safeJsonString(obj, "playUrl", "")
             sb.ext = DefaultConfig.safeJsonString(obj, "ext", "")
             sb.jar = DefaultConfig.safeJsonString(obj, "jar", "")
-            sb.homePage = DefaultConfig.safeJsonString(obj, "homePage", "")
-            if (!sb.homePage.isNullOrEmpty()) {
-                sb.homePage = com.github.avbox.osc.util.HtmlUrl.normalize(sb.homePage).pageUrl
-            }
             sb.proxy = DefaultConfig.safeJsonString(obj, "proxy", "")
             sb.playerType = DefaultConfig.safeJsonInt(obj, "playerType", -1)
             sb.categories = DefaultConfig.safeJsonStringList(obj, "categories")
@@ -130,20 +130,10 @@ object ConfigParser {
             sb.clickSelector = DefaultConfig.safeJsonString(obj, "click", "")
             sb.style = DefaultConfig.safeJsonString(obj, "style", "")
             sb.icon = DefaultConfig.safeJsonString(obj, "icon", "")
-            sb.hide = DefaultConfig.safeJsonInt(obj, "hide", 0)
-            sb.indexs = DefaultConfig.safeJsonInt(obj, "indexs", 0)
-            sb.danmaku = DefaultConfig.safeJsonInt(obj, "danmaku", 1)
+            sb.setHide(DefaultConfig.safeJsonInt(obj, "hide", 0))
+            sb.setIndexs(DefaultConfig.safeJsonInt(obj, "indexs", 0))
+            sb.setDanmaku(DefaultConfig.safeJsonInt(obj, "danmaku", 1))
             sb.header = parseHeaderObject(obj, "header")
-            // 旧版 type 6（html 站点）统一迁移为内置 Csp_Nostr + 顶层 homePage。
-            // 我们自己是宿主：html 由内置 Csp 处理，不再保留 type 6 分支。
-            if (sb.type == 6) {
-                val page = com.github.avbox.osc.util.HtmlUrl.normalize(sb.api).pageUrl
-                if (page.isNotEmpty()) {
-                    sb.homePage = page
-                    sb.api = com.github.avbox.osc.spider.BuiltinSpiders.HTML_API
-                    sb.type = 3
-                }
-            }
             SiteExt.apply(sb)
             val extPreview = sb.ext
             AppLog.i("echo-site:" + sb.name + " icon:" + sb.icon
@@ -165,7 +155,7 @@ object ConfigParser {
             if (!isDepotJson(infoJson)) {
                 return apiLines
             }
-            for (item in SourceDepot.arrayFrom(infoJson.get("urls").asJsonArray)) {
+            for (item in Depot.arrayFrom(infoJson.get("urls").asJsonArray)) {
                 apiLines.add(HistoryHelper.buildApiLine(item.getName(), item.getUrl()))
             }
         } catch (ignored: Throwable) {
@@ -318,6 +308,8 @@ object ConfigParser {
         }
         return ConfigUrl(configUrl, key)
     }
+
+    const val TYPE_HTML = 6
 
     class ConfigUrl(@JvmField val url: String, @JvmField val key: String?)
 }

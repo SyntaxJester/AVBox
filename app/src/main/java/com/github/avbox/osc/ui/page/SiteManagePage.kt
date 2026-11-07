@@ -36,15 +36,14 @@ import com.github.avbox.osc.ui.components.AVBoxAlertDialog
 import com.github.avbox.osc.ui.components.AppTopBarScaffold
 import com.github.avbox.osc.ui.components.CapsuleSegmentedButton
 import com.github.avbox.osc.ui.components.DenseSegmentContentPadding
-import com.github.avbox.osc.ui.SiteCardShapeSingle
-import com.github.avbox.osc.ui.SiteKind
-import com.github.avbox.osc.ui.SiteSourceCard
-import com.github.avbox.osc.ui.siteKindOf
+import com.github.avbox.osc.ui.components.SiteCardShapeSingle
+import com.github.avbox.osc.ui.components.SiteKind
+import com.github.avbox.osc.ui.components.SiteSourceCard
+import com.github.avbox.osc.ui.components.siteKindOf
 import com.github.avbox.osc.ui.components.SegmentOption
 import com.github.avbox.osc.ui.components.TopBarActionBox
 import com.github.avbox.osc.util.LocalScriptSource
 import org.json.JSONObject
-import com.github.avbox.osc.ui.components.marqueeOnOverflow
 
 
 
@@ -94,17 +93,9 @@ fun SiteManageScreen(
     val visibleSites = sites.filter { filter == SiteKind.ALL || siteKindOf(it.api()) == filter }
     val visibleBac = bac.filter { filter == SiteKind.ALL || siteKindOf(it.api()) == filter }
 
-    // 页内任何操作都【不】立刻触发全局重载：那会重新载入订阅源并连带把当前页面顶掉，
-    // 表现就是"点一下分类/开关就退出站点管理"。只重读本地目录（很轻），
-    // 全局重载推迟到【离开本页】时补做一次，回到首页照样是最新数据。
-    var dirty by remember { mutableStateOf(false) }
-    val leave: () -> Unit = {
-        if (dirty) onReloadSource()
-        onBack()
-    }
     val refresh: () -> Unit = {
         reload++
-        dirty = true
+        onReloadSource()
     }
 
     AppTopBarScaffold(
@@ -119,7 +110,7 @@ fun SiteManageScreen(
             TopBarActionBox(
                 iconRes = R.drawable.ic_arrow_left,
                 contentDescription = "返回",
-                onClick = leave,
+                onClick = onBack,
             )
         },
     ) { topPad, _ ->
@@ -152,16 +143,10 @@ fun SiteManageScreen(
                 ) {
                     var changed = false
                     if (keepSel.isNotEmpty()) {
-                        changed = LocalScriptSource.reorder(
-                            dir, keepSel.toList(), true, false,
-                            visibleSites.map { it.key() }.toSet(),
-                        ) || changed
+                        changed = LocalScriptSource.reorder(dir, keepSel.toList(), true) || changed
                     }
                     if (goneSel.isNotEmpty()) {
-                        changed = LocalScriptSource.reorder(
-                            dir, goneSel.toList(), true, true,
-                            visibleBac.map { it.key() }.toSet(),
-                        ) || changed
+                        changed = LocalScriptSource.reorder(dir, goneSel.toList(), true, true) || changed
                     }
                     if (changed) refresh()
                 }
@@ -172,16 +157,10 @@ fun SiteManageScreen(
                 ) {
                     var changed = false
                     if (keepSel.isNotEmpty()) {
-                        changed = LocalScriptSource.reorder(
-                            dir, keepSel.toList(), false, false,
-                            visibleSites.map { it.key() }.toSet(),
-                        ) || changed
+                        changed = LocalScriptSource.reorder(dir, keepSel.toList(), false) || changed
                     }
                     if (goneSel.isNotEmpty()) {
-                        changed = LocalScriptSource.reorder(
-                            dir, goneSel.toList(), false, true,
-                            visibleBac.map { it.key() }.toSet(),
-                        ) || changed
+                        changed = LocalScriptSource.reorder(dir, goneSel.toList(), false, true) || changed
                     }
                     if (changed) refresh()
                 }
@@ -313,9 +292,7 @@ private fun ActionChip(
         Box(contentAlignment = Alignment.Center) {
             Text(
                 text,
-                modifier = Modifier
-                    .padding(horizontal = 6.dp, vertical = 8.dp)
-                    .marqueeOnOverflow(),
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
                 style = MaterialTheme.typography.labelMedium,
                 color = if (enabled) {
                     MaterialTheme.colorScheme.onSurfaceVariant

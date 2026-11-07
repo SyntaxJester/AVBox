@@ -9,7 +9,7 @@ interface CollectRepository {
 
     suspend fun isVodCollect(sourceKey: String?, vodId: String?): Boolean
 
-    suspend fun allVodCollect(): List<VodCollect>
+    suspend fun getAllVodCollect(): List<VodCollect>
 
     fun observeAll(): Flow<List<VodCollect>>
 
@@ -33,7 +33,7 @@ internal class RoomCollectRepository(
         return record != null
     }
 
-    override suspend fun allVodCollect(): List<VodCollect> = collects().getAll()
+    override suspend fun getAllVodCollect(): List<VodCollect> = collects().getAll()
 
     override fun observeAll(): Flow<List<VodCollect>> = collects().observeAll()
 

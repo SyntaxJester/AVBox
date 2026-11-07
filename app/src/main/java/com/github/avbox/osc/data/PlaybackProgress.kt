@@ -1,15 +1,14 @@
 package com.github.avbox.osc.data
 
-import com.github.avbox.osc.event.UiChange
-import com.github.avbox.osc.event.UiEvents
-
 import com.github.avbox.osc.bean.VodInfo
+import com.github.avbox.osc.event.RefreshEvent
 import com.github.avbox.osc.util.HistoryHelper
 import com.github.avbox.osc.util.KV
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import org.greenrobot.eventbus.EventBus
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -117,7 +116,7 @@ object PlaybackProgress {
 
     private fun markWatched(vod: VodInfo?, positionMs: Int) {
         if (vod == null) return
-        if (PlaybackPorts.ports?.isLiveMode() == true) return
+        if (PlaybackPorts.isLiveMode?.invoke() == true) return
         val token = key(vod.sourceKey, vod.id) + "#" + vod.playFlag + "#" + vod.playIndex
         if (token != sampleToken) {
             sampleToken = token
@@ -129,7 +128,7 @@ object PlaybackProgress {
         lastPosition = positionMs
         if (!shouldMarkWatched(advancedMs, token, watchedToken)) return
         watchedToken = token
-        UiEvents.post(UiChange.PlaybackStarted)
+        EventBus.getDefault().post(RefreshEvent(RefreshEvent.TYPE_PLAYBACK_STARTED))
     }
 
     private fun calcPercent(positionMs: Int, durationMs: Int): Int? {

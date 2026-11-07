@@ -1,7 +1,5 @@
 package com.github.avbox.osc.util
 
-import com.github.avbox.osc.util.AppLog
-
 import com.github.avbox.osc.bean.SourceBean
 
 import java.util.HashMap
@@ -21,7 +19,7 @@ object SiteExt {
 
     private fun overrides(): MutableMap<String, String> {
         return try {
-            KV.get(KVKeys.SITE_EXT_OVERRIDE, HashMap<String, String>())
+            KV.get(HawkConfig.SITE_EXT_OVERRIDE, HashMap<String, String>())
         } catch (th: Throwable) {
             AppLog.e(TAG, th)
             HashMap()
@@ -38,7 +36,7 @@ object SiteExt {
         if (key.isNullOrEmpty()) return
         val next = HashMap<String, String>(overrides())
         if (value.isEmpty()) next.remove(key) else next[key] = value
-        KV.put(KVKeys.SITE_EXT_OVERRIDE, next)
+        KV.put(HawkConfig.SITE_EXT_OVERRIDE, next)
         AppLog.i("$TAG: set $key -> $value")
     }
 

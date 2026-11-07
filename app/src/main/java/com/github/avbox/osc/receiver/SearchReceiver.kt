@@ -4,9 +4,11 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 
-import com.github.avbox.osc.ui.SearchActivity
+import com.github.avbox.osc.event.ServerEvent
+import com.github.avbox.osc.ui.activity.SearchActivity
 import com.github.avbox.osc.util.ActivityStack
 
+import org.greenrobot.eventbus.EventBus
 
 class SearchReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -14,6 +16,7 @@ class SearchReceiver : BroadcastReceiver() {
         if (action == intent.action && extras != null) {
             if (ActivityStack.getInstance().getActivity(SearchActivity::class.java) != null) {
                 ActivityStack.getInstance().backActivity(SearchActivity::class.java)
+                EventBus.getDefault().post(ServerEvent(ServerEvent.SERVER_SEARCH, extras.getString("title")))
             } else {
                 val newIntent = Intent(context, SearchActivity::class.java)
                 newIntent.putExtra("title", extras.getString("title"))

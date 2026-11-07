@@ -1,14 +1,18 @@
 package com.github.avbox.osc.util
 
-import com.github.avbox.osc.spider.BuiltinSpiders
-import com.github.avbox.osc.server.RemoteServer
-import com.github.avbox.osc.util.AppLog
-
 import org.json.JSONArray
+import com.github.avbox.osc.util.AppLog
+import com.github.avbox.osc.util.MD5
 import org.json.JSONObject
 
-import android.os.Environment
 import java.io.File
+
+// Android Kotlin 兼容的文件名工具
+private fun File.nameWithoutExtension(): String {
+    val name = this.name
+    val idx = name.lastIndexOf('.')
+    return if (idx <= 0) name else name.substring(0, idx)
+}
 
 /**
  * 本地脚本目录当订阅源：把目录里所有 .py / .js / .html 扫出来，生成一份站点配置。
@@ -71,20 +75,24 @@ object LocalScriptSource {
 
     private fun storeFile(dir: String): File = File(dir, STORE_FILE)
 
-    // 远程判定与本地路径换算统一收敛到 HtmlUrl，避免这里与 WebView 加载各判各的
-    private fun isRemote(api: String?): Boolean = HtmlUrl.isRemote(api)
+    private fun isRemote(api: String?): Boolean =
+        api != null && (api.startsWith("http://") || api.startsWith("https://"))
 
     private fun isFileBacked(api: String?): Boolean = !isRemote(api)
 
-    private fun localPathOf(api: String?): String? = HtmlUrl.localPathOf(api)
+    private fun localPathOf(api: String?): String? {
+        if (api == null) return null
+        if (api.startsWith("file://")) return api.substring("file://".length)
+        if (api.startsWith("clan://localhost/")) return api.substring("clan://localhost/".length)
+        return if (api.startsWith("/")) api else null
+    }
 
     private fun extOf(file: File): String {
         val n = file.name.lowercase()
         return EXTS.firstOrNull { n.endsWith(it) } ?: ""
     }
 
-    /** 全部走 type 3：py / js 走脚本通道，html 走宿主内置 Csp_Nostr。 */
-    private fun typeOf(ext: String): Int = 3
+    private fun typeOf(ext: String): Int = if (ext == ".py" || ext == ".js") 3 else 6
 
     private fun labelOf(ext: String): String = when (ext) {
         ".py" -> "[py]"
@@ -115,42 +123,15 @@ object LocalScriptSource {
         val label = labelOf(ext)
         val o = JSONObject()
         o.put("key", keyOf(root, file))
-        o.put("name", file.nameWithoutExtension + label)
+        o.put("name", file.name.substringBeforeLast('.') + label)
         o.put("type", typeOf(ext))
-        if (ext == ".html" || ext == ".htm") {
-            // html 站点：走宿主内置 Csp，页面地址放【顶层 homePage】
-            o.put("api", BuiltinSpiders.HTML_API)
-            o.put("homePage", fileHomePage(file))
-        } else {
-            o.put("api", "file://" + file.absolutePath)
-        }
+        o.put("api", "file://" + file.absolutePath)
         o.put("ext", "")
         o.put("proxy", proxyOf(root, file))
         o.put("searchable", 1)
         o.put("changeable", 1)
         o.put("quickSearch", 1)
         return o
-    }
-
-    /** 本地 html 页面地址：统一由 HtmlUrl 生成（端口按运行时实际值，不写死 9978）。 */
-    private fun fileHomePage(file: File): String = HtmlUrl.localPage(file)
-
-    /** html 条目背后的本地文件路径，用于判断文件还在不在 */
-    private fun htmlLocalPath(o: JSONObject): String? =
-        HtmlUrl.localPathOf(o.optString("homePage"))
-
-    /** 老数据迁移：type 6 一律换成 type 3 + 内置 Csp_Nostr + 顶层 homePage */
-    private fun migrate(o: JSONObject): Boolean {
-        val api = o.optString("api")
-        var home = o.optString("homePage")
-        val isHtmlFile = api.endsWith(".html", true) || api.endsWith(".htm", true)
-        if (home.isBlank() && isHtmlFile) home = HtmlUrl.normalize(api).pageUrl
-        if (home.isBlank() && HtmlUrl.isRemote(api)) home = HtmlUrl.normalize(api).pageUrl
-        if (home.isBlank()) return false
-        o.put("type", 3)
-        o.put("api", BuiltinSpiders.HTML_API)
-        o.put("homePage", home)
-        return true
     }
 
     private fun readStore(dir: String): JSONObject {
@@ -217,11 +198,6 @@ object LocalScriptSource {
         for (o in sites) liveKeys.add(o.optString("key"))
         for (o in bac) liveKeys.add(o.optString("key"))
 
-        // 老数据迁移：type 6（旧 html 站点）统一换成 type 3 + Csp_Nostr + 顶层 homePage
-        var migrated = false
-        for (o in sites) if (migrate(o)) migrated = true
-        for (o in bac) if (migrate(o)) migrated = true
-
         // 规则 4：两边都清掉已不存在的本地文件条目
         purgeGone(sites, foundPaths)
         purgeGone(bac, foundPaths)
@@ -236,7 +212,7 @@ object LocalScriptSource {
             changed = true
         }
 
-        if (changed || migrated) save(dir, sites, bac)
+        if (changed) save(dir, sites, bac)
         return Pair(sites, bac)
     }
 
@@ -244,11 +220,8 @@ object LocalScriptSource {
         val it = list.iterator()
         while (it.hasNext()) {
             val o = it.next()
-            val api = o.optString("api")
-            val home = o.optString("homePage")
-            // 远程条目（含远程 html 页面）永不自动删除
-            if (isRemote(api) || isRemote(home)) continue
-            val p = localPathOf(api) ?: htmlLocalPath(o) ?: continue
+            if (!isFileBacked(o.optString("api"))) continue
+            val p = localPathOf(o.optString("api")) ?: continue
             if (!foundPaths.containsKey(p)) it.remove()
         }
     }
@@ -299,10 +272,8 @@ object LocalScriptSource {
         val o = JSONObject()
         o.put("key", (MD5.encode(url) ?: url).take(12))
         o.put("name", uniqueName(name.ifBlank { url } + "[url]", taken))
-        o.put("type", 3)
-        o.put("api", BuiltinSpiders.HTML_API)
-        // 粘贴的 url 同样过一遍归一化：三斜杠笔误、file://、回环 /file/ 都在这里修好
-        o.put("homePage", HtmlUrl.normalize(url).pageUrl)
+        o.put("type", 6)
+        o.put("api", url)
         o.put("ext", "")
         o.put("proxy", proxy)
         o.put("searchable", 1)
@@ -343,53 +314,11 @@ object LocalScriptSource {
         return true
     }
 
-    /**
-     * 排序：把 keys 里的条目整体上移/下移一位；inBac=true 时作用于回收站。
-     *
-     * visibleKeys 非空表示当前处于某个分类筛选下。此时显示的是全量列表的【子集】，
-     * 若仍按全量相邻交换，可见的相邻两项在全量里往往隔着别的分类项，换完屏幕上的
-     * 顺序纹丝不动 —— 就是"切换分类后上下移动无效"的错觉来源。
-     * 分类模式下改为在可见序列内与相邻可见项交换，再写回全量对应的位置。
-     */
-    fun reorder(
-        dir: String,
-        keys: Collection<String>,
-        up: Boolean,
-        inBac: Boolean = false,
-        visibleKeys: Set<String>? = null,
-    ): Boolean {
+    /** 排序：把 keys 里的条目整体上移/下移一位；inBac=true 时作用于回收站 */
+    fun reorder(dir: String, keys: Collection<String>, up: Boolean, inBac: Boolean = false): Boolean {
         if (keys.isEmpty()) return false
         val (sites, bac) = load(dir)
         val list = if (inBac) bac else sites
-        if (visibleKeys != null) {
-            val pos = (0 until list.size).filter { visibleKeys.contains(list[it].optString("key")) }
-            if (pos.isEmpty()) return false
-            val vis = ArrayList(pos.map { list[it] })
-            var changed = false
-            if (up) {
-                for (i in 1 until vis.size) {
-                    if (keys.contains(vis[i].optString("key")) &&
-                        !keys.contains(vis[i - 1].optString("key"))
-                    ) {
-                        val t = vis[i]; vis[i] = vis[i - 1]; vis[i - 1] = t
-                        changed = true
-                    }
-                }
-            } else {
-                for (i in vis.size - 2 downTo 0) {
-                    if (keys.contains(vis[i].optString("key")) &&
-                        !keys.contains(vis[i + 1].optString("key"))
-                    ) {
-                        val t = vis[i]; vis[i] = vis[i + 1]; vis[i + 1] = t
-                        changed = true
-                    }
-                }
-            }
-            if (!changed) return false
-            for ((k, p) in pos.withIndex()) list[p] = vis[k]
-            save(dir, sites, bac)
-            return true
-        }
         val idx = ArrayList<Int>()
         for (i in list.indices) if (keys.contains(list[i].optString("key"))) idx.add(i)
         if (idx.isEmpty()) return false

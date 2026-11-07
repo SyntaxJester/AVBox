@@ -77,7 +77,7 @@ class Style {
         private var styleCounter: Int = 0
 
         @JvmStatic
-        fun rgbValue(format: String, value: String): String? {
+        fun getRGBValue(format: String, value: String): String? {
             var color: String? = null
             if (format.equals("name", ignoreCase = true)) {
                 if (value == "transparent")

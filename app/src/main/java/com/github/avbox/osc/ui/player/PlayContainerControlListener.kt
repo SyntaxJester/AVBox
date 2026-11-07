@@ -1,30 +1,30 @@
 package com.github.avbox.osc.ui.player
 
 import android.text.TextUtils
+import com.github.avbox.osc.R
 import com.github.avbox.osc.api.ApiConfig
 import com.github.avbox.osc.bean.ParseBean
 import com.github.avbox.osc.data.WatchProgressStore
+import com.github.avbox.osc.event.RefreshEvent
 import com.github.avbox.osc.player.controller.VodControlListener
 import com.github.avbox.osc.player.state.DanmuSettingSheetState
-import com.github.avbox.osc.util.DanmuSettingsState
+import com.github.avbox.osc.util.DanmuHelper
 import com.github.avbox.osc.util.AppLog
-import org.json.JSONObject
+import org.greenrobot.eventbus.EventBus
 import java.util.HashMap
 
 class PlayContainerControlListener(private val container: PlayContainer) : VodControlListener {
 
     override fun showDanmuSetting() {
         if (!container.isAttached()) return
-        container.playerController.getUiState().openDanmuSettingSheet(
+        container.mController.getUiState().danmuSettingSheet =
             DanmuSettingSheetState(
                 onOpenSearch = { container.openDanmuSearchSheet() },
                 onReset = {
-                    DanmuSettingsState.reset()
+                    DanmuHelper.reset()
                     container.applyDanmuSettings(false)
                 },
-                onSettingsApplied = { forColor -> container.applyDanmuSettings(forColor) },
-            ),
-        )
+            )
     }
 
     override fun toggleDanmu(): Boolean {
@@ -33,7 +33,7 @@ class PlayContainerControlListener(private val container: PlayContainer) : VodCo
     }
 
     override fun showEpisodes() {
-        container.pageHostRef?.showEpisodeSheet()
+        container.mPageHost?.showEpisodeSheet()
     }
 
     override fun searchDanmuUi(longClick: Boolean) {
@@ -64,20 +64,22 @@ class PlayContainerControlListener(private val container: PlayContainer) : VodCo
     }
 
     override fun changeParse(pb: ParseBean) {
-        container.scheduler.requestParse(pb)
+        container.scheduler.resetAutoRetryState()
+        container.scheduler.clearTriedLines()
+        container.scheduler.doParse(pb)
     }
 
-    override fun updatePlayerCfg(
-        suppressAutoSwitch: Boolean,
-        suppressDecodeFallback: Boolean,
-        mutate: (JSONObject) -> Unit,
-    ) {
-        container.scheduler.updatePlayerCfg(mutate, suppressAutoSwitch, suppressDecodeFallback)
+    override fun updatePlayerCfg() {
+        val persistCfg = container.scheduler.playerCfgForPersist() ?: return
+        container.scheduler.vod()?.playerCfg = persistCfg.toString()
+        EventBus.getDefault().post(RefreshEvent(RefreshEvent.TYPE_REFRESH, persistCfg))
     }
 
     override fun replay(replay: Boolean) {
         container.reviveEngineIfReleased()
-        container.scheduler.prepareUserReplay()
+        container.scheduler.resetAutoRetryState()
+        container.scheduler.clearTriedLines()
+        container.scheduler.setPlaybackStarted(false)
         if (replay) {
             container.playViaScheduler(true)
         } else {
@@ -85,8 +87,9 @@ class PlayContainerControlListener(private val container: PlayContainer) : VodCo
         }
     }
 
-    override fun onNearEndProgress(positionMs: Long, durationMs: Long) {
-        container.scheduler.onNearEndProgress(positionMs, durationMs)
+    override fun errReplay() {
+        container.scheduler.rememberErrorHttpStatus()
+        container.errorWithRetry(container.context.getString(R.string.player_error_play), false, true)
     }
 
     override fun closeSubtitles() {
@@ -111,7 +114,7 @@ class PlayContainerControlListener(private val container: PlayContainer) : VodCo
 
     override fun prepared() {
         container.initSubtitleView()
-        container.kernelView?.prepared()
+        container.mVideoView?.prepared()
         container.startDanmuIfReady()
     }
 
@@ -125,10 +128,18 @@ class PlayContainerControlListener(private val container: PlayContainer) : VodCo
     }
 
     override fun onM3u8ProxyUrl(proxyUrl: String, sourceUrl: String) {
-        container.scheduler.onM3u8ProxyResolved(proxyUrl, sourceUrl)
+        container.scheduler.setM3u8Urls(proxyUrl, sourceUrl)
     }
 
     override fun clickCast() {
         container.showCastDialog()
+    }
+
+    override fun setAllowSwitchPlayer(isAllow: Boolean) {
+        container.scheduler.setAllowSwitchPlayer(isAllow)
+    }
+
+    override fun setAllowDecodeFallback(isAllow: Boolean) {
+        container.scheduler.setAllowDecodeFallback(isAllow)
     }
 }

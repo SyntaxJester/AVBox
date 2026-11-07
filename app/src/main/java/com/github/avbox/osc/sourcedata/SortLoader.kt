@@ -1,12 +1,12 @@
 package com.github.avbox.osc.sourcedata
 
-import com.github.catvod.crawler.SpiderReaper
 import com.github.avbox.osc.api.ApiConfig
 import com.github.avbox.osc.bean.AbsSortXml
 import com.github.avbox.osc.bean.Movie
 import com.github.avbox.osc.bean.SourceBean
 import com.github.avbox.osc.player.thirdparty.RemoteTVBox
 import com.github.avbox.osc.util.BoundedCall
+import com.github.avbox.osc.util.SpiderReaper
 import com.github.avbox.osc.util.AppLog
 import com.google.gson.Gson
 import kotlinx.coroutines.CancellationException
@@ -42,8 +42,6 @@ class SortLoader(
             synchronized(sortCache) {
                 sortCache[sourceKey] = sortXml
             }
-            // 落到磁盘，供下次冷启动/切源时先渲染出首屏
-            SortDiskCache.save(SortDiskCache.keyOf(sourceKey), sortXml)
         }
     }
 
@@ -126,38 +124,27 @@ class SortLoader(
                     return
                 }
             }
-
-            // 内存没命中（冷启动 / 刚切订阅源）：先用磁盘快照把首屏铺出来，
-            // 再继续往下走真实请求，拿到后覆盖。注意这里不写回内存缓存，
-            // 否则后续 getSort 会一直命中快照、永远不刷新。
-            val snapshot = withContext(Dispatchers.IO) {
-                SortDiskCache.load(SortDiskCache.keyOf(sourceKey))
-            }
-            if (snapshot != null && !snapshot.videoList.isNullOrEmpty()) {
-                attachSortSource(sourceKey, snapshot)
-                postSortResult(sourceKey, snapshot)
-            }
         }
 
         val type = sourceBean.type
         if (type == 3) {
-            sortFromSpider(sourceKey, sourceBean, withRec)
+            getSortFromSpider(sourceKey, sourceBean, withRec)
         } else if (type == 0 || type == 1) {
-            sortFromApi(sourceKey, sourceBean, withRec)
+            getSortFromApi(sourceKey, sourceBean, withRec)
         } else if (type == 4) {
-            sortFromExtendedApi(sourceKey, sourceBean)
+            getSortFromExtendedApi(sourceKey, sourceBean)
         } else {
             postSortResult(sourceKey, null)
         }
     }
 
-    private suspend fun sortFromSpider(sourceKey: String, sourceBean: SourceBean, withRec: Boolean) {
+    private suspend fun getSortFromSpider(sourceKey: String, sourceBean: SourceBean, withRec: Boolean) {
         val sortJson = withContext(Dispatchers.IO) {
             BoundedCall.call(Callable<String> {
                 val sp = ApiConfig.get().getCSP(sourceBean)
                 val json = SpiderReaper.track(sp) { sp.homeContent(true) }
                 json
-            }, sourceBean.playTimeoutSeconds() * 1000L, "echo--getSort--" + sourceBean.key)
+            }, sourceBean.getPlayTimeoutSeconds() * 1000L, "echo--getSort--" + sourceBean.key)
         }
         if (sortJson == null) {
             AppLog.i("echo--getSort-spider-null:$sourceKey")
@@ -182,13 +169,13 @@ class SortLoader(
             postSortResult(sourceKey, sortXml)
             cacheSort(sourceKey, sortXml)
         } else {
-            sortXml.videoList = listLoader.homeRecList(sourceBean, null)
+            sortXml.videoList = listLoader.getHomeRecList(sourceBean, null)
             postSortResult(sourceKey, sortXml)
             cacheSort(sourceKey, sortXml)
         }
     }
 
-    private suspend fun sortFromApi(sourceKey: String, sourceBean: SourceBean, withRec: Boolean) {
+    private suspend fun getSortFromApi(sourceKey: String, sourceBean: SourceBean, withRec: Boolean) {
         val type = sourceBean.type
         try {
             val body = SourceHelper.siteGet(sourceBean) {}
@@ -212,7 +199,7 @@ class SortLoader(
                 for (vod in recVideoList) {
                     ids.add(vod.id)
                 }
-                sortXml.videoList = listLoader.homeRecList(sourceBean, ids)
+                sortXml.videoList = listLoader.getHomeRecList(sourceBean, ids)
                 postSortResult(sourceKey, sortXml)
                 cacheSort(sourceKey, sortXml)
             } else if (sortXml.classes != null) {
@@ -231,9 +218,9 @@ class SortLoader(
         }
     }
 
-    private suspend fun sortFromExtendedApi(sourceKey: String, sourceBean: SourceBean) {
+    private suspend fun getSortFromExtendedApi(sourceKey: String, sourceBean: SourceBean) {
         val extend = withContext(Dispatchers.IO) {
-            SourceHelper.getFixUrl(extendCache, gson, sourceBean.ext, sourceBean.playTimeoutSeconds().toLong())
+            SourceHelper.getFixUrl(extendCache, gson, sourceBean.ext, sourceBean.getPlayTimeoutSeconds().toLong())
         }
         if (URLEncoder.encode(extend).length < 1000) {
             try {
@@ -255,7 +242,7 @@ class SortLoader(
                     postSortResult(sourceKey, sortXml)
                     cacheSort(sourceKey, sortXml)
                 } else {
-                    sortXml.videoList = listLoader.homeRecList(sourceBean, null)
+                    sortXml.videoList = listLoader.getHomeRecList(sourceBean, null)
                     postSortResult(sourceKey, sortXml)
                     cacheSort(sourceKey, sortXml)
                 }

@@ -58,7 +58,7 @@ object PlayerUtils {
     @JvmStatic
     fun getScreenWidth(context: Context, isIncludeNav: Boolean): Int {
         return if (isIncludeNav) {
-            context.resources.displayMetrics.widthPixels + navigationBarHeight(context)
+            context.resources.displayMetrics.widthPixels + getNavigationBarHeight(context)
         } else {
             context.resources.displayMetrics.widthPixels
         }
@@ -67,13 +67,13 @@ object PlayerUtils {
     @JvmStatic
     fun getScreenHeight(context: Context, isIncludeNav: Boolean): Int {
         return if (isIncludeNav) {
-            context.resources.displayMetrics.heightPixels + navigationBarHeight(context)
+            context.resources.displayMetrics.heightPixels + getNavigationBarHeight(context)
         } else {
             context.resources.displayMetrics.heightPixels
         }
     }
 
-    private fun navigationBarHeight(context: Context): Int {
+    private fun getNavigationBarHeight(context: Context): Int {
         if (!hasNavigationBar(context)) return 0
         val resources = context.resources
         val resourceId = resources.getIdentifier("navigation_bar_height", "dimen", "android")

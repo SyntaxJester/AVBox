@@ -27,7 +27,7 @@ package com.github.avbox.osc.subtitle
 
 import com.github.avbox.osc.subtitle.model.Subtitle
 
-import com.github.avbox.osc.player.core.KernelPlayer
+import com.github.avbox.osc.player.KernelPlayer
 
 interface SubtitleEngine {
 

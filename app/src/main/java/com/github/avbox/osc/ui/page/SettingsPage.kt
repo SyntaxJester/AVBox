@@ -2,12 +2,6 @@
 
 package com.github.avbox.osc.ui.page
 
-import com.github.avbox.osc.util.HistoryMerge
-
-import com.github.avbox.osc.util.MusicSettings
-
-import androidx.compose.ui.unit.Dp
-
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -40,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
@@ -48,11 +43,12 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.github.avbox.osc.R
 import com.github.avbox.osc.io.FileUtils
-import com.github.avbox.osc.net.HttpClients
-import com.github.avbox.osc.ui.ConfigManageActivity
-import com.github.avbox.osc.ui.PlaySettingsActivity
-import com.github.avbox.osc.ui.PreferenceSettingsActivity
-import com.github.avbox.osc.ui.ThemeSettingsActivity
+import com.github.avbox.osc.net.OkGoHelper
+import com.github.avbox.osc.player.effect.anime4k.Anime4kTier
+import com.github.avbox.osc.ui.activity.ConfigManageActivity
+import com.github.avbox.osc.ui.activity.PlaySettingsActivity
+import com.github.avbox.osc.ui.activity.PreferenceSettingsActivity
+import com.github.avbox.osc.ui.activity.ThemeSettingsActivity
 import com.github.avbox.osc.ui.components.AVBoxAlertDialog
 import com.github.avbox.osc.ui.components.AVBoxBottomSheet
 import com.github.avbox.osc.ui.components.AppTopBarScaffold
@@ -62,19 +58,17 @@ import com.github.avbox.osc.ui.components.SettingsCardPosition
 import com.github.avbox.osc.ui.components.SettingsGroup
 import com.github.avbox.osc.ui.components.SettingsOptionMenuRow
 import com.github.avbox.osc.ui.components.SettingsRow
-import com.github.avbox.osc.ui.settings.UiSettingsState
 import com.github.avbox.osc.util.DefaultConfig
-import com.github.avbox.osc.util.SiteProxy
+import com.github.avbox.osc.util.HawkConfig
 import com.github.avbox.osc.util.HistoryHelper
-import com.github.avbox.osc.util.SearchSettingsState
+import com.github.avbox.osc.util.HistoryMerge
+import com.github.avbox.osc.util.KV
+import com.github.avbox.osc.util.MusicSettings
 import com.github.avbox.osc.util.SpiderStorageNotice
-import com.github.avbox.osc.api.TmdbPoster
+import com.github.avbox.osc.util.TmdbPoster
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import com.github.avbox.osc.util.KV
-import com.github.avbox.osc.util.KVKeys
-import com.github.avbox.osc.player.effect.anime4k.Anime4kTier
 
 private const val CACHE_SIZE_REFRESH_MIN_INTERVAL_MS = 60_000L
 
@@ -98,8 +92,13 @@ data class SettingsState(
     val collectColumns: Int,
     val danmuOpen: Boolean,
     val danmuApi: String,
-    val proxyUrl: String,
     val defaultLoadLive: Boolean,
+    val adBlockEnabled: Boolean,
+    val adAudioFingerprintEnabled: Boolean,
+    val mediaBadgesShow: Boolean,
+    val mediaBadgesDisplayMode: Int,
+    val mediaBadgesLinkMode: Int,
+    val mediaBadgesCustomLink: String,
     val historyNumIndex: Int,
     val historyMerge: Boolean,
     val searchThreads: Int,
@@ -109,7 +108,6 @@ data class SettingsState(
     val preloadDuration: Int,
     val playCache: Boolean,
     val exoCacheSizeMb: Int,
-    val autoLandscape: Boolean,
     val dohIndex: Int,
     val cacheSizeText: String = "",
 )
@@ -127,13 +125,11 @@ class SettingsViewModel : ViewModel() {
     val state: androidx.compose.runtime.State<SettingsState> = _state
 
     fun refresh() {
-        UiSettingsState.reload()
         _state.value = loadState()
         refreshCacheSize()
     }
 
     fun refreshState() {
-        UiSettingsState.reload()
         _state.value = loadState()
     }
 
@@ -150,6 +146,20 @@ class SettingsViewModel : ViewModel() {
         refreshCacheSize()
     }
 
+    fun <T> put(key: String, value: T) {
+        KV.put(key, value)
+        _state.value = _state.value.copy(
+            mediaBadgesShow = if (key == HawkConfig.MEDIA_BADGES_SHOW) (value as? Boolean) ?: _state.value.mediaBadgesShow else _state.value.mediaBadgesShow,
+            mediaBadgesDisplayMode = if (key == HawkConfig.MEDIA_BADGES_DISPLAY_MODE) (value as? Int) ?: _state.value.mediaBadgesDisplayMode else _state.value.mediaBadgesDisplayMode,
+            mediaBadgesLinkMode = if (key == HawkConfig.MEDIA_BADGES_LINK_MODE) (value as? Int) ?: _state.value.mediaBadgesLinkMode else _state.value.mediaBadgesLinkMode,
+            mediaBadgesCustomLink = if (key == HawkConfig.MEDIA_BADGES_CUSTOM_LINK) (value as? String) ?: _state.value.mediaBadgesCustomLink else _state.value.mediaBadgesCustomLink,
+        )
+        if (key != HawkConfig.MEDIA_BADGES_SHOW && key != HawkConfig.MEDIA_BADGES_DISPLAY_MODE &&
+            key != HawkConfig.MEDIA_BADGES_LINK_MODE && key != HawkConfig.MEDIA_BADGES_CUSTOM_LINK) {
+            refresh()
+        }
+    }
+
     fun clearCache(onCleared: () -> Unit = {}) {
         viewModelScope.launch {
             val text = withContext(Dispatchers.IO) {
@@ -163,7 +173,7 @@ class SettingsViewModel : ViewModel() {
     }
 
     private fun cacheSizeText(): String =
-        FileUtils.formatCacheSize(FileUtils.cacheSize())
+        FileUtils.formatCacheSize(FileUtils.getCacheSize())
 
     private fun applyCacheSizeText(text: String) {
         if (text != cacheSizeText) {
@@ -173,38 +183,42 @@ class SettingsViewModel : ViewModel() {
     }
 
     private fun loadState(): SettingsState = SettingsState(
-        playType = KV.get(KVKeys.PLAY_TYPE, 2),
-        playRender = KV.get(KVKeys.PLAY_RENDER, 1),
-        playScale = KV.get(KVKeys.PLAY_SCALE, 0),
-        exoDecode = KV.get(KVKeys.EXO_DECODE, "硬解码"), // i18n: keep
+        playType = KV.get(HawkConfig.PLAY_TYPE, 2),
+        playRender = KV.get(HawkConfig.PLAY_RENDER, 1),
+        playScale = KV.get(HawkConfig.PLAY_SCALE, 0),
+        exoDecode = KV.get(HawkConfig.EXO_DECODE, "硬解码"), // i18n: keep
         anime4kTier = Anime4kTier.current(),
-        kernelPrewarm = KV.get(KVKeys.KERNEL_PREWARM, KVKeys.KERNEL_PREWARM_DEFAULT),
-        playTunnel = KV.get(KVKeys.PLAY_TUNNEL, false),
-        preferAac = KV.get(KVKeys.PLAY_PREFER_AAC, false),
+        kernelPrewarm = KV.get(HawkConfig.KERNEL_PREWARM, HawkConfig.KERNEL_PREWARM_DEFAULT),
+        playTunnel = KV.get(HawkConfig.PLAY_TUNNEL, false),
+        preferAac = KV.get(HawkConfig.PLAY_PREFER_AAC, false),
         musicPlayerPage = MusicSettings.autoOpenPage(),
-        autoSwitchLine = KV.get(KVKeys.AUTO_SWITCH_LINE, KVKeys.AUTO_SWITCH_LINE_DEFAULT),
-        m3u8Purify = KV.get(KVKeys.M3U8_PURIFY, false),
-        incognito = KV.get(KVKeys.INCOGNITO, false),
-        hideStatusBar = KV.get(KVKeys.HIDE_STATUS_BAR, false),
-        gestureControlDisabled = KV.get(KVKeys.GESTURE_CONTROL_DISABLED, false),
-        navAnimationDisabled = KV.get(KVKeys.NAV_ANIMATION_DISABLED, false),
-        navLiveHidden = KV.get(KVKeys.NAV_LIVE_HIDDEN, false),
-        collectColumns = KV.get(KVKeys.COLLECT_COLUMNS, 3),
-        danmuOpen = KV.get(KVKeys.DANMU_OPEN, true),
-        danmuApi = KV.get(KVKeys.DANMU_API, ""),
-        proxyUrl = SiteProxy.configuredUrl(),
-        defaultLoadLive = KV.get(KVKeys.DEFAULT_LOAD_LIVE, false),
-        historyNumIndex = KV.get(KVKeys.HISTORY_NUM, 0),
+        autoSwitchLine = KV.get(HawkConfig.AUTO_SWITCH_LINE, HawkConfig.AUTO_SWITCH_LINE_DEFAULT),
+        m3u8Purify = KV.get(HawkConfig.M3U8_PURIFY, false),
+        incognito = KV.get(HawkConfig.INCOGNITO, false),
+        hideStatusBar = KV.get(HawkConfig.HIDE_STATUS_BAR, false),
+        gestureControlDisabled = KV.get(HawkConfig.GESTURE_CONTROL_DISABLED, false),
+        navAnimationDisabled = KV.get(HawkConfig.NAV_ANIMATION_DISABLED, false),
+        navLiveHidden = KV.get(HawkConfig.NAV_LIVE_HIDDEN, false),
+        collectColumns = KV.get(HawkConfig.COLLECT_COLUMNS, 3),
+        danmuOpen = KV.get(HawkConfig.DANMU_OPEN, true),
+        danmuApi = KV.get(HawkConfig.DANMU_API, ""),
+        defaultLoadLive = KV.get(HawkConfig.DEFAULT_LOAD_LIVE, false),
+        historyNumIndex = KV.get(HawkConfig.HISTORY_NUM, 0),
         historyMerge = HistoryMerge.isEnabled(),
-        searchThreads = KV.get(KVKeys.SEARCH_THREADS, KVKeys.SEARCH_THREADS_DEFAULT),
-        longPressSpeed = KV.get(KVKeys.LONG_PRESS_SPEED, KVKeys.LONG_PRESS_SPEED_DEFAULT),
-        bufferTimes = KV.get(KVKeys.BUFFER_TIMES, KVKeys.BUFFER_TIMES_DEFAULT),
-        preloadNextEpisode = KV.get(KVKeys.PRELOAD_NEXT_EPISODE, false),
-        preloadDuration = KV.get(KVKeys.PRELOAD_DURATION, KVKeys.PRELOAD_DURATION_DEFAULT),
-        playCache = KV.get(KVKeys.PLAY_CACHE, false),
-        exoCacheSizeMb = KV.get(KVKeys.EXO_CACHE_SIZE_MB, KVKeys.EXO_CACHE_SIZE_MB_DEFAULT),
-        autoLandscape = KV.get(KVKeys.DETAIL_PAGE_PLAY, KVKeys.DETAIL_PAGE_PLAY_DEFAULT),
-        dohIndex = KV.get(KVKeys.DOH_URL, 0),
+        searchThreads = KV.get(HawkConfig.SEARCH_THREADS, HawkConfig.SEARCH_THREADS_DEFAULT),
+        longPressSpeed = KV.get(HawkConfig.LONG_PRESS_SPEED, HawkConfig.LONG_PRESS_SPEED_DEFAULT),
+        bufferTimes = KV.get(HawkConfig.BUFFER_TIMES, HawkConfig.BUFFER_TIMES_DEFAULT),
+        preloadNextEpisode = KV.get(HawkConfig.PRELOAD_NEXT_EPISODE, false),
+        preloadDuration = KV.get(HawkConfig.PRELOAD_DURATION, HawkConfig.PRELOAD_DURATION_DEFAULT),
+        playCache = KV.get(HawkConfig.PLAY_CACHE, false),
+        adBlockEnabled = KV.get(HawkConfig.AD_BLOCK_ENABLED, true),
+        adAudioFingerprintEnabled = KV.get(HawkConfig.AD_AUDIO_FINGERPRINT_ENABLED, false),
+        mediaBadgesShow = KV.get(HawkConfig.MEDIA_BADGES_SHOW, true),
+        mediaBadgesDisplayMode = KV.get(HawkConfig.MEDIA_BADGES_DISPLAY_MODE, 0),
+        mediaBadgesLinkMode = KV.get(HawkConfig.MEDIA_BADGES_LINK_MODE, 0),
+        mediaBadgesCustomLink = KV.get(HawkConfig.MEDIA_BADGES_CUSTOM_LINK, ""),
+        exoCacheSizeMb = KV.get(HawkConfig.EXO_CACHE_SIZE_MB, HawkConfig.EXO_CACHE_SIZE_MB_DEFAULT),
+        dohIndex = KV.get(HawkConfig.DOH_URL, 0),
         cacheSizeText = cacheSizeText,
     )
 }
@@ -222,7 +236,7 @@ fun SettingsPage(
         vm.refreshCacheSizeIfStale()
     }
     val context = LocalContext.current
-    val versionName = remember { DefaultConfig.appVersionName(context) ?: "" }
+    val versionName = remember { DefaultConfig.getAppVersionName(context) ?: "" }
     var aboutSheet by remember { mutableStateOf(false) }
 
     val listState = rememberScrollState()
@@ -286,18 +300,17 @@ fun SettingsPage(
 
             SettingsGroup(title = null) {
                 SettingsCard(SettingsCardPosition.FIRST) {
-                    val uiConfig = UiSettingsState.config
                     SettingsOptionMenuRow(
                         title = stringResource(R.string.settings_default_page),
                         subtitle = stringResource(R.string.settings_default_page_subtitle),
                         iconRes = R.drawable.ic_settings_start,
-                        valueText = stringResource(if (uiConfig.defaultLoadLive) R.string.common_live else R.string.common_vod),
+                        valueText = stringResource(if (state.defaultLoadLive) R.string.common_live else R.string.common_vod),
                         options = listOf(
                             stringResource(R.string.common_vod),
                             stringResource(R.string.common_live),
                         ),
-                        selectedIndex = if (uiConfig.defaultLoadLive) 1 else 0,
-                        onSelect = { idx -> UiSettingsState.defaultLoadLive = idx == 1 },
+                        selectedIndex = if (state.defaultLoadLive) 1 else 0,
+                        onSelect = { idx -> vm.put(HawkConfig.DEFAULT_LOAD_LIVE, idx == 1) },
                     )
                 }
                 SettingsCard(SettingsCardPosition.MIDDLE) {
@@ -307,13 +320,13 @@ fun SettingsPage(
                         iconRes = R.drawable.ic_settings_history,
                         valueText = stringResource(
                             R.string.settings_history_limit_value,
-                            HistoryHelper.getHisNum(SearchSettingsState.config.historyNumIndex),
+                            HistoryHelper.getHisNum(state.historyNumIndex),
                         ),
                         options = listOf(0, 1, 2).map {
                             stringResource(R.string.settings_history_limit_value, HistoryHelper.getHisNum(it))
                         },
-                        selectedIndex = SearchSettingsState.config.historyNumIndex,
-                        onSelect = { idx -> SearchSettingsState.historyNumIndex = idx },
+                        selectedIndex = state.historyNumIndex,
+                        onSelect = { idx -> vm.put(HawkConfig.HISTORY_NUM, idx) },
                     )
                 }
                 SettingsCard(SettingsCardPosition.MIDDLE) {
@@ -356,19 +369,18 @@ fun SettingsPage(
                     }
                 }
                 SettingsCard(SettingsCardPosition.LAST) {
-                    val uiConfig = UiSettingsState.config
                     SettingsOptionMenuRow(
                         title = "DOH",
                         subtitle = stringResource(R.string.settings_doh_subtitle),
                         iconRes = R.drawable.ic_settings_doh,
-                        valueText = if (uiConfig.dohIndex == 0) stringResource(R.string.common_off)
-                        else HttpClients.dnsHttpsList.getOrNull(uiConfig.dohIndex)
+                        valueText = if (state.dohIndex == 0) stringResource(R.string.common_off)
+                        else OkGoHelper.dnsHttpsList.getOrNull(state.dohIndex)
                             ?: stringResource(R.string.common_off),
-                        options = HttpClients.dnsHttpsList.mapIndexed { index, name ->
+                        options = OkGoHelper.dnsHttpsList.mapIndexed { index, name ->
                             if (index == 0) context.getString(R.string.common_off) else name
                         },
-                        selectedIndex = uiConfig.dohIndex,
-                        onSelect = { idx -> UiSettingsState.dohIndex = idx },
+                        selectedIndex = state.dohIndex,
+                        onSelect = { idx -> vm.put(HawkConfig.DOH_URL, idx) },
                     )
                 }
             }
@@ -450,44 +462,24 @@ fun TextEditDialog(
     initialText: String,
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit,
-    placeholder: String? = null,
-    singleLine: Boolean = true,
-    fieldHeight: Dp = 0.dp,
 ) {
     var text by rememberSaveable { mutableStateOf(initialText) }
     AVBoxAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
-            val fieldModifier = Modifier.fillMaxWidth().then(
-                if (fieldHeight > 0.dp) {
-                    Modifier.height(fieldHeight).verticalScroll(rememberScrollState())
-                } else {
-                    Modifier
-                },
-            )
             OutlinedTextField(
                 value = text,
                 onValueChange = { text = it },
-                modifier = fieldModifier,
-                singleLine = singleLine,
-                minLines = if (singleLine) 1 else 2,
-                maxLines = if (singleLine) 1 else if (fieldHeight > 0.dp) 8 else 2,
-                placeholder = {
-                    Text(placeholder ?: stringResource(R.string.dialog_api_url_hint))
-                },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                placeholder = { Text(stringResource(R.string.dialog_api_url_hint)) },
             )
         },
         confirmButton = {
             val dismissThen = LocalSheetDismissThen.current
             TextButton(onClick = { dismissThen { onConfirm(text.trim()) } }) {
                 Text(stringResource(R.string.common_confirm))
-            }
-        },
-        dismissButton = {
-            val dismissThen = LocalSheetDismissThen.current
-            TextButton(onClick = { dismissThen { onDismiss() } }) {
-                Text(stringResource(R.string.common_cancel))
             }
         },
     )

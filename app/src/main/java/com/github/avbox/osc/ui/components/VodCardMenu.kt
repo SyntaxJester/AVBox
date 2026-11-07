@@ -7,44 +7,42 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.github.avbox.osc.R
 import com.github.avbox.osc.bean.Movie
 import com.github.avbox.osc.bean.VodInfo
+import com.github.avbox.osc.data.AppGraph
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Stable
-class VodCardMenuState internal constructor(
-    private val scope: CoroutineScope,
-    private val lookupCollected: suspend (Movie.Video) -> Boolean,
-    private val onCollectToggle: (Movie.Video, Boolean) -> Unit,
-) {
+class VodCardMenuState internal constructor(private val scope: CoroutineScope) {
 
     internal var menu by mutableStateOf<Pair<Movie.Video, Boolean>?>(null)
 
     fun show(video: Movie.Video) {
         scope.launch {
-            menu = video to lookupCollected(video)
+            val collected = withContext(Dispatchers.IO) {
+                AppGraph.collectRepository.isVodCollect(video.sourceKey, video.id)
+            }
+            menu = video to collected
         }
-    }
-
-    internal fun collect(video: Movie.Video, toCollect: Boolean) {
-        onCollectToggle(video, toCollect)
     }
 }
 
 @Composable
-fun rememberVodCardMenuState(
-    lookupCollected: suspend (Movie.Video) -> Boolean,
-    onCollectToggle: (Movie.Video, Boolean) -> Unit,
-): VodCardMenuState {
+fun rememberVodCardMenuState(): VodCardMenuState {
     val scope = rememberCoroutineScope()
-    return remember(scope) { VodCardMenuState(scope, lookupCollected, onCollectToggle) }
+    return remember(scope) { VodCardMenuState(scope) }
 }
 
 @Composable
 fun VodCardMenu(state: VodCardMenuState, onSearchSimilar: (String) -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     state.menu?.let { (video, collected) ->
         val collectLabel = stringResource(R.string.detail_collect)
         val uncollectLabel = stringResource(R.string.detail_uncollect)
@@ -60,8 +58,12 @@ fun VodCardMenu(state: VodCardMenuState, onSearchSimilar: (String) -> Unit) {
             selected = null,
             onSelect = { option ->
                 when (option) {
-                    collectLabel -> state.collect(video, true)
-                    uncollectLabel -> state.collect(video, false)
+                    collectLabel -> scope.launch(Dispatchers.IO) {
+                        AppGraph.collectRepository.insertVodCollect(video.sourceKey, toVodInfo(video))
+                    }
+                    uncollectLabel -> scope.launch(Dispatchers.IO) {
+                        AppGraph.collectRepository.deleteVodCollect(video.sourceKey, toVodInfo(video))
+                    }
                     searchSimilarLabel -> onSearchSimilar(video.name ?: "")
                 }
             },
@@ -70,5 +72,10 @@ fun VodCardMenu(state: VodCardMenuState, onSearchSimilar: (String) -> Unit) {
 }
 
 internal fun toVodInfo(video: Movie.Video): VodInfo {
-    return VodInfo(id = video.id, name = video.name, pic = video.pic, sourceKey = video.sourceKey)
+    val info = VodInfo()
+    info.id = video.id
+    info.name = video.name
+    info.pic = video.pic
+    info.sourceKey = video.sourceKey
+    return info
 }

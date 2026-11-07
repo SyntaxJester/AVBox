@@ -2,6 +2,7 @@ package com.github.avbox.osc.player.usecase
 
 import com.github.avbox.osc.base.App
 import com.github.avbox.osc.util.AppLog
+import com.github.avbox.osc.util.thunder.Thunder
 import org.json.JSONArray
 import org.json.JSONException
 
@@ -39,7 +40,7 @@ object PlayerSwitchUseCase {
 
     @JvmStatic
     fun stopOther() {
-        requireNotNull(App.getInstance()) { "app instance not ready" }
-        App.dashData = null
+        Thunder.stop(false)
+        requireNotNull(App.getInstance()) { "app instance not ready" }.setDashData(null)
     }
 }

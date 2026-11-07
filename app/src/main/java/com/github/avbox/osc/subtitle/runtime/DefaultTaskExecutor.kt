@@ -33,17 +33,17 @@ import java.util.concurrent.Executors
 
 class DefaultTaskExecutor : TaskExecutor() {
 
-    private var mainHandler: Handler? = null
-    private val lock = Any()
-    private val deskIO: ExecutorService = Executors.newFixedThreadPool(3)
+    private var mMainHandler: Handler? = null
+    private val mLock = Any()
+    private val mDeskIO: ExecutorService = Executors.newFixedThreadPool(3)
 
     override fun executeOnDeskIO(task: Runnable) {
-        deskIO.execute(task)
+        mDeskIO.execute(task)
     }
 
     override fun postToMainThread(task: Runnable) {
-        val handler = mainHandler ?: synchronized(lock) {
-            Handler(Looper.getMainLooper()).also { mainHandler = it }
+        val handler = mMainHandler ?: synchronized(mLock) {
+            Handler(Looper.getMainLooper()).also { mMainHandler = it }
         }
         handler.post(task)
     }

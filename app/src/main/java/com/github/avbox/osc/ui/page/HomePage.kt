@@ -5,7 +5,6 @@
 
 package com.github.avbox.osc.ui.page
 
-import com.github.avbox.osc.api.SearchSourcesState
 import android.content.Intent
 import android.widget.Toast
 import androidx.compose.animation.Crossfade
@@ -99,10 +98,10 @@ import com.github.avbox.osc.R
 import com.github.avbox.osc.bean.Movie
 import com.github.avbox.osc.bean.MovieSort
 import com.github.avbox.osc.net.SiteSearch
-import com.github.avbox.osc.ui.ConfigManageActivity
-import com.github.avbox.osc.ui.PartitionListActivity
-import com.github.avbox.osc.ui.SearchActivity
-import com.github.avbox.osc.ui.WindowSize
+import com.github.avbox.osc.ui.activity.ConfigManageActivity
+import com.github.avbox.osc.ui.activity.PartitionListActivity
+import com.github.avbox.osc.ui.activity.SearchActivity
+import com.github.avbox.osc.ui.activity.SearchViewModel
 import com.github.avbox.osc.ui.components.AVBoxBottomSheet
 import com.github.avbox.osc.ui.components.AVBoxOptionMenuAction
 import com.github.avbox.osc.ui.components.AppTopBarScaffold
@@ -110,7 +109,6 @@ import com.github.avbox.osc.ui.components.HeroSpotlight
 import com.github.avbox.osc.ui.components.HomeBackdrop
 import com.github.avbox.osc.ui.components.HomeHeroBackdrop
 import com.github.avbox.osc.ui.components.LoadState
-import com.github.avbox.osc.ui.components.ProvideTmdbPosterLookup
 import com.github.avbox.osc.ui.components.homeHeroBackdropSupported
 import com.github.avbox.osc.ui.components.LoadStateBox
 import com.github.avbox.osc.ui.components.LocalSheetDismiss
@@ -123,7 +121,13 @@ import com.github.avbox.osc.ui.components.SegmentOption
 import com.github.avbox.osc.ui.components.SegmentStyle
 import com.github.avbox.osc.ui.components.CapsuleSegmentedButton
 import com.github.avbox.osc.ui.components.SettingsOptionRow
+import com.github.avbox.osc.ui.components.SiteCardShapeLeft
+import com.github.avbox.osc.ui.components.SiteCardShapeRight
+import com.github.avbox.osc.ui.components.SiteCardShapeSingle
 import com.github.avbox.osc.ui.components.DenseSegmentContentPadding
+import com.github.avbox.osc.ui.components.SiteKind
+import com.github.avbox.osc.ui.components.SiteSourceCard
+import com.github.avbox.osc.ui.components.siteKindOf
 import com.github.avbox.osc.ui.components.SettingsRow
 import com.github.avbox.osc.ui.components.SkeletonBox
 import com.github.avbox.osc.ui.components.VodCard
@@ -141,14 +145,6 @@ import com.github.avbox.osc.util.SiteExt
 import com.github.avbox.osc.util.SiteProxy
 import com.kyant.capsule.ContinuousCapsule
 import kotlin.math.roundToInt
-import com.github.avbox.osc.ui.SiteCardShapeLeft
-import com.github.avbox.osc.ui.SiteCardShapeRight
-import com.github.avbox.osc.ui.SiteCardShapeSingle
-import com.github.avbox.osc.ui.SiteKind
-import com.github.avbox.osc.ui.SiteSourceCard
-import com.github.avbox.osc.ui.siteKindOf
-import com.github.avbox.osc.ui.components.marqueeOnOverflow
-import androidx.compose.foundation.layout.fillMaxHeight
 
 private val HomeSourceCapsuleMaxWidth = 240.dp
 
@@ -166,17 +162,13 @@ fun HomePage(
     val navStart = contentPadding.calculateStartPadding(LocalLayoutDirection.current)
     val navBottom = contentPadding.calculateBottomPadding()
     val screenHeightDp = LocalConfiguration.current.screenHeightDp
-    val screenWidthDp = LocalConfiguration.current.screenWidthDp
     val context = LocalContext.current
     val currentSource by vm.currentSource.collectAsStateWithLifecycle()
     val sources by vm.sources.collectAsStateWithLifecycle()
     val rec by vm.rec.collectAsStateWithLifecycle()
     val partitions by vm.partitions.collectAsStateWithLifecycle()
     val sorts by vm.sorts.collectAsStateWithLifecycle()
-    val vodMenu = rememberVodCardMenuState(
-        lookupCollected = vm::isVideoCollected,
-        onCollectToggle = vm::toggleVideoCollect,
-    )
+    val vodMenu = rememberVodCardMenuState()
 
     val listState = rememberLazyListState()
 
@@ -282,9 +274,7 @@ fun HomePage(
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .weight(1f, fill = false)
-                            .marqueeOnOverflow(),
+                        modifier = Modifier.weight(1f, fill = false),
                     )
                     Spacer(modifier = Modifier.width(2.dp))
                     Icon(
@@ -420,152 +410,15 @@ fun HomePage(
                 }
             }
             else -> {
-            // 横屏左右分栏实测效果不佳，撤回为上下堆叠（保留智能列数/高度适配）
-            val homeSplitLandscape = false
-            val homeHeroPanelWidth = (screenWidthDp * 0.38f).dp
             if (homeLayout == HomeSettings.HomeLayout.Vertical) {
-                ProvideTmdbPosterLookup(vm) {
-                    HomeGridLayout(
-                        vm = vm,
-                        topPadding = topPad,
-                        contentPadding = contentPadding,
-                        pullState = pullState,
-                        onCardClick = { video -> handleCardClick(vm, video, context) },
-                        onCardLongClick = { video -> vodMenu.show(video) },
-                    )
-                }
-            } else if (homeSplitLandscape) {
-                Row(modifier = Modifier.fillMaxSize()) {
-                    Box(
-                        modifier = Modifier
-                            .width(homeHeroPanelWidth)
-                            .fillMaxHeight()
-                            .padding(top = topPad),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        when {
-                            rec.state == HomeViewModel.PartitionState.Ready && rec.videos.isNotEmpty() -> {
-                                ProvideTmdbPosterLookup(vm) {
-                                    HeroSpotlight(
-                                        videos = rec.videos.take(HomeViewModel.HERO_VIDEO_COUNT),
-                                        backdropColor = backdropContainer,
-                                        onBackdropSeed = { argb -> backdropSeed = argb },
-                                        onPosterPic = { pic -> backdropPic = pic },
-                                        onCardClick = { video -> handleCardClick(vm, video, context) },
-                                        fadeToBackdrop = heroBackdropEnabled,
-                                    )
-                                }
-                            }
-                            rec.state == HomeViewModel.PartitionState.Loading -> {
-                                SkeletonBox(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(heroSpotlightHeight(screenHeightDp, screenWidthDp)),
-                                )
-                            }
-                            rec.state == HomeViewModel.PartitionState.Error -> {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(heroSpotlightHeight(screenHeightDp, screenWidthDp))
-                                        .background(MaterialTheme.colorScheme.surfaceContainer),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    LoadStateBox(
-                                        state = LoadState.Error(),
-                                        emptyText = "",
-                                        errorText = stringResource(R.string.home_load_timeout),
-                                        retryText = stringResource(R.string.common_retry),
-                                        onRetry = { vm.loadHome() },
-                                    )
-                                }
-                            }
-                            else -> {
-                                Spacer(modifier = Modifier.height(topPad + 8.dp))
-                            }
-                        }
-                    }
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .pullToRefresh(
-                                isRefreshing = false,
-                                state = pullState,
-                                onRefresh = { vm.reload() },
-                            ),
-                        contentPadding = PaddingValues(
-                            start = 0.dp,
-                            top = 0.dp,
-                            bottom = 88.dp + navBottom,
-                        ),
-                    ) {
-                    item(key = "cats") {
-                        HomeCategoryChips(
-                            sorts = sorts,
-                            onOpenSort = { sort -> PartitionListActivity.startForPartition(context, sort) },
-                            modifier = Modifier.padding(start = navStart),
-                        )
-                    }
-                    if (rec.state != HomeViewModel.PartitionState.Empty &&
-                        (rec.state == HomeViewModel.PartitionState.Loading ||
-                            rec.videos.size > HomeViewModel.HERO_VIDEO_COUNT)
-                    ) {
-                        item(key = "rec") {
-                            ProvideTmdbPosterLookup(vm) {
-                                PartitionSection(
-                                    title = stringResource(R.string.home_recommend),
-                                    state = rec.state,
-                                    videos = rec.videos.drop(HomeViewModel.HERO_VIDEO_COUNT),
-                                    onLoadMore = {},
-                                    onCardClick = { video -> handleCardClick(vm, video, context) },
-                                    onCardLongClick = { video -> vodMenu.show(video) },
-                                    modifier = Modifier.padding(start = navStart),
-                                )
-                            }
-                        }
-                    }
-                    if (sortLoadFailed) {
-                        item(key = "sort_error") {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(start = navStart)
-                                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.common_load_failed_network),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                TextButton(onClick = { vm.retrySort() }) {
-                                    Text(text = stringResource(R.string.common_retry))
-                                }
-                            }
-                        }
-                    }
-                    items(partitions, key = { it.sort.id.orEmpty() }) { p ->
-                        ProvideTmdbPosterLookup(vm) {
-                            PartitionSection(
-                                title = p.sort.name ?: "",
-                                state = p.state,
-                                videos = p.videos,
-                                onLoadMore = { vm.loadMorePartition(p) },
-                                onCardClick = { video -> handleCardClick(vm, video, context) },
-                                onCardLongClick = { video -> vodMenu.show(video) },
-                                onOpenAll = {
-                                    PartitionListActivity.startForPartition(context, p.sort)
-                                },
-                                onRetry = { vm.retryPartition(p) },
-                                modifier = Modifier.padding(start = navStart),
-                            )
-                        }
-                    }
-                    }
-                }
+                HomeGridLayout(
+                    vm = vm,
+                    topPadding = topPad,
+                    contentPadding = contentPadding,
+                    pullState = pullState,
+                    onCardClick = { video -> handleCardClick(vm, video, context) },
+                    onCardLongClick = { video -> vodMenu.show(video) },
+                )
             } else LazyColumn(
                 state = listState,
                 modifier = Modifier
@@ -584,29 +437,27 @@ fun HomePage(
                 item(key = "hero") {
                     when {
                         rec.state == HomeViewModel.PartitionState.Ready && rec.videos.isNotEmpty() -> {
-                            ProvideTmdbPosterLookup(vm) {
-                                HeroSpotlight(
-                                    videos = rec.videos.take(HomeViewModel.HERO_VIDEO_COUNT),
-                                    backdropColor = backdropContainer,
-                                    onBackdropSeed = { argb -> backdropSeed = argb },
-                                    onPosterPic = { pic -> backdropPic = pic },
-                                    onCardClick = { video -> handleCardClick(vm, video, context) },
-                                    fadeToBackdrop = heroBackdropEnabled,
-                                )
-                            }
+                            HeroSpotlight(
+                                videos = rec.videos.take(HomeViewModel.HERO_VIDEO_COUNT),
+                                backdropColor = backdropContainer,
+                                onBackdropSeed = { argb -> backdropSeed = argb },
+                                onPosterPic = { pic -> backdropPic = pic },
+                                onCardClick = { video -> handleCardClick(vm, video, context) },
+                                fadeToBackdrop = heroBackdropEnabled,
+                            )
                         }
                         rec.state == HomeViewModel.PartitionState.Loading -> {
                             SkeletonBox(
                                 modifier = Modifier
                                     .fillParentMaxWidth()
-                                    .height(heroSpotlightHeight(screenHeightDp, screenWidthDp)),
+                                    .height(heroSpotlightHeight(screenHeightDp)),
                             )
                         }
                         rec.state == HomeViewModel.PartitionState.Error -> {
                             Box(
                                 modifier = Modifier
                                     .fillParentMaxWidth()
-                                    .height(heroSpotlightHeight(screenHeightDp, screenWidthDp))
+                                    .height(heroSpotlightHeight(screenHeightDp))
                                     .background(MaterialTheme.colorScheme.surfaceContainer),
                                 contentAlignment = Alignment.Center,
                             ) {
@@ -636,17 +487,15 @@ fun HomePage(
                         rec.videos.size > HomeViewModel.HERO_VIDEO_COUNT)
                 ) {
                     item(key = "rec") {
-                        ProvideTmdbPosterLookup(vm) {
-                            PartitionSection(
-                                title = stringResource(R.string.home_recommend),
-                                state = rec.state,
-                                videos = rec.videos.drop(HomeViewModel.HERO_VIDEO_COUNT),
-                                onLoadMore = {},
-                                onCardClick = { video -> handleCardClick(vm, video, context) },
-                                onCardLongClick = { video -> vodMenu.show(video) },
-                                modifier = Modifier.padding(start = navStart),
-                            )
-                        }
+                        PartitionSection(
+                            title = stringResource(R.string.home_recommend),
+                            state = rec.state,
+                            videos = rec.videos.drop(HomeViewModel.HERO_VIDEO_COUNT),
+                            onLoadMore = {},
+                            onCardClick = { video -> handleCardClick(vm, video, context) },
+                            onCardLongClick = { video -> vodMenu.show(video) },
+                            modifier = Modifier.padding(start = navStart),
+                        )
                     }
                 }
                 if (sortLoadFailed) {
@@ -671,21 +520,19 @@ fun HomePage(
                     }
                 }
                 items(partitions, key = { it.sort.id.orEmpty() }) { p ->
-                    ProvideTmdbPosterLookup(vm) {
-                        PartitionSection(
-                            title = p.sort.name ?: "",
-                            state = p.state,
-                            videos = p.videos,
-                            onLoadMore = { vm.loadMorePartition(p) },
-                            onCardClick = { video -> handleCardClick(vm, video, context) },
-                            onCardLongClick = { video -> vodMenu.show(video) },
-                            onOpenAll = {
-                                PartitionListActivity.startForPartition(context, p.sort)
-                            },
-                            onRetry = { vm.retryPartition(p) },
-                            modifier = Modifier.padding(start = navStart),
-                        )
-                    }
+                    PartitionSection(
+                        title = p.sort.name ?: "",
+                        state = p.state,
+                        videos = p.videos,
+                        onLoadMore = { vm.loadMorePartition(p) },
+                        onCardClick = { video -> handleCardClick(vm, video, context) },
+                        onCardLongClick = { video -> vodMenu.show(video) },
+                        onOpenAll = {
+                            PartitionListActivity.startForPartition(context, p.sort)
+                        },
+                        onRetry = { vm.retryPartition(p) },
+                        modifier = Modifier.padding(start = navStart),
+                    )
                 }
             }
         }
@@ -702,21 +549,10 @@ fun HomePage(
     }
 
     if (showSourceSheet) {
-        // 横屏时屏幕"高度"其实很短（手机横放只有 360dp 左右），
-        // 仍按 0.72 取的话弹窗只剩两百多 dp，装不下搜索框+分类+列表，
-        // 底部配置管理会把列表挤没。横屏改按接近满屏给高度。
-        val isLandscape = screenWidthDp > screenHeightDp
-        // 横屏时按 screenHeightDp 乘比例算出来的高度会超出实际窗口
-        // （系统栏还要占掉一截），底部配置管理被挤出屏幕、列表只剩一行。
-        // 这里横屏直接按父容器实际高度取 96%，竖屏维持原来的 72%。
-        val sheetModifier = if (isLandscape) {
-            Modifier.fillMaxHeight(0.96f)
-        } else {
-            Modifier.height((screenHeightDp * 0.72f).dp)
-        }
+        val sheetHeight = (screenHeightDp * 0.72f).dp
         AVBoxBottomSheet(
             onDismissRequest = { showSourceSheet = false },
-            modifier = sheetModifier,
+            modifier = Modifier.height(sheetHeight),
             title = stringResource(R.string.home_subscription_source),
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
             isScrollable = false,
@@ -743,219 +579,177 @@ fun HomePage(
                     vm.switchSubscribe(item)
                 }
             }
-            // 分栏实测效果不佳，统一走自上而下的单列（横屏靠高度与列数适配）
-            val splitLandscape = false
+            SearchField(
+                query = query,
+                onQueryChange = { query = it },
+                onSearch = { keyboard?.hide() },
+                hint = stringResource(R.string.home_site_search_hint),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+                trailing = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (subscribeOptions.isNotEmpty()) {
+                            AVBoxOptionMenuAction(
+                                options = subscribeOptions,
+                                selectedIndex = activeSubscribeIndex,
+                                onSelect = { index -> subscribes.getOrNull(index)?.let(::switchSubscribe) },
+                                contentDescription = stringResource(R.string.home_subscription_source),
+                            )
+                        }
+                        IconButton(onClick = { vm.refreshSourceList() }) {
+                            Icon(
+                                imageVector = Icons.Outlined.Refresh,
+                                contentDescription = stringResource(R.string.common_refresh),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                        IconButton(onClick = { HomeSettings.setSourceGrid(!sourceGrid) }) {
+                            Icon(
+                                painter = painterResource(
+                                    if (sourceGrid) R.drawable.ic_layout_vertical else R.drawable.ic_layout_horizontal,
+                                ),
+                                contentDescription = stringResource(
+                                    if (sourceGrid) R.string.config_list_single else R.string.config_list_double,
+                                ),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
+                },
+            )
             var sourceKind by remember { mutableStateOf(SiteKind.ALL) }
             val visible = remember(filtered, sourceKind) {
                 filtered.filter { sourceKind == SiteKind.ALL || siteKindOf(it.api) == sourceKind }
             }
-            // 多列模式按屏宽算最佳列数：横屏宽了就多列，别把空间浪费掉
-            val perRow = if (sourceGrid) {
-                val listWidth = if (splitLandscape) (screenWidthDp * 0.64f).toInt() - 32 else screenWidthDp - 32
-                WindowSize.listColumns(listWidth, minColumns = 2, maxColumns = 6)
-            } else {
-                1
-            }
-            val topControls: @Composable () -> Unit = {
-                SearchField(
-                    query = query,
-                    onQueryChange = { query = it },
-                    onSearch = { keyboard?.hide() },
-                    hint = stringResource(R.string.home_site_search_hint),
+            val perRow = if (sourceGrid) 2 else 1
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                CapsuleSegmentedButton(
+                    options = SiteKind.values().map { SegmentOption(it.label, it) },
+                    selectedValue = sourceKind,
+                    onOptionSelected = { sourceKind = it },
+                    style = SegmentStyle.Separated,
+                    containerColor = MaterialTheme.colorScheme.surfaceBright,
+                    pressMorph = true,
+                    textStyle = MaterialTheme.typography.labelMedium,
+                    contentPadding = DenseSegmentContentPadding,
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 16.dp, end = 16.dp, bottom = if (isLandscape) 8.dp else 12.dp),
-                    trailing = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (subscribeOptions.isNotEmpty()) {
-                                AVBoxOptionMenuAction(
-                                    options = subscribeOptions,
-                                    selectedIndex = activeSubscribeIndex,
-                                    onSelect = { index -> subscribes.getOrNull(index)?.let(::switchSubscribe) },
-                                    contentDescription = stringResource(R.string.home_subscription_source),
+                        .weight(1f)
+                        .padding(end = 4.dp),
+                )
+            }
+            val gridLineColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+            val gridRowHeight = 52.dp
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp)
+                    .drawBehind {
+                        val rowH = gridRowHeight.toPx()
+                        val colW = size.width / perRow
+                        var y = rowH
+                        while (y < size.height) {
+                            drawLine(
+                                color = gridLineColor,
+                                start = Offset(0f, y),
+                                end = Offset(size.width, y),
+                                strokeWidth = 1f,
+                            )
+                            y += rowH
+                        }
+                        for (c in 1 until perRow) {
+                            val x = colW * c
+                            drawLine(
+                                color = gridLineColor,
+                                start = Offset(x, 0f),
+                                end = Offset(x, size.height),
+                                strokeWidth = 1f,
+                            )
+                        }
+                    }
+                    .clearFocusOnDrag(focusManager)
+                    .pointerInput(focusManager) {
+                        detectTapGestures(onTap = { focusManager.clearFocus() })
+                    },
+            ) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    if (visible.isEmpty() && query.isNotEmpty()) {
+                        item {
+                            LoadStateBox(
+                                state = LoadState.Empty,
+                                emptyText = stringResource(R.string.home_site_search_empty),
+                                errorText = "",
+                                retryText = "",
+                                emptyIconRes = R.drawable.ic_empty_record,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(160.dp),
+                            )
+                        }
+                    }
+                    items(visible.chunked(perRow)) { row ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            row.forEachIndexed { index, bean ->
+                                val selected = bean.key == currentSource?.key
+                                SiteSourceCard(
+                                    name = bean.name?.takeIf { it.isNotEmpty() } ?: bean.key.orEmpty(),
+                                    selected = selected,
+                                    dotOnLeft = index == 0,
+                                    shape = if (perRow == 2) {
+                                        if (index == 0) SiteCardShapeLeft else SiteCardShapeRight
+                                    } else {
+                                        SiteCardShapeSingle
+                                    },
+                                    onClick = {
+                                        if (!selected) {
+                                            vm.switchSource(bean)
+                                        }
+                                        dismissAnimated()
+                                    },
+                                    modifier = Modifier.weight(1f),
                                 )
                             }
-                            IconButton(onClick = { vm.refreshSourceList() }) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Refresh,
-                                    contentDescription = stringResource(R.string.common_refresh),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(20.dp),
-                                )
-                            }
-                            IconButton(onClick = { HomeSettings.setSourceGrid(!sourceGrid) }) {
-                                Icon(
-                                    painter = painterResource(
-                                        if (sourceGrid) R.drawable.ic_layout_vertical else R.drawable.ic_layout_horizontal,
-                                    ),
-                                    contentDescription = stringResource(
-                                        if (sourceGrid) R.string.config_list_single else R.string.config_list_double,
-                                    ),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(20.dp),
-                                )
+                            if (row.size < perRow) {
+                                Spacer(modifier = Modifier.weight(1f))
                             }
                         }
-                    },
-                )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 16.dp, end = 16.dp, bottom = if (isLandscape) 4.dp else 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                    }
+                }
+            }
+            SettingsGroup(
+                title = null,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 16.dp),
+            ) {
+                SettingsCard(
+                    position = SettingsCardPosition.SINGLE,
+                    color = MaterialTheme.colorScheme.surfaceBright,
                 ) {
-                    CapsuleSegmentedButton(
-                        options = SiteKind.values().map { SegmentOption(it.label, it) },
-                        selectedValue = sourceKind,
-                        onOptionSelected = { sourceKind = it },
-                        style = SegmentStyle.Separated,
-                        containerColor = MaterialTheme.colorScheme.surfaceBright,
-                        pressMorph = true,
-                        textStyle = MaterialTheme.typography.labelMedium,
-                        contentPadding = DenseSegmentContentPadding,
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(end = 4.dp),
+                    SettingsRow(
+                        title = stringResource(R.string.settings_config_manage),
+                        onClick = {
+                            dismissAnimated()
+                            ConfigManageActivity.start(context)
+                        },
                     )
                 }
-            }
-            val siteListPanel: @Composable (Modifier) -> Unit = { panelModifier ->
-                val gridLineColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
-                val gridRowHeight = 52.dp
-                Box(
-                    modifier = panelModifier
-                        .fillMaxWidth()
-                        .padding(horizontal = if (splitLandscape) 0.dp else 16.dp)
-                        .drawBehind {
-                            val rowH = gridRowHeight.toPx()
-                            val colW = size.width / perRow
-                            var y = rowH
-                            while (y < size.height) {
-                                drawLine(
-                                    color = gridLineColor,
-                                    start = Offset(0f, y),
-                                    end = Offset(size.width, y),
-                                    strokeWidth = 1f,
-                                )
-                                y += rowH
-                            }
-                            for (c in 1 until perRow) {
-                                val x = colW * c
-                                drawLine(
-                                    color = gridLineColor,
-                                    start = Offset(x, 0f),
-                                    end = Offset(x, size.height),
-                                    strokeWidth = 1f,
-                                )
-                            }
-                        }
-                        .clearFocusOnDrag(focusManager)
-                        .pointerInput(focusManager) {
-                            detectTapGestures(onTap = { focusManager.clearFocus() })
-                        },
-                ) {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        if (visible.isEmpty() && query.isNotEmpty()) {
-                            item {
-                                LoadStateBox(
-                                    state = LoadState.Empty,
-                                    emptyText = stringResource(R.string.home_site_search_empty),
-                                    errorText = "",
-                                    retryText = "",
-                                    emptyIconRes = R.drawable.ic_empty_record,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(160.dp),
-                                )
-                            }
-                        }
-                        items(visible.chunked(perRow)) { row ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(2.dp),
-                            ) {
-                                row.forEachIndexed { index, bean ->
-                                    val selected = bean.key == currentSource?.key
-                                    SiteSourceCard(
-                                        name = bean.name?.takeIf { it.isNotEmpty() } ?: bean.key.orEmpty(),
-                                        selected = selected,
-                                        dotOnLeft = index == 0,
-                                        shape = if (perRow == 2) {
-                                            if (index == 0) SiteCardShapeLeft else SiteCardShapeRight
-                                        } else {
-                                            SiteCardShapeSingle
-                                        },
-                                        onClick = {
-                                            if (!selected) {
-                                                vm.switchSource(bean)
-                                            }
-                                            dismissAnimated()
-                                        },
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                }
-                                if (row.size < perRow) {
-                                    Spacer(modifier = Modifier.weight(1f))
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            val configPanel: @Composable (Modifier) -> Unit = { panelModifier ->
-                SettingsGroup(
-                    title = null,
-                    modifier = panelModifier
-                        .padding(
-                            start = if (splitLandscape) 0.dp else 16.dp,
-                            end = if (splitLandscape) 0.dp else 16.dp,
-                            top = if (isLandscape) 6.dp else 10.dp,
-                            bottom = if (isLandscape) 8.dp else 16.dp,
-                        ),
-                ) {
-                    SettingsCard(
-                        position = SettingsCardPosition.SINGLE,
-                        color = MaterialTheme.colorScheme.surfaceBright,
-                    ) {
-                        SettingsRow(
-                            title = stringResource(R.string.settings_config_manage),
-                            onClick = {
-                                dismissAnimated()
-                                ConfigManageActivity.start(context)
-                            },
-                        )
-                    }
-                }
-            }
-            if (splitLandscape) {
-                Row(modifier = Modifier.fillMaxSize()) {
-                    Column(
-                        modifier = Modifier
-                            .weight(0.64f)
-                            .fillMaxHeight()
-                            .padding(start = 16.dp, end = 8.dp),
-                    ) {
-                        topControls()
-                        siteListPanel(Modifier.weight(1f).fillMaxWidth())
-                    }
-                    Column(
-                        modifier = Modifier
-                            .weight(0.36f)
-                            .fillMaxHeight()
-                            .padding(start = 8.dp, end = 16.dp, top = 16.dp, bottom = 16.dp),
-                    ) {
-                        configPanel(Modifier.fillMaxWidth())
-                    }
-                }
-            } else {
-                topControls()
-                siteListPanel(Modifier.weight(1f).fillMaxWidth())
-                configPanel(Modifier.fillMaxWidth())
             }
         }
     }
@@ -963,7 +757,7 @@ fun HomePage(
     if (showSearchSettings) {
         SearchSettingsSheet(
             onDismiss = { showSearchSettings = false },
-            onSelectionChanged = { SearchSourcesState.refresh() },
+            onSelectionChanged = { SearchViewModel.loadCheckedSources() },
         )
     }
 
@@ -971,9 +765,6 @@ fun HomePage(
         TextEditDialog(
             title = stringResource(R.string.home_site_ext),
             initialText = extValue,
-            placeholder = stringResource(R.string.home_site_ext_hint),
-            singleLine = false,
-            fieldHeight = 132.dp,
             onDismiss = { extDialog = false },
             onConfirm = { text ->
                 extDialog = false
@@ -991,7 +782,6 @@ fun HomePage(
         TextEditDialog(
             title = stringResource(R.string.settings_proxy_url),
             initialText = SiteProxy.configuredUrl(),
-            placeholder = SiteProxy.DEFAULT_URL,
             onDismiss = { proxyUrlDialog = false },
             onConfirm = { text ->
                 proxyUrlDialog = false

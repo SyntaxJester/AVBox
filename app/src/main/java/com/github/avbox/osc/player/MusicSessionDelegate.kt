@@ -3,10 +3,7 @@ package com.github.avbox.osc.player
 import android.text.TextUtils
 import com.github.avbox.osc.api.ApiConfig
 import com.github.avbox.osc.bean.VodInfo
-import com.github.avbox.osc.player.core.TrackInfo
-import com.github.avbox.osc.player.state.AudioOnlyRules
-import com.github.avbox.osc.player.state.AudioOnlyState
-import com.github.avbox.osc.player.core.PlayState
+import com.github.avbox.osc.player.state.PlayState
 import com.github.avbox.osc.util.AppLog
 import org.json.JSONArray
 import org.json.JSONObject
@@ -18,8 +15,6 @@ class MusicSessionDelegate(private val host: Host) {
         fun view(): PlaybackViewBridge?
 
         fun attemptState(): PlaybackAttemptState
-
-        fun updateAttemptState(block: (PlaybackAttemptState) -> PlaybackAttemptState)
 
         fun timeouts(): PlaybackTimeouts
 
@@ -38,19 +33,13 @@ class MusicSessionDelegate(private val host: Host) {
         fun playUrl(url: String, headers: HashMap<String, String>?)
     }
 
-    private var audioOnlyIntent = false
-
-    private var audioOnlyConfirmed = false
-
-    private var audioSessionActive = false
-
-    private val trackAudioOnly: () -> Boolean? = { isAudioOnlyPlayback() }
+    private var musicPage = false
 
     private var playArtwork: String? = null
 
     private var playDanmu: String? = null
 
-    var currentArtwork: String? = null
+    private var currentArtwork: String? = null
 
     fun clearArtworks() {
         playArtwork = null
@@ -58,7 +47,7 @@ class MusicSessionDelegate(private val host: Host) {
     }
 
     fun beginSwitchPlayback() {
-        host.updateAttemptState { it.copy(switchingPlayback = true) }
+        host.attemptState().switchingPlayback = true
         host.timeouts().cancelPendingCompletionDrop()
     }
 
@@ -66,6 +55,9 @@ class MusicSessionDelegate(private val host: Host) {
 
     fun currentArtwork(): String? = currentArtwork
 
+    fun setCurrentArtwork(artwork: String?) {
+        currentArtwork = artwork
+    }
 
     fun playDanmu(): String? = playDanmu
 
@@ -74,58 +66,44 @@ class MusicSessionDelegate(private val host: Host) {
     }
 
     fun stopMusicSessionForFailedPlayback() {
-        host.updateAttemptState { it.clearSessionFlags() }
-        resetAudioSession()
+        host.attemptState().clearSessionFlags()
         host.timeouts().cancelPendingCompletionDrop()
         stopMusicSession()
     }
-
-    fun onNewContent() {
-        audioOnlyConfirmed = false
-    }
-
-    fun onNewPlayStarted() {
-        audioOnlyConfirmed = false
-        audioSessionActive = false
-    }
-
-    fun resetAudioSession() {
-        audioSessionActive = false
-    }
-
-    fun audioOnlyState(): AudioOnlyState =
-        AudioOnlyRules.state(audioOnlyIntent, audioOnlyConfirmed, trackAudioOnly)
 
     fun stopMusicSession() {
         val view = host.view() ?: return
         PlaybackService.stopSession(view.context(), view.playbackHost())
     }
 
-    fun isConfirmedAudioOnly(): Boolean = audioOnlyState() == AudioOnlyState.CONFIRMED
+    fun isConfirmedAudioOnly(): Boolean {
+        return java.lang.Boolean.TRUE == isAudioOnlyPlayback() || host.attemptState().audioOnlyConfirmed
+    }
 
     fun isAudioOnlyContent(): Boolean = java.lang.Boolean.TRUE == isAudioOnlyPlayback()
 
     fun setMusicAudioOnly(enabled: Boolean) {
-        if (audioOnlyIntent == enabled) return
-        audioOnlyIntent = enabled
+        if (musicPage == enabled) return
+        musicPage = enabled
         AppLog.i("echo-music audio-only forced=$enabled")
     }
 
     fun handlePlayStateForMusicSession(playState: PlayState): Boolean {
-        if (host.attemptState().switchingPlayback) {
+        val st = host.attemptState()
+        if (st.switchingPlayback) {
             if (playState == PlayState.COMPLETED) {
                 AppLog.i("echo-music keep session while resolving next episode")
                 return true
             } else if (playState == PlayState.ERROR) {
-                host.updateAttemptState { it.copy(switchingPlayback = false) }
+                st.switchingPlayback = false
             } else if (host.isStartedPlayState(playState)) {
-                if (hasPlayableAudio() || audioSessionActive) {
-                    host.updateAttemptState { it.copy(switchingPlayback = false) }
-                    audioSessionActive = true
+                if (hasPlayableAudio() || st.audioPlayback) {
+                    st.switchingPlayback = false
+                    st.audioPlayback = true
                 }
             }
         }
-        if (!host.attemptState().switchingPlayback) {
+        if (!st.switchingPlayback) {
             if (playState == PlayState.COMPLETED) {
                 host.timeouts().cancelPendingCompletionDrop()
                 host.timeouts().armPendingCompletionDrop()
@@ -159,18 +137,18 @@ class MusicSessionDelegate(private val host: Host) {
         }
         AppLog.i("echo-music session drop after completed (deferred): no next episode registered")
         PlaybackService.stopSession(view.context(), view.playbackHost())
-        audioSessionActive = false
+        st.audioPlayback = false
     }
 
     private fun hasPlayableAudio(): Boolean {
         val trackInfo = currentTrackInfo()
-        return trackInfo != null && trackInfo.audio.isNotEmpty()
+        return trackInfo != null && trackInfo.getAudio().isNotEmpty()
     }
 
     private fun isAudioOnlyPlayback(): Boolean? {
         val trackInfo = currentTrackInfo()
-        if (trackInfo == null || trackInfo.audio.isEmpty()) return null
-        return trackInfo.video.isEmpty()
+        if (trackInfo == null || trackInfo.getAudio().isEmpty()) return null
+        return trackInfo.getVideo().isEmpty()
     }
 
     private fun currentTrackInfo(): TrackInfo? {
@@ -205,27 +183,26 @@ class MusicSessionDelegate(private val host: Host) {
         if (st.switchingPlayback) return
         val vod = host.vod()
         val trackInfo = currentTrackInfo()
-        val hasAudio: Boolean? = trackInfo != null && trackInfo.audio.isNotEmpty()
-        val audioOnly: Boolean? = if (audioOnlyIntent && java.lang.Boolean.TRUE == hasAudio) {
+        val hasAudio: Boolean? = trackInfo != null && trackInfo.getAudio().isNotEmpty()
+        val audioOnly: Boolean? = if (musicPage && java.lang.Boolean.TRUE == hasAudio) {
             true
-        } else if (trackInfo == null || trackInfo.audio.isEmpty()) {
+        } else if (trackInfo == null || trackInfo.getAudio().isEmpty()) {
             null
         } else {
-            trackInfo.video.isEmpty()
+            trackInfo.getVideo().isEmpty()
         }
         if (java.lang.Boolean.TRUE == hasAudio) {
-            audioSessionActive = true
-            if (java.lang.Boolean.TRUE == audioOnly) audioOnlyConfirmed = true
+            st.audioPlayback = true
+            if (java.lang.Boolean.TRUE == audioOnly) st.audioOnlyConfirmed = true
         }
         val state = view.playState()
         AppLog.i(
             "echo-music session gate: state=" + state + " playing=" + view.isPlaying()
-                + " hasAudio=" + hasAudio + " audioOnly=" + audioOnly + " audioPlayback=" + audioSessionActive
-                + " audioOnlyConfirmed=" + audioOnlyConfirmed + " audioOnlyState=" + audioOnlyState()
-                + " switching=" + st.switchingPlayback
+                + " hasAudio=" + hasAudio + " audioOnly=" + audioOnly + " audioPlayback=" + st.audioPlayback
+                + " audioOnlyConfirmed=" + st.audioOnlyConfirmed + " switching=" + st.switchingPlayback
                 + " pos=" + view.currentPosition()
         )
-        if (audioSessionActive && java.lang.Boolean.TRUE == audioOnly
+        if (st.audioPlayback && java.lang.Boolean.TRUE == audioOnly
             && !host.isStartedPlayState(state)
             && TextUtils.isEmpty(playArtwork) && vod != null && !TextUtils.isEmpty(vod.pic)
         ) {
@@ -233,21 +210,21 @@ class MusicSessionDelegate(private val host: Host) {
             playArtwork = artwork
             view.setArtwork(artwork)
         }
-        if ((state == PlayState.ERROR && audioOnlyConfirmed) && host.retryAfterStartedError()) {
+        if ((state == PlayState.ERROR && st.audioOnlyConfirmed) && host.retryAfterStartedError()) {
             AppLog.i("echo-music session keep: auto retry after started error (audio-only)")
             return
         }
-        if (vod == null || !audioSessionActive
+        if (vod == null || !st.audioPlayback
             || state == PlayState.ERROR
             || state == PlayState.COMPLETED
         ) {
             AppLog.i(
-                "echo-music session drop: vod=" + (vod != null) + " audioPlayback=" + audioSessionActive
+                "echo-music session drop: vod=" + (vod != null) + " audioPlayback=" + st.audioPlayback
                     + " state=" + state + " (ERROR=" + PlayState.ERROR
                     + " COMPLETED=" + PlayState.COMPLETED + ")"
             )
             PlaybackService.stopSession(context, view.playbackHost())
-            audioSessionActive = false
+            st.audioPlayback = false
             return
         }
         view.requestNotificationPermission()
@@ -272,7 +249,7 @@ class MusicSessionDelegate(private val host: Host) {
             val jx = quality.optString("jx", "0") == "1"
             val headers = PlaybackController.extractHeaders(quality)
             if (parse || jx) {
-                val flags = ApiConfig.get().vipParseFlags ?: mutableListOf()
+                val flags = ApiConfig.get().getVipParseFlags() ?: mutableListOf()
                 val userJxList = (playUrl.isEmpty() && flags.contains(flag)) || jx
                 host.initParse(flag, userJxList, playUrl, url)
             } else {

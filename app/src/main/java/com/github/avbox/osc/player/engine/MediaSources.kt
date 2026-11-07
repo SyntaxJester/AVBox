@@ -3,6 +3,7 @@ package com.github.avbox.osc.player.engine
 import android.content.Context
 import android.net.Uri
 import android.os.Bundle
+import android.text.TextUtils
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
@@ -17,15 +18,14 @@ import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.source.ConcatenatingMediaSource
 import androidx.media3.exoplayer.source.ShuffleOrder
-import com.github.avbox.osc.net.HttpClients
-import com.github.avbox.osc.player.core.HttpHeaders
-import com.github.avbox.osc.player.core.OkHttpDataSource
+import com.github.avbox.osc.net.OkGoHelper
 import com.github.avbox.osc.player.engine.iso.BdavDataSource
 import com.github.avbox.osc.player.engine.iso.BdavLoadErrorPolicy
 import com.github.avbox.osc.player.engine.iso.IsoDataSource
 import com.github.avbox.osc.player.engine.iso.IsoExtractorsFactory
 import com.github.avbox.osc.player.engine.iso.IsoPlaylistState
 import com.github.avbox.osc.player.engine.iso.withPlaylistTargets
+import com.github.avbox.osc.player.engine.iso.IsoSelection
 import com.github.avbox.osc.player.engine.iso.IsoThroughput
 import com.github.avbox.osc.player.engine.iso.M2tsDataSource
 import com.github.avbox.osc.util.AppLog
@@ -44,6 +44,14 @@ class MediaSources(
 
     private val appContext: Context = context.applicationContext
 
+    fun setOkClient(client: OkHttpClient?) {
+        this.client = client
+    }
+
+    fun setCache(cache: Cache?) {
+        this.cache = cache
+    }
+
     fun getMediaSource(uri: String): MediaSource = getMediaSource(uri, null, false)
 
     fun getMediaSource(uri: String, headers: Map<String, String>?): MediaSource =
@@ -55,10 +63,10 @@ class MediaSources(
     fun getMediaSource(uri: String, headers: Map<String, String>?, isCache: Boolean): MediaSource =
         getMediaSource(uri, headers, isCache, false, inferContentType(uri, headers))
 
-    fun preloadTargetMediaSource(uri: String, headers: Map<String, String>?): MediaSource =
+    fun getPreloadTargetMediaSource(uri: String, headers: Map<String, String>?): MediaSource =
         getMediaSource(uri, headers, true, true, inferContentType(uri, headers))
 
-    fun hlsMediaSource(uri: String, headers: Map<String, String>?): MediaSource =
+    fun getHlsMediaSource(uri: String, headers: Map<String, String>?): MediaSource =
         getMediaSource(uri, headers, false, false, C.TYPE_HLS)
 
     private fun getMediaSource(
@@ -79,7 +87,7 @@ class MediaSources(
         val mediaItem = buildMediaItem(uri, headers)
         var factory: DataSource.Factory = createDataSourceFactory(requestHeaders)
         if (isCache) {
-            factory = cacheDataSourceFactory(factory, requestHeaders, useDefaultCacheKey)
+            factory = getCacheDataSourceFactory(factory, requestHeaders, useDefaultCacheKey)
         }
         return when (contentType) {
             C.TYPE_DASH -> DashMediaSource.Factory(factory).createMediaSource(mediaItem)
@@ -90,7 +98,7 @@ class MediaSources(
         }
     }
 
-    fun isoMediaSource(uri: String, headers: Map<String, String>?, seekMs: Long): MediaSource =
+    fun getIsoMediaSource(uri: String, headers: Map<String, String>?, seekMs: Long): MediaSource =
         createIsoMediaSource(uri, headers, seekMs)
 
     private fun createIsoMediaSource(
@@ -132,7 +140,7 @@ class MediaSources(
         IsoExtractorsFactory(),
     ).createMediaSource(mediaItem)
 
-    fun bdavMediaSource(uri: String, headers: Map<String, String>?): MediaSource {
+    fun getBdavMediaSource(uri: String, headers: Map<String, String>?): MediaSource {
         IsoThroughput.beginSession()
         IsoPlaylistState.reset()
         val dataSourceFactory = BdavDataSource.Factory(createDataSourceFactory(headers))
@@ -152,16 +160,16 @@ class MediaSources(
                 requestHeaders[entry.key] = entry.value
             }
         }
-        val httpFactory = OkHttpDataSource.Factory(client ?: HttpClients.itvClient() ?: FallbackClient.INSTANCE)
+        val httpFactory = OkHttpDataSource.Factory(client ?: OkGoHelper.getItvClient() ?: FallbackClient.INSTANCE)
         httpFactory.setUserAgent(userAgent)
         httpFactory.setDefaultRequestProperties(requestHeaders)
         return DefaultDataSource.Factory(appContext, httpFactory)
     }
 
     fun createDataSourceFactory(mediaItem: MediaItem): DataSource.Factory =
-        createDataSourceFactory(headersFrom(mediaItem))
+        createDataSourceFactory(getHeadersFrom(mediaItem))
 
-    private fun cacheDataSourceFactory(
+    private fun getCacheDataSourceFactory(
         upstream: DataSource.Factory,
         headers: Map<String, String>?,
         useDefaultCacheKey: Boolean,
@@ -182,9 +190,9 @@ class MediaSources(
 
     companion object {
 
-        const val HEADER_FORMAT = HttpHeaders.HEADER_FORMAT
+        const val HEADER_FORMAT = "TVBox-Format"
 
-        const val HEADER_ISO = HttpHeaders.HEADER_ISO
+        const val HEADER_ISO = "TVBox-Iso"
 
         const val TYPE_ISO = 100
 
@@ -231,7 +239,7 @@ class MediaSources(
         }
 
         @JvmStatic
-        fun headersFrom(mediaItem: MediaItem): Map<String, String>? {
+        fun getHeadersFrom(mediaItem: MediaItem): Map<String, String>? {
             val extras = mediaItem.requestMetadata.extras ?: return null
             val stored = extras.getSerializable(EXTRA_HEADERS)
             @Suppress("UNCHECKED_CAST")
@@ -263,8 +271,27 @@ class MediaSources(
         }
 
         @JvmStatic
-        fun toRequestHeaders(headers: Map<String, String>?): HashMap<String, String> =
-            HttpHeaders.toRequestHeaders(headers)
+        fun toRequestHeaders(headers: Map<String, String>?): HashMap<String, String> {
+            val requestHeaders = HashMap<String, String>()
+            if (headers == null) {
+                return requestHeaders
+            }
+            for (entry in headers.entries) {
+                val key = entry.key
+                val value = entry.value
+                if (TextUtils.isEmpty(key) || TextUtils.isEmpty(value)) {
+                    continue
+                }
+                if (HEADER_FORMAT.equals(key, ignoreCase = true)) {
+                    continue
+                }
+                if (HEADER_ISO.equals(key, ignoreCase = true)) {
+                    continue
+                }
+                requestHeaders[key] = value.trim { it <= ' ' }
+            }
+            return requestHeaders
+        }
 
         @JvmStatic
         fun inferContentType(fileName: String, headers: Map<String, String>?): Int {

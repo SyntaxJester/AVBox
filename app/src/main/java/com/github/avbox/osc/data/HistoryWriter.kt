@@ -1,10 +1,9 @@
 package com.github.avbox.osc.data
 
-import com.github.avbox.osc.event.UiChange
-import com.github.avbox.osc.event.UiEvents
-
 import com.github.avbox.osc.bean.VodInfo
+import com.github.avbox.osc.event.RefreshEvent
 import com.github.avbox.osc.util.AppLog
+import org.greenrobot.eventbus.EventBus
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlinx.coroutines.runBlocking
@@ -45,7 +44,7 @@ object HistoryWriter {
             return
         }
         AppLog.i("echo-history touch key=" + sourceKey + "|" + vodId)
-        UiEvents.post(UiChange.HistoryChanged)
+        EventBus.getDefault().post(RefreshEvent(RefreshEvent.TYPE_HISTORY_REFRESH))
     }
 
     private fun writeNow(sourceKey: String, info: VodInfo) {
@@ -55,6 +54,6 @@ object HistoryWriter {
             AppLog.e("HistoryWriter", "echo-history insert failed: " + th, th)
             return
         }
-        UiEvents.post(UiChange.HistoryChanged)
+        EventBus.getDefault().post(RefreshEvent(RefreshEvent.TYPE_HISTORY_REFRESH))
     }
 }

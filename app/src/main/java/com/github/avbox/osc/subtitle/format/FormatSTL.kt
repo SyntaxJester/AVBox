@@ -392,7 +392,7 @@ class FormatSTL : TimedTextFileFormat {
         val styling = requireNotNull(tto.styling)
 
         style = Style("white")
-        style.color = Style.rgbValue("name", "white")
+        style.color = Style.getRGBValue("name", "white")
         styling.put(style.iD, style)
 
         style = Style("whiteU", style)
@@ -408,7 +408,7 @@ class FormatSTL : TimedTextFileFormat {
         styling.put(style.iD, style)
 
         style = Style("green")
-        style.color = Style.rgbValue("name", "green")
+        style.color = Style.getRGBValue("name", "green")
         styling.put(style.iD, style)
 
         style = Style("greenU", style)
@@ -424,7 +424,7 @@ class FormatSTL : TimedTextFileFormat {
         styling.put(style.iD, style)
 
         style = Style("blue")
-        style.color = Style.rgbValue("name", "blue")
+        style.color = Style.getRGBValue("name", "blue")
         styling.put(style.iD, style)
 
         style = Style("blueU", style)
@@ -440,7 +440,7 @@ class FormatSTL : TimedTextFileFormat {
         styling.put(style.iD, style)
 
         style = Style("cyan")
-        style.color = Style.rgbValue("name", "cyan")
+        style.color = Style.getRGBValue("name", "cyan")
         styling.put(style.iD, style)
 
         style = Style("cyanU", style)
@@ -456,7 +456,7 @@ class FormatSTL : TimedTextFileFormat {
         styling.put(style.iD, style)
 
         style = Style("red")
-        style.color = Style.rgbValue("name", "red")
+        style.color = Style.getRGBValue("name", "red")
         styling.put(style.iD, style)
 
         style = Style("redU", style)
@@ -472,7 +472,7 @@ class FormatSTL : TimedTextFileFormat {
         styling.put(style.iD, style)
 
         style = Style("yellow")
-        style.color = Style.rgbValue("name", "yellow")
+        style.color = Style.getRGBValue("name", "yellow")
         styling.put(style.iD, style)
 
         style = Style("yellowU", style)
@@ -488,7 +488,7 @@ class FormatSTL : TimedTextFileFormat {
         styling.put(style.iD, style)
 
         style = Style("magenta")
-        style.color = Style.rgbValue("name", "magenta")
+        style.color = Style.getRGBValue("name", "magenta")
         styling.put(style.iD, style)
 
         style = Style("magentaU", style)
@@ -504,7 +504,7 @@ class FormatSTL : TimedTextFileFormat {
         styling.put(style.iD, style)
 
         style = Style("black")
-        style.color = Style.rgbValue("name", "black")
+        style.color = Style.getRGBValue("name", "black")
         styling.put(style.iD, style)
 
         style = Style("blackU", style)

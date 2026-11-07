@@ -9,27 +9,29 @@ import android.os.SystemClock
 
 import com.github.catvod.crawler.JsLoader
 import com.github.avbox.osc.BuildConfig
-import com.github.avbox.osc.boot.BootGuard
+import com.github.avbox.osc.bean.VodInfo
 import com.github.avbox.osc.data.AppDataManager
+import com.github.avbox.osc.data.PlaybackPorts
 import com.github.avbox.osc.io.FileUtils
-import com.github.avbox.osc.net.HttpClients
+import com.github.avbox.osc.net.OkGoHelper
 import com.github.avbox.osc.server.ControlManager
 import com.github.avbox.osc.util.AppContextHolder
 import com.github.avbox.osc.util.ActivityStack
 import com.github.avbox.osc.util.EpgUtil
-import com.github.avbox.osc.util.KVKeys
+import com.github.avbox.osc.util.HawkConfig
 import com.github.avbox.osc.util.KV
 import com.github.avbox.osc.util.AppLog
-import com.github.avbox.osc.util.HiddenApiCompat
 import com.github.avbox.osc.util.LanguageManager
 import com.github.avbox.osc.util.Probe
-import com.github.avbox.osc.util.VodImages
+import com.p2p.P2PClass
 import com.whl.quickjs.android.QuickJSLoader
 
+import com.github.avbox.osc.player.engine.PlayerCache
 import me.jessyan.autosize.AutoSizeConfig
 import me.jessyan.autosize.unit.Subunits
 
 class App : Application() {
+    private var vodInfo: VodInfo? = null
 
     override fun attachBaseContext(base: Context) {
         Probe.step("kvInit") { KV.init(base) }
@@ -47,19 +49,18 @@ class App : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        // 必须早于任何 py / js 环境启动：hidden API 反射放行只对之后加载的类生效
-        HiddenApiCompat.apply()
         bootLastMs = SystemClock.elapsedRealtime()
         installStrictMode()
         bootMark("installStrictMode")
         instance = this
         AppContextHolder.install(this)
-        BootGuard.install()
+        PlaybackPorts.currentVod = { getInstance()?.getVodInfo() }
+        com.github.avbox.osc.util.BootGuard.install()
         bootMark("bootGuard")
         initParams()
         bootMark("initParams")
-        Probe.trace("boot:httpClients") { HttpClients.init() }
-        bootMark("httpClients")
+        Probe.trace("boot:okGoHelper") { OkGoHelper.init() }
+        bootMark("okGoHelper")
         Probe.trace("boot:epgUtil") { EpgUtil.init() }
         bootMark("epgUtil")
         Probe.trace("boot:controlManager") { ControlManager.init(this) }
@@ -73,16 +74,22 @@ class App : Application() {
                 .setSupportSubunits(Subunits.MM)
         }
         bootMark("autoSize")
+        Probe.trace("boot:playerCacheSize") {
+            val exoCacheBytes = Math.max(128, KV.get(HawkConfig.EXO_CACHE_SIZE_MB, HawkConfig.EXO_CACHE_SIZE_MB_DEFAULT)) * 1024L * 1024L
+            bootMark("playerCacheSize:kv")
+            PlayerCache.setSharedCacheSizeBytes(exoCacheBytes)
+        }
+        bootMark("playerCacheSize")
         Probe.trace("boot:quickJSLoader") { loadQuickJs() }
         bootMark("quickJSLoader")
-        Probe.trace("boot:vodImages") { VodImages.init() }
+        Probe.trace("boot:vodImages") { com.github.avbox.osc.ui.components.VodImages.init() }
         bootMark("vodImages")
         Thread({
             FileUtils.ensureNoMediaMarker()
+            FileUtils.purgeExoCacheIfPending()
+            PlayerCache.warmup(this)
             Probe.trace("boot:cleanPlayerCache") { FileUtils.cleanPlayerCache() }
         }, "exo-cache-boot").start()
-        // 预热 WebView：把首次初始化的几百毫秒挪出「点开 html 页面」的关键路径
-        com.github.avbox.osc.ui.WebViewPool.warm(this)
         bootMark("onCreateDone")
     }
 
@@ -96,13 +103,13 @@ class App : Application() {
     }
 
     private fun initParams() {
-        KV.put(KVKeys.PLAYER_IS_LIVE, false)
-        if (!KV.contains(KVKeys.PLAY_TYPE)) {
-            KV.put(KVKeys.PLAY_TYPE, 2)
+        KV.put(HawkConfig.PLAYER_IS_LIVE, false)
+        if (!KV.contains(HawkConfig.PLAY_TYPE)) {
+            KV.put(HawkConfig.PLAY_TYPE, 2)
         } else {
-            val playType = KV.get(KVKeys.PLAY_TYPE, 2)
+            val playType = KV.get(HawkConfig.PLAY_TYPE, 2)
             if (playType == 0 || playType == 1 || (playType > 2 && playType != 13)) {
-                KV.put(KVKeys.PLAY_TYPE, 2)
+                KV.put(HawkConfig.PLAY_TYPE, 2)
             }
         }
     }
@@ -134,19 +141,52 @@ class App : Application() {
         JsLoader.destroy()
     }
 
+    fun setVodInfo(vodinfo: VodInfo?) {
+        this.vodInfo = vodinfo
+    }
+
+    fun getVodInfo(): VodInfo? {
+        return this.vodInfo
+    }
+
     fun getCurrentActivity(): Activity {
         return ActivityStack.getInstance().currentActivity()
     }
 
+    fun setDashData(data: String?) {
+        dashData = data
+    }
+
+    fun getDashData(): String? {
+        return dashData
+    }
 
     companion object {
         private var instance: App? = null
 
-        var dashData: String? = null
+        private var dashData: String? = null
+
+        private var p: P2PClass? = null
+
+        @JvmField
+        var burl: String? = null
 
         @JvmStatic
         fun getInstance(): App? {
             return instance
+        }
+
+        @JvmStatic
+        fun getp2p(): P2PClass? {
+            try {
+                if (p == null) {
+                    p = P2PClass(FileUtils.getExternalCachePath())
+                }
+                return p
+            } catch (e: Exception) {
+                AppLog.e(e.toString())
+                return null
+            }
         }
     }
 }

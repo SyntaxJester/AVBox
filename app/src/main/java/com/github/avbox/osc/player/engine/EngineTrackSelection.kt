@@ -1,6 +1,5 @@
 package com.github.avbox.osc.player.engine
 
-import android.content.Context
 import androidx.media3.common.C
 import androidx.media3.common.Format
 import androidx.media3.common.MimeTypes
@@ -10,8 +9,9 @@ import androidx.media3.exoplayer.source.TrackGroupArray
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.trackselection.MappingTrackSelector
 import com.github.avbox.osc.R
-import com.github.avbox.osc.player.core.TrackInfo
-import com.github.avbox.osc.player.core.TrackInfoBean
+import com.github.avbox.osc.base.App
+import com.github.avbox.osc.player.TrackInfo
+import com.github.avbox.osc.player.TrackInfoBean
 import com.github.avbox.osc.util.AppLog
 import com.github.avbox.osc.util.LanguageManager
 import com.github.avbox.osc.util.TrackMemory
@@ -24,8 +24,6 @@ internal class EngineTrackSelection(private val host: Host) {
         fun trackSelector(): DefaultTrackSelector
 
         fun internalPlayer(): ExoPlayer?
-
-        fun appContext(): Context
     }
 
     private var contentKey = ""
@@ -41,7 +39,11 @@ internal class EngineTrackSelection(private val host: Host) {
     val subtitleDelayUs: Long
         get() = subtitleDelayUsValue
 
-    var onCuesListener: ((List<Cue>) -> Unit)? = null
+    private var onCuesListener: ((List<Cue>) -> Unit)? = null
+
+    fun setOnCuesListener(listener: ((List<Cue>) -> Unit)?) {
+        onCuesListener = listener
+    }
 
     fun dispatchCues(cues: List<Cue>) {
         onCuesListener?.invoke(cues)
@@ -82,8 +84,8 @@ internal class EngineTrackSelection(private val host: Host) {
                     if (type == C.TRACK_TYPE_TEXT && isUndeclaredClosedCaptionTrack(fmt)) continue
                     val language = getLanguage(fmt)
                     val detail = when (type) {
-                        C.TRACK_TYPE_VIDEO -> videoName(fmt)
-                        C.TRACK_TYPE_TEXT -> subtitleName(fmt)
+                        C.TRACK_TYPE_VIDEO -> getVideoName(fmt)
+                        C.TRACK_TYPE_TEXT -> getSubtitleName(fmt)
                         else -> getName(fmt)
                     }
                     val bean = TrackInfoBean()
@@ -92,9 +94,9 @@ internal class EngineTrackSelection(private val host: Host) {
                         if (type == C.TRACK_TYPE_AUDIO) str(R.string.player_menu_audio_track)
                         else if (type == C.TRACK_TYPE_VIDEO) str(R.string.player_menu_video_track)
                         else str(R.string.player_menu_subtitle),
-                        if (type == C.TRACK_TYPE_AUDIO) data.audio.size + 1
-                        else if (type == C.TRACK_TYPE_VIDEO) data.video.size + 1
-                        else data.subtitle.size + 1,
+                        if (type == C.TRACK_TYPE_AUDIO) data.getAudio().size + 1
+                        else if (type == C.TRACK_TYPE_VIDEO) data.getVideo().size + 1
+                        else data.getSubtitle().size + 1,
                         language,
                         detail,
                     )
@@ -271,7 +273,7 @@ internal class EngineTrackSelection(private val host: Host) {
     }
 
     fun ensureSubtitleTrackSelected() {
-        val subtitles = getTrackInfo().subtitle
+        val subtitles = getTrackInfo().getSubtitle()
         if (subtitles.isEmpty()) return
         for (subtitle in subtitles) {
             if (subtitle.selected) return
@@ -280,7 +282,7 @@ internal class EngineTrackSelection(private val host: Host) {
     }
 
     private fun selectDefaultSubtitlePick() {
-        val subtitles = getTrackInfo().subtitle
+        val subtitles = getTrackInfo().getSubtitle()
         if (subtitles.isEmpty()) return
         defaultSubtitleTrackSelected = true
         var target = subtitles[0]
@@ -422,7 +424,7 @@ internal class EngineTrackSelection(private val host: Host) {
         return builder.toString()
     }
 
-    private fun subtitleName(fmt: Format): String {
+    private fun getSubtitleName(fmt: Format): String {
         val builder = StringBuilder()
         val fromMime = subtitleFormatName(fmt.sampleMimeType)
         appendPart(builder, fromMime)
@@ -432,7 +434,7 @@ internal class EngineTrackSelection(private val host: Host) {
         return builder.toString()
     }
 
-    private fun videoName(fmt: Format): String {
+    private fun getVideoName(fmt: Format): String {
         val builder = StringBuilder()
         appendPart(builder, fmt.label)
         if (fmt.width > 0 && fmt.height > 0) {
@@ -469,8 +471,10 @@ internal class EngineTrackSelection(private val host: Host) {
         builder.append(part)
     }
 
-    private fun str(resId: Int, vararg args: Any?): String =
-        LanguageManager.localized(host.appContext()).getString(resId, *args)
+    private fun str(resId: Int, vararg args: Any?): String {
+        val app = App.getInstance() ?: return ""
+        return LanguageManager.localized(app).getString(resId, *args)
+    }
 
     companion object {
 

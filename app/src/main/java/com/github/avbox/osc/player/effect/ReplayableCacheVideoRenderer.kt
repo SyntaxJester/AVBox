@@ -7,9 +7,9 @@ import androidx.media3.exoplayer.mediacodec.MediaCodecAdapter
 import androidx.media3.exoplayer.video.MediaCodecVideoRenderer
 import androidx.media3.exoplayer.video.PlaybackVideoGraphWrapper
 import androidx.media3.exoplayer.video.VideoFrameReleaseControl
-import com.github.avbox.osc.player.core.DecodeKindRule
-import com.github.avbox.osc.player.core.VideoCodecObserver
-import com.github.avbox.osc.player.core.CodecPreferences
+import com.github.avbox.osc.player.PlayerHelper
+import com.github.avbox.osc.player.VideoCodecObserver
+import com.github.avbox.osc.player.engine.CodecPreferences
 import com.github.avbox.osc.util.AppLog
 
 class ReplayableCacheVideoRenderer(
@@ -43,11 +43,11 @@ class ReplayableCacheVideoRenderer(
     ) {
         super.onCodecInitialized(name, configuration, initializedTimestampMs, initializationDurationMs)
         val info = configuration.codecInfo
-        val kind = DecodeKindRule.videoKindOf(name, info.softwareOnly)
+        val kind = PlayerHelper.videoDecodeKindOf(name, info.softwareOnly)
         videoCodecObserver?.onCodecInitialized(name, kind)
         AppLog.i(
             "echo-exo-codec-init: name=$name kind=$kind hw=${info.hardwareAccelerated}" +
-                " swOnly=${info.softwareOnly} preferSoft=${CodecPreferences.preferSoftwareDecode}",
+                " swOnly=${info.softwareOnly} preferSoft=${CodecPreferences.isPreferSoftwareDecode()}",
         )
     }
 

@@ -84,7 +84,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.github.avbox.osc.R
-import com.github.avbox.osc.ui.player.CastSheet
+import com.github.avbox.osc.player.ui.CastSheet
 import com.github.avbox.osc.ui.components.AVBoxBottomSheet
 import com.github.avbox.osc.ui.components.ImagePalette
 import com.github.avbox.osc.ui.components.LocalTopBarGlassBackdrop
@@ -92,7 +92,7 @@ import com.github.avbox.osc.ui.components.PosterBackdrop
 import com.github.avbox.osc.ui.components.ScallopShape
 import com.github.avbox.osc.ui.components.TopBarActionBox
 import com.github.avbox.osc.ui.components.glassTopBarSurface
-import com.github.avbox.osc.ui.player.PlayerTipState
+import com.github.avbox.osc.ui.player.PlayerTipBridge
 import com.github.avbox.osc.ui.theme.AppThemeState
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
@@ -101,7 +101,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.PI
 import kotlin.math.sin
-import com.github.avbox.osc.ui.components.marqueeOnOverflow
 
 @Composable
 fun MusicPlayerScreen(
@@ -213,7 +212,7 @@ fun MusicPlayerScreen(
                 Spacer(Modifier.height(16.dp))
             }
 
-            MusicTipOverlay(state.tip)
+            MusicTipOverlay()
         }
 
         if (queueVisible) {
@@ -259,9 +258,7 @@ fun MusicPlayerScreen(
                                 fontWeight = if (current) FontWeight.Bold else FontWeight.Normal,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .marqueeOnOverflow(),
+                                modifier = Modifier.weight(1f),
                             )
                             if (current) {
                                 Icon(
@@ -277,14 +274,9 @@ fun MusicPlayerScreen(
             }
         }
 
-        MusicCastOverlay(state)
-    }
-}
-
-@Composable
-private fun MusicCastOverlay(state: MusicPlayerState) {
-    state.castSheet?.let { sheet ->
-        CastSheet(sheet) { state.dismissCastSheet() }
+        state.castSheet?.let { sheet ->
+            CastSheet(sheet) { state.castSheet = null }
+        }
     }
 }
 
@@ -319,9 +311,7 @@ private fun MusicSourcePill(sourceName: String) {
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier
-                .widthIn(max = 170.dp)
-                .marqueeOnOverflow(),
+            modifier = Modifier.widthIn(max = 170.dp),
         )
     }
 }
@@ -516,7 +506,6 @@ private fun MusicInfo(title: String, subtitle: String) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            modifier = Modifier.marqueeOnOverflow(),
             text = title,
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
@@ -531,9 +520,7 @@ private fun MusicInfo(title: String, subtitle: String) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .padding(top = 4.dp)
-                    .marqueeOnOverflow(),
+                modifier = Modifier.padding(top = 4.dp),
             )
         }
     }
@@ -820,7 +807,8 @@ private const val WAVE_PERIOD_NANOS = 2_000_000_000L
 private const val WAVE_FRAME_INTERVAL_NANOS = 1_000_000_000L / 30
 
 @Composable
-private fun MusicTipOverlay(tip: PlayerTipState) {
+private fun MusicTipOverlay() {
+    val tip = PlayerTipBridge.state
     if (tip.msg.isEmpty()) return
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Surface(

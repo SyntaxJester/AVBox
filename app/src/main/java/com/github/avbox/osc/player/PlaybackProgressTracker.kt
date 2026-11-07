@@ -19,8 +19,6 @@ class PlaybackProgressTracker(private val host: Host) {
         fun currentSession(): PlaybackSession?
 
         fun attemptState(): PlaybackAttemptState
-
-        fun updateAttemptState(block: (PlaybackAttemptState) -> PlaybackAttemptState)
     }
 
     private var progressKey: String? = null
@@ -109,6 +107,8 @@ class PlaybackProgressTracker(private val host: Host) {
     }
 
     fun setPendingInherit(key: String?, progress: Long) {
-        host.updateAttemptState { it.copy(pendingInheritKey = key, pendingInheritProgress = progress) }
+        val st = host.attemptState()
+        st.pendingInheritKey = key
+        st.pendingInheritProgress = progress
     }
 }

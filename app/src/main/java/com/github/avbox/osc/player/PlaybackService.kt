@@ -26,12 +26,8 @@ import coil3.request.ImageRequest
 import coil3.target.Target
 import coil3.toBitmap
 import com.github.avbox.osc.R
-import com.github.avbox.osc.bean.VodInfo
-import com.github.avbox.osc.data.PlaybackDataPorts
 import com.github.avbox.osc.data.PlaybackPorts
-import com.github.avbox.osc.io.FileUtils
-import com.github.avbox.osc.player.engine.PlayerCache
-import com.github.avbox.osc.util.KVKeys
+import com.github.avbox.osc.util.HawkConfig
 import com.github.avbox.osc.util.KV
 import com.github.avbox.osc.util.AppLog
 import com.github.avbox.osc.util.LanguageManager
@@ -73,14 +69,6 @@ class PlaybackService : Service() {
         AppLog.i(TAG + " host onCreate (engine=" + (if (engine == null) "none" else "alive") + ")")
         createNotificationChannel()
         createMediaSession()
-        initPlayerCache()
-    }
-
-    private fun initPlayerCache() {
-        Thread({
-            FileUtils.purgeExoCacheIfPending()
-            PlayerCache.warmup(this)
-        }, "playback-cache-boot").start()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -155,11 +143,8 @@ class PlaybackService : Service() {
 
             override fun onStop() {
                 val host = getOwner()
-                if (host != null) {
-                    host.stopFromMediaSession()
-                } else {
-                    stopPlaybackSession()
-                }
+                if (host != null) host.stopFromMediaSession()
+                stopPlaybackSession()
             }
 
             override fun onSeekTo(pos: Long) {
@@ -506,29 +491,15 @@ class PlaybackService : Service() {
         @JvmStatic
         fun peek(): PlaybackEngine? = engine
 
-        /** 画中画窗口按钮复用 MediaSession 的切集链路：owner 才是真正实现切集的 host */
-        @JvmStatic
-        fun host(): PlaybackHostApi? = owner?.get()
-
         private fun installDataPorts() {
-            if (PlaybackPorts.ports == null) {
-                PlaybackPorts.ports = object : PlaybackDataPorts {
-                    override fun currentVod(): VodInfo? = peek()?.controller()?.vod()
-                    override fun isLiveMode(): Boolean = peek()?.isLiveMode() == true
-                    override fun hasAttachedPage(): Boolean = peek()?.attachedPage() != null
-                    override fun discardStartedContentOf(owners: List<String>) {
-                        peek()?.discardStartedContentOf(owners)
-                    }
-                    override fun onProgressKeysCleared(keys: List<String>) {
-                        peek()?.markZeroStartKeys(keys)
-                    }
-                }
-            }
+            PlaybackPorts.isLiveMode = { peek()?.isLiveMode() == true }
+            PlaybackPorts.discardStartedContentOf = { peek()?.discardStartedContentOf(it) }
+            PlaybackPorts.onProgressKeysCleared = { peek()?.markZeroStartKeys(it) }
         }
 
         @JvmStatic
         fun prewarm(context: Context, delayMs: Long) {
-            if (!KV.get(KVKeys.KERNEL_PREWARM, KVKeys.KERNEL_PREWARM_DEFAULT)) return
+            if (!KV.get(HawkConfig.KERNEL_PREWARM, HawkConfig.KERNEL_PREWARM_DEFAULT)) return
             val app = context.applicationContext
             prewarmHandler.removeCallbacksAndMessages(null)
             prewarmHandler.postDelayed({ ensurePrewarmed(app) }, Math.max(0L, delayMs))
@@ -547,7 +518,7 @@ class PlaybackService : Service() {
         }
 
         private fun ensurePrewarmed(app: Context) {
-            if (!KV.get(KVKeys.KERNEL_PREWARM, KVKeys.KERNEL_PREWARM_DEFAULT)) return
+            if (!KV.get(HawkConfig.KERNEL_PREWARM, HawkConfig.KERNEL_PREWARM_DEFAULT)) return
             try {
                 var current = engine
                 if (current == null) {
@@ -634,41 +605,6 @@ class PlaybackService : Service() {
             } else if (pendingStart) {
                 stopWhenStarted = true
             }
-        }
-
-        /**
-         * 用户点掉画中画窗口的关闭按钮时收尾。
-         *
-         * Activity 会被系统 finish，但播放内核挂在本服务的会话上；服务是
-         * startService 起的，不会随 Activity 销毁而停止，只有 onTaskRemoved
-         * 才 stopSelf。所以不显式收尾，后台会一直出声。
-         */
-        @JvmStatic
-        fun stopForPipClose(context: Context?) {
-            // 点播 / 直播 / 音乐三种模式共用同一个 engine，不依赖 owner 是否还在，
-            // 直接把内核停掉；否则 owner 被提前清掉时只移除通知，声音仍在后台。
-            val current = engine
-            if (current != null) {
-                try {
-                    val view = current.player()
-                    view.pause()
-                    view.stopPlaybackKeepPlayer()
-                } catch (th: Throwable) {
-                    AppLog.e(TAG, th)
-                }
-            }
-            val host = owner?.get()
-            if (host != null) {
-                try {
-                    host.stopFromMediaSession()
-                } catch (th: Throwable) {
-                    AppLog.e(TAG, th)
-                }
-            }
-            forceStopSession(context)
-            instance?.stopSelf()
-            // 服务 onDestroy 默认只 keepKernel，不释放；这里同步释放才彻底无声
-            releaseEngine()
         }
 
         @JvmStatic

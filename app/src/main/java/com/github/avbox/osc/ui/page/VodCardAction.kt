@@ -5,7 +5,7 @@ import android.widget.Toast
 import com.github.avbox.osc.R
 import com.github.avbox.osc.api.ApiConfig
 import com.github.avbox.osc.bean.Movie
-import com.github.avbox.osc.ui.PartitionListActivity
+import com.github.avbox.osc.ui.activity.PartitionListActivity
 
 sealed interface VodCardTarget {
     data class Action(val video: Movie.Video) : VodCardTarget

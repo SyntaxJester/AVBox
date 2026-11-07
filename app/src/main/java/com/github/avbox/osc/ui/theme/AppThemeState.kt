@@ -13,7 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
-import com.github.avbox.osc.util.KVKeys
+import com.github.avbox.osc.util.HawkConfig
 import com.materialkolor.PaletteStyle
 import com.materialkolor.dynamicColorScheme
 import com.github.avbox.osc.util.KV
@@ -28,48 +28,38 @@ object AppThemeState {
     val config: ThemeConfig get() = current
 
     private fun load(): ThemeConfig = ThemeConfig(
-        source = KV.get(KVKeys.THEME_SOURCE, ThemeSource.SYSTEM),
-        mode = KV.get(KVKeys.THEME_MODE, ThemeMode.FOLLOW_SYSTEM),
-        seedArgb = KV.get(KVKeys.THEME_SEED, DefaultSeedArgb),
-        style = runCatching { PaletteStyle.valueOf(KV.get(KVKeys.THEME_PALETTE_STYLE, "")) }
+        source = KV.get(HawkConfig.THEME_SOURCE, ThemeSource.SYSTEM),
+        mode = KV.get(HawkConfig.THEME_MODE, ThemeMode.FOLLOW_SYSTEM),
+        seedArgb = KV.get(HawkConfig.THEME_SEED, DefaultSeedArgb),
+        style = runCatching { PaletteStyle.valueOf(KV.get(HawkConfig.THEME_PALETTE_STYLE, "")) }
             .getOrDefault(DefaultPaletteStyle),
-        pureBlack = KV.get(KVKeys.THEME_PURE_BLACK, false),
+        pureBlack = KV.get(HawkConfig.THEME_PURE_BLACK, false),
     )
 
-    var source: Int
-        get() = current.source
-        set(value) {
-            KV.put(KVKeys.THEME_SOURCE, value)
-            current = current.copy(source = value)
-        }
+    fun setSource(source: Int) {
+        KV.put(HawkConfig.THEME_SOURCE, source)
+        current = current.copy(source = source)
+    }
 
-    var mode: Int
-        get() = current.mode
-        set(value) {
-            KV.put(KVKeys.THEME_MODE, value)
-            current = current.copy(mode = value)
-        }
+    fun setMode(mode: Int) {
+        KV.put(HawkConfig.THEME_MODE, mode)
+        current = current.copy(mode = mode)
+    }
 
-    var seed: Int
-        get() = current.seedArgb
-        set(value) {
-            KV.put(KVKeys.THEME_SEED, value)
-            current = current.copy(seedArgb = value)
-        }
+    fun setSeed(argb: Int) {
+        KV.put(HawkConfig.THEME_SEED, argb)
+        current = current.copy(seedArgb = argb)
+    }
 
-    var style: PaletteStyle
-        get() = current.style
-        set(value) {
-            KV.put(KVKeys.THEME_PALETTE_STYLE, value.name)
-            current = current.copy(style = value)
-        }
+    fun setStyle(style: PaletteStyle) {
+        KV.put(HawkConfig.THEME_PALETTE_STYLE, style.name)
+        current = current.copy(style = style)
+    }
 
-    var pureBlack: Boolean
-        get() = current.pureBlack
-        set(value) {
-            KV.put(KVKeys.THEME_PURE_BLACK, value)
-            current = current.copy(pureBlack = value)
-        }
+    fun setPureBlack(enabled: Boolean) {
+        KV.put(HawkConfig.THEME_PURE_BLACK, enabled)
+        current = current.copy(pureBlack = enabled)
+    }
 
     fun isDark(systemDark: Boolean): Boolean = when (current.mode) {
         ThemeMode.LIGHT -> false

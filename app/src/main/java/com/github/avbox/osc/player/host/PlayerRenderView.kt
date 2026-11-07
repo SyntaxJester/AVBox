@@ -3,7 +3,7 @@ package com.github.avbox.osc.player.host
 import android.content.Context
 import android.graphics.Bitmap
 import android.view.View
-import com.github.avbox.osc.player.core.KernelPlayer
+import com.github.avbox.osc.player.KernelPlayer
 
 interface PlayerRenderView {
 

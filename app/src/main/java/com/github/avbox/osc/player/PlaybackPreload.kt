@@ -7,7 +7,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import org.json.JSONObject
-import com.github.avbox.osc.player.core.PlayState
+import com.github.avbox.osc.player.state.PlayState
 
 class PlaybackPreload(private val host: Host) {
 
@@ -22,31 +22,28 @@ class PlaybackPreload(private val host: Host) {
     }
 
     private var preloadCoordinator: PreloadCoordinator? = null
+    private var preloadReadyListener: PreloadManagerHolder.ReadyListener? = null
     private var collectJob: Job? = null
-    private var readyJob: Job? = null
 
     fun init() {
         if (host.sourceViewModel() == null) host.ensureFetch()
         val vm = host.sourceViewModel()
-        preloadCoordinator = PreloadCoordinator(vm) { showReadyTip() }
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        preloadCoordinator = PreloadCoordinator(vm)
         if (vm != null) {
-            collectJob = scope.launch {
+            collectJob = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate).launch {
                 vm.preloadResult.flow.collect { info -> preloadCoordinator?.handlePreloadResult(info) }
             }
         }
-        readyJob = scope.launch {
-            PreloadManagerHolder.completedUrl.collect { url -> if (url != null) showReadyTip() }
+        val listener = PreloadManagerHolder.ReadyListener { _ ->
+            val view = host.view()
+            if (view == null || !view.isPageAlive()) return@ReadyListener
+            view.runOnUi {
+                val current = host.view()
+                current?.showPreloadReadyTip()
+            }
         }
-    }
-
-    private fun showReadyTip() {
-        val view = host.view()
-        if (view == null || !view.isPageAlive()) return
-        view.runOnUi {
-            val current = host.view()
-            current?.showPreloadReadyTip()
-        }
+        preloadReadyListener = listener
+        PreloadManagerHolder.setReadyListener(listener)
     }
 
     fun onPlayerState(playState: PlayState) {
@@ -76,10 +73,10 @@ class PlaybackPreload(private val host: Host) {
     }
 
     fun destroy() {
+        PreloadManagerHolder.clearReadyListener(preloadReadyListener)
+        preloadReadyListener = null
         collectJob?.cancel()
         collectJob = null
-        readyJob?.cancel()
-        readyJob = null
         preloadCoordinator?.destroy()
         preloadCoordinator = null
     }

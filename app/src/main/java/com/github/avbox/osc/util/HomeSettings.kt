@@ -27,23 +27,23 @@ object HomeSettings {
     private val defaultLayout: HomeLayout =
         if (resolveHomeLayoutVertical(null, smallestWidthDp())) HomeLayout.Vertical else HomeLayout.Horizontal
 
-    var layout: HomeLayout
-        get() = when (KV.get(KEY_LAYOUT, "")) {
-            VALUE_LAYOUT_HORIZONTAL -> HomeLayout.Horizontal
-            VALUE_LAYOUT_VERTICAL -> HomeLayout.Vertical
-            else -> defaultLayout
-        }
-        set(value) {
-            KV.put(
-                KEY_LAYOUT,
-                if (value == HomeLayout.Vertical) VALUE_LAYOUT_VERTICAL else VALUE_LAYOUT_HORIZONTAL,
-            )
-            mutableLayout.value = value
-        }
-
-    private val mutableLayout = MutableStateFlow(layout)
+    private val mutableLayout = MutableStateFlow(current())
 
     val layoutFlow: StateFlow<HomeLayout> = mutableLayout
+
+    fun current(): HomeLayout = when (KV.get(KEY_LAYOUT, "")) {
+        VALUE_LAYOUT_HORIZONTAL -> HomeLayout.Horizontal
+        VALUE_LAYOUT_VERTICAL -> HomeLayout.Vertical
+        else -> defaultLayout
+    }
+
+    fun setLayout(layout: HomeLayout) {
+        KV.put(
+            KEY_LAYOUT,
+            if (layout == HomeLayout.Vertical) VALUE_LAYOUT_VERTICAL else VALUE_LAYOUT_HORIZONTAL,
+        )
+        mutableLayout.value = layout
+    }
 
     private fun smallestWidthDp(): Int =
         AppContextHolder.context()?.resources?.configuration?.smallestScreenWidthDp ?: 0

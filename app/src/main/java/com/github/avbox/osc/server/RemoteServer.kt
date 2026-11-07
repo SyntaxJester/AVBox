@@ -2,16 +2,20 @@ package com.github.avbox.osc.server
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.res.AssetManager
 import android.net.wifi.WifiManager
 import android.os.Environment
 import android.text.TextUtils
 import android.util.Base64
+import android.webkit.MimeTypeMap
 
+import com.github.avbox.osc.api.ApiConfig
+import com.github.avbox.osc.base.App
 import com.github.avbox.osc.bean.VodInfo
-import com.github.avbox.osc.data.PlaybackPorts
+import com.github.avbox.osc.event.ServerEvent
 import com.github.avbox.osc.io.LocalSourceTree
-import com.github.avbox.osc.net.HttpClients
-import com.github.avbox.osc.net.StreamProxy
+import com.github.avbox.osc.net.OkGoHelper
+import com.github.avbox.osc.net.Proxy
 import com.github.avbox.osc.net.ProxyResponsePolicy
 import com.github.avbox.osc.util.AppContextHolder
 import com.github.avbox.osc.util.AppLog
@@ -19,6 +23,7 @@ import com.github.avbox.osc.util.RegexUtils
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 
+import org.greenrobot.eventbus.EventBus
 
 import java.io.ByteArrayInputStream
 import java.io.File
@@ -39,12 +44,10 @@ import java.util.regex.Pattern
 
 import fi.iki.elonen.NanoHTTPD
 import okio.Buffer
-import android.webkit.CookieManager
 
 class RemoteServer(port: Int, context: Context) : NanoHTTPD(port) {
-    private val hostContext: Context = context
+    private val mContext: Context = context
 
-    @Volatile
     private var isStarted = false
 
     private val getRequestList = ArrayList<RequestProcess>()
@@ -66,6 +69,7 @@ class RemoteServer(port: Int, context: Context) : NanoHTTPD(port) {
     override fun start(timeout: Int, daemon: Boolean) {
         isStarted = true
         super.start(timeout, daemon)
+        EventBus.getDefault().post(ServerEvent(ServerEvent.SERVER_SUCCESS))
     }
 
     override fun stop() {
@@ -155,13 +159,7 @@ class RemoteServer(port: Int, context: Context) : NanoHTTPD(port) {
     }
 
     override fun serve(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
-        if (session.method == NanoHTTPD.Method.OPTIONS &&
-            session.uri.startsWith("/webResource")) {
-            return cors(
-                NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.NO_CONTENT, NanoHTTPD.MIME_PLAINTEXT, ""),
-                session,
-            )
-        }
+        EventBus.getDefault().post(ServerEvent(ServerEvent.SERVER_CONNECTION))
         if (!session.uri.isEmpty()) {
             var fileName = session.uri.trim { it <= ' ' }
             if (fileName.indexOf('?') >= 0) {
@@ -170,9 +168,6 @@ class RemoteServer(port: Int, context: Context) : NanoHTTPD(port) {
             if (session.method == NanoHTTPD.Method.GET) {
                 if (isProxyRequest(fileName, session.parms)) {
                     return handleProxy(session)
-                }
-                if (fileName == "/webResource") {
-                    return handleWebResource(session)
                 }
                 for (process in getRequestList) {
                     if (process.isRequest(session, fileName)) {
@@ -193,16 +188,39 @@ class RemoteServer(port: Int, context: Context) : NanoHTTPD(port) {
                         }
                         if (localFile.isFile) {
                             try {
-                                return NanoHTTPD.newChunkedResponse(NanoHTTPD.Response.Status.OK, mimeOf(file), FileInputStream(localFile))
+                                return NanoHTTPD.newChunkedResponse(NanoHTTPD.Response.Status.OK, "application/octet-stream", FileInputStream(localFile))
                             } catch (ignored: Throwable) {
                                 AppLog.d("RemoteServer", "file open failed, fallback to tree grant")
                             }
                         }
                         val granted = if (isLocalRequest(session)) LocalSourceTree.open(requireNotNull(AppContextHolder.context()) { "app context not initialized" }, f) else null
                         if (granted != null) {
-                            return NanoHTTPD.newChunkedResponse(NanoHTTPD.Response.Status.OK, mimeOf(file), granted)
+                            return NanoHTTPD.newChunkedResponse(NanoHTTPD.Response.Status.OK, "application/octet-stream", granted)
                         }
                         return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.INTERNAL_ERROR, NanoHTTPD.MIME_PLAINTEXT, "File $file not found!")
+                    } catch (th: Throwable) {
+                        return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.INTERNAL_ERROR, NanoHTTPD.MIME_PLAINTEXT, th.message)
+                    }
+                } else if (fileName.startsWith("/html/")) {
+                    try {
+                        val path = fileName.substring(6)
+                        if (path.isEmpty()) {
+                            return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.NOT_FOUND, NanoHTTPD.MIME_PLAINTEXT, "Not Found")
+                        }
+                        val ctx = AppContextHolder.context()
+                        if (ctx == null) {
+                            return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.INTERNAL_ERROR, NanoHTTPD.MIME_PLAINTEXT, "Context not available")
+                        }
+                        val assetManager = ctx.assets
+                        val list = assetManager.list("html") ?: arrayOf()
+                        val found = list.any { it == path || it == path.removeSuffix(".html") }
+                        if (!found) {
+                            return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.NOT_FOUND, NanoHTTPD.MIME_PLAINTEXT, "Asset not found: $path")
+                        }
+                        val assetPath = if (path.endsWith(".html")) path else "$path.html"
+                        val inputStream = assetManager.open("html/$assetPath")
+                        val mimeType = guessMimeType(assetPath)
+                        return NanoHTTPD.newChunkedResponse(NanoHTTPD.Response.Status.OK, mimeType, inputStream)
                     } catch (th: Throwable) {
                         return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.INTERNAL_ERROR, NanoHTTPD.MIME_PLAINTEXT, th.message)
                     }
@@ -210,7 +228,7 @@ class RemoteServer(port: Int, context: Context) : NanoHTTPD(port) {
                     val name = session.parms["name"]
                     var rs = ByteArray(0)
                     try {
-                        val dnsOverHttps = HttpClients.dnsOverHttps
+                        val dnsOverHttps = OkGoHelper.dnsOverHttps
                         val hostName = name
                         if (dnsOverHttps != null && !hostName.isNullOrEmpty()) {
                             rs = buildDnsResponse(hostName, dnsOverHttps.lookup(hostName))
@@ -226,7 +244,7 @@ class RemoteServer(port: Int, context: Context) : NanoHTTPD(port) {
                     }
                     return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "application/vnd.apple.mpegurl", content)
                 } else if (fileName.startsWith("/dash/")) {
-                    val dashData = ServerQueryPorts.ports?.dashData()
+                    val dashData = App.getInstance()?.getDashData()
                     try {
                         val data = String(Base64.decode(dashData, Base64.DEFAULT or Base64.NO_WRAP), Charsets.UTF_8)
                         return NanoHTTPD.newFixedLengthResponse(
@@ -269,112 +287,6 @@ class RemoteServer(port: Int, context: Context) : NanoHTTPD(port) {
         return createPlainTextResponse(NanoHTTPD.Response.Status.NOT_FOUND, "Not Found")
     }
 
-    /**
-     * 跨域资源网关（对齐 webhtv 的 WebResourceGateway）。
-     *
-     * 页面里的原生 fetch 发到这个同源端点，由宿主共享 OkHttp 代发并加全套 CORS，
-     * 于是跨域请求不再被 CORS / CSP 拦死，也顺带让站点代理链路生效。
-     * 只服务本机 WebView，外部来源不额外鉴权与 /file/ 一致。
-     */
-    private fun handleWebResource(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
-        val target = session.parms["url"]
-        if (target.isNullOrEmpty() || !(target.startsWith("http://") || target.startsWith("https://"))) {
-            return cors(
-                NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.BAD_REQUEST, NanoHTTPD.MIME_PLAINTEXT, "Unsupported url"),
-                session,
-            )
-        }
-        var resp: okhttp3.Response? = null
-        return try {
-            val builder = okhttp3.Request.Builder().url(target)
-            builder.header("User-Agent", WEB_RESOURCE_UA)
-            // 伪装真实浏览器：CDN 防护（如 policy_default_denied）会按请求头特征拦截
-            val u = java.net.URI.create(target)
-            builder.header("Origin", u.scheme + "://" + u.authority)
-            builder.header("Referer", u.scheme + "://" + u.authority + "/")
-            builder.header("Accept-Language", "zh-CN,zh;q=0.9")
-            builder.header("Sec-Fetch-Site", "cross-site")
-            builder.header("Sec-Fetch-Mode", "cors")
-            builder.header("Sec-Fetch-Dest", "empty")
-            if (!session.parms.containsKey("credentials")) {
-                try {
-                    val ck = CookieManager.getInstance().getCookie(target)
-                    if (!ck.isNullOrBlank()) builder.header("Cookie", ck)
-                } catch (ignored: Throwable) {}
-            }
-            val extra = session.parms["headers"]
-            if (!extra.isNullOrEmpty()) {
-                try {
-                    val jo = org.json.JSONObject(extra)
-                    val it = jo.keys()
-                    while (it.hasNext()) {
-                        val k = it.next()
-                        if (k.equals("User-Agent", true) || k.equals("Host", true) ||
-                            k.equals("Content-Length", true) || k.equals("Origin", true) ||
-                            k.equals("Referer", true) || k.equals("Cookie", true)) continue
-                        builder.header(k, jo.optString(k))
-                    }
-                } catch (ignored: Throwable) {
-                }
-            }
-            headerOf(session, "range")?.let { builder.header("Range", it) }
-            val m = if (session.method == NanoHTTPD.Method.OPTIONS) "GET" else session.method.name
-            if (m.equals("GET", true) || m.equals("HEAD", true)) {
-                builder.method(m, null)
-            } else {
-                var body = session.parms["body"]
-                if (body.isNullOrEmpty()) body = session.parms["postData"]
-                builder.method(m, okhttp3.RequestBody.create(null, body ?: ""))
-            }
-            resp = com.github.catvod.net.OkHttp.client(WEB_RESOURCE_TIMEOUT_MS)
-                .newCall(builder.build()).execute()
-            // 403/429 多为 CDN 按 UA/TLS 特征拦截，换桌面 UA 重试一次
-            if (resp!!.code == 403 || resp.code == 429) {
-                try { resp.close() } catch (ignored: Throwable) {}
-                builder.header("User-Agent", WEB_RESOURCE_UA_DESKTOP)
-                builder.header("Sec-Fetch-Mode", "navigate")
-                builder.header("Sec-Fetch-Dest", "document")
-                resp = com.github.catvod.net.OkHttp.client(WEB_RESOURCE_TIMEOUT_MS)
-                    .newCall(builder.build()).execute()
-            }
-            val r = resp!!
-            val type = r.body?.contentType()?.toString() ?: NanoHTTPD.MIME_PLAINTEXT
-            val out = NanoHTTPD.newChunkedResponse(
-                nanoStatus(r.code), type,
-                r.body?.byteStream() ?: ByteArrayInputStream(ByteArray(0)),
-            )
-            for (name in r.headers.names()) {
-                if (name.lowercase() in SKIP_GATEWAY_HEADERS) continue
-                r.headers.values(name).forEach { out.addHeader(name, it) }
-            }
-            cors(out, session)
-        } catch (th: Throwable) {
-            try { resp?.close() } catch (ignored: Throwable) {}
-            AppLog.e("echo-webResource error: " + th.message)
-            cors(
-                NanoHTTPD.newFixedLengthResponse(
-                    NanoHTTPD.Response.Status.INTERNAL_ERROR,
-                    NanoHTTPD.MIME_PLAINTEXT,
-                    th.message ?: "webResource failed",
-                ),
-                session,
-            )
-        }
-    }
-
-    private fun headerOf(session: NanoHTTPD.IHTTPSession, name: String): String? =
-        session.headers.entries.firstOrNull { it.key.equals(name, true) }?.value?.takeIf { it.isNotEmpty() }
-
-    private fun cors(response: NanoHTTPD.Response, session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
-        response.addHeader("Access-Control-Allow-Origin", headerOf(session, "origin") ?: "*")
-        response.addHeader("Access-Control-Allow-Credentials", "true")
-        response.addHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,HEAD,OPTIONS")
-        response.addHeader("Access-Control-Allow-Headers", "*")
-        response.addHeader("Access-Control-Expose-Headers", "*")
-        response.addHeader("Access-Control-Max-Age", "86400")
-        return response
-    }
-
     private fun isProxyRequest(fileName: String, params: Map<String, String>?): Boolean {
         if (params == null) return false
         if (!params.containsKey("do") && !params.containsKey("go")) return false
@@ -388,11 +300,11 @@ class RemoteServer(port: Int, context: Context) : NanoHTTPD(port) {
             val isDanmuProxy = "danmu" == params["do"]
             if (isDanmuProxy) normalizeDanmuParams(params)
             if (isDanmuProxy) AppLog.i("echo-proxy-danmu params: " + params.toString())
-            val rs = ServerQueryPorts.ports?.proxyLocal(params)
+            val rs = ApiConfig.get().proxyLocal(params)
             return getProxy(rs, params["url"])
         }
         if (params.containsKey("go")) {
-            val rs = StreamProxy.proxy(params)
+            val rs = Proxy.proxy(params)
             return getProxy(rs, params["url"])
         }
         return getProxy(null, null)
@@ -400,11 +312,11 @@ class RemoteServer(port: Int, context: Context) : NanoHTTPD(port) {
 
     private fun normalizeDanmuParams(params: MutableMap<String, String>) {
         try {
-            val vodInfo = PlaybackPorts.ports?.currentVod() ?: return
+            val vodInfo = App.getInstance()?.getVodInfo() ?: return
             val vodName = vodInfo.name
             if (!vodName.isNullOrEmpty()) params["vodName"] = vodName
             if (!isNumeric(params["vodIndex"])) {
-                val episode = currentEpisodeIndex(vodInfo)
+                val episode = getCurrentEpisodeIndex(vodInfo)
                 if (!episode.isNullOrEmpty()) params["vodIndex"] = episode
             }
         } catch (th: Throwable) {
@@ -412,7 +324,7 @@ class RemoteServer(port: Int, context: Context) : NanoHTTPD(port) {
         }
     }
 
-    private fun currentEpisodeIndex(vodInfo: VodInfo): String? {
+    private fun getCurrentEpisodeIndex(vodInfo: VodInfo): String? {
         val seriesMap = vodInfo.seriesMap
         if (seriesMap != null && !TextUtils.isEmpty(vodInfo.playFlag)) {
             val series = seriesMap[vodInfo.playFlag]
@@ -441,18 +353,45 @@ class RemoteServer(port: Int, context: Context) : NanoHTTPD(port) {
         return isStarted
     }
 
-    fun serverAddress(): String {
-        val ipAddress = getLocalIPAddress(hostContext)
+    fun getServerAddress(): String {
+        val ipAddress = getLocalIPAddress(mContext)
         return "http://" + ipAddress + ":" + RemoteServer.serverPort + "/"
     }
 
-    fun loadAddress(): String {
+    fun getLoadAddress(): String {
         return "http://127.0.0.1:" + RemoteServer.serverPort + "/"
     }
 
     private fun isLocalRequest(session: NanoHTTPD.IHTTPSession): Boolean {
         val address = session.remoteIpAddress
         return address != null && (address.startsWith("127.") || address == "::1")
+    }
+
+    private fun guessMimeType(path: String): String {
+        val ext = path.substringAfterLast('.', "").lowercase()
+        return when (ext) {
+            "html", "htm" -> "text/html; charset=utf-8"
+            "js", "mjs" -> "application/javascript; charset=utf-8"
+            "css" -> "text/css; charset=utf-8"
+            "json" -> "application/json; charset=utf-8"
+            "svg" -> "image/svg+xml"
+            "png" -> "image/png"
+            "jpg", "jpeg" -> "image/jpeg"
+            "gif" -> "image/gif"
+            "webp" -> "image/webp"
+            "ico" -> "image/x-icon"
+            "woff" -> "font/woff"
+            "woff2" -> "font/woff2"
+            "ttf" -> "font/ttf"
+            "otf" -> "font/otf"
+            "txt", "log", "md" -> "text/plain; charset=utf-8"
+            "xml" -> "text/xml; charset=utf-8"
+            "m3u8" -> "application/vnd.apple.mpegurl"
+            "mp4" -> "video/mp4"
+            "mp3" -> "audio/mpeg"
+            "wasm" -> "application/wasm"
+            else -> MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "application/octet-stream"
+        }
     }
 
     private fun fileTime(time: Long, fmt: String): String {
@@ -467,7 +406,7 @@ class RemoteServer(port: Int, context: Context) : NanoHTTPD(port) {
         val file = File("$root/$path")
         val list = file.listFiles()
         val info = JsonObject()
-        info.addProperty("remote", serverAddress().replace("http://", "clan://"))
+        info.addProperty("remote", getServerAddress().replace("http://", "clan://"))
         info.addProperty("del", 0)
         if (path.isEmpty()) {
             info.addProperty("parent", ".")
@@ -505,16 +444,6 @@ class RemoteServer(port: Int, context: Context) : NanoHTTPD(port) {
     companion object {
         @JvmField
         var serverPort = 9978
-
-        private const val WEB_RESOURCE_TIMEOUT_MS = 15_000L
-        private const val WEB_RESOURCE_UA =
-            "Mozilla/5.0 (Linux; Android 12; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
-        private const val WEB_RESOURCE_UA_DESKTOP =
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-        private val SKIP_GATEWAY_HEADERS = setOf(
-            "connection", "transfer-encoding", "keep-alive", "content-length",
-            "content-encoding", "content-type",
-        )
 
         private const val M3U8_SLOT_LIMIT = 4
 
@@ -612,31 +541,6 @@ class RemoteServer(port: Int, context: Context) : NanoHTTPD(port) {
                 buffer.write(raw)
             }
             return buffer.readByteString().toByteArray()
-        }
-    }
-
-    /**
-     * 按扩展名返回正确的 MIME。
-     * 以前一律返回 application/octet-stream，WebView 拿到后只会【触发下载、不渲染】——
-     * html 页面经由 http://127.0.0.1:9978/file/ 打开时表现为"打不开/白屏"。
-     */
-    private fun mimeOf(pathOrName: String): String {
-        val lower = pathOrName.substringAfterLast('/').lowercase()
-        return when {
-            lower.endsWith(".html") || lower.endsWith(".htm") -> "text/html; charset=UTF-8"
-            lower.endsWith(".js") || lower.endsWith(".mjs") -> "application/javascript; charset=UTF-8"
-            lower.endsWith(".css") -> "text/css; charset=UTF-8"
-            lower.endsWith(".json") -> "application/json; charset=UTF-8"
-            lower.endsWith(".xml") -> "application/xml; charset=UTF-8"
-            lower.endsWith(".txt") || lower.endsWith(".md") || lower.endsWith(".log") -> "text/plain; charset=UTF-8"
-            lower.endsWith(".png") -> "image/png"
-            lower.endsWith(".jpg") || lower.endsWith(".jpeg") -> "image/jpeg"
-            lower.endsWith(".gif") -> "image/gif"
-            lower.endsWith(".webp") -> "image/webp"
-            lower.endsWith(".svg") -> "image/svg+xml"
-            lower.endsWith(".mp4") -> "video/mp4"
-            lower.endsWith(".m3u8") -> "application/vnd.apple.mpegurl"
-            else -> "application/octet-stream"
         }
     }
 }

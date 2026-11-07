@@ -57,7 +57,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import android.app.Activity
 import android.content.Intent
-import com.github.avbox.osc.ui.MainActivity
+import com.github.avbox.osc.ui.activity.MainActivity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -66,7 +66,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.github.avbox.osc.R
 import com.github.avbox.osc.api.ApiConfig
-import com.github.avbox.osc.ui.ConfigManageActivity
+import com.github.avbox.osc.ui.activity.ConfigManageActivity
 import com.github.avbox.osc.ui.components.AVBoxAlertDialog
 import com.github.avbox.osc.ui.components.AVBoxBottomSheet
 import com.github.avbox.osc.ui.components.CapsuleSegmentedButton
@@ -88,7 +88,6 @@ import com.github.avbox.osc.ui.components.TopBarActionBox
 import com.github.avbox.osc.ui.components.glassSurface
 import com.github.avbox.osc.ui.theme.cardContainer
 import com.github.avbox.osc.util.HistoryHelper
-import com.github.avbox.osc.ui.components.marqueeOnOverflow
 
 private fun badgeText(name: String, url: String, emptyText: String): String = when {
     name.isNotEmpty() -> name
@@ -144,7 +143,7 @@ fun ConfigManageScreen(onNavigateBack: () -> Unit) {
         ApiConfig.get().isLiveApiLineMode() && HistoryHelper.isLiveApiLineUrl(liveActiveUrl)
     }
 
-    val repoEntries = if (isVod) HistoryHelper.getApiLines() else HistoryHelper.liveApiLines()
+    val repoEntries = if (isVod) HistoryHelper.getApiLines() else HistoryHelper.getLiveApiLines()
 
     val repoActiveUrl = if (isVod) activeUrl else liveActiveUrl
 
@@ -203,7 +202,7 @@ fun ConfigManageScreen(onNavigateBack: () -> Unit) {
                             iconRes = R.drawable.ic_edit,
                             contentDescription = stringResource(R.string.common_edit),
                             enabled = selected.size == 1,
-                            onClick = { vm.openEdit(selected.firstOrNull()?.let { parseSubscribe(it) }) },
+                            onClick = { vm.editTarget.value = selected.firstOrNull()?.let { parseSubscribe(it) } },
                         )
                         ManageActionIcon(
                             iconRes = R.drawable.ic_delete,
@@ -309,17 +308,17 @@ fun ConfigManageScreen(onNavigateBack: () -> Unit) {
                 },
                 label = "configSegment",
             ) { m ->
-                val vodMode = m == ConfigMode.Vod
-                val configItems = if (vodMode) vodItems else liveItems
+                val mIsVod = m == ConfigMode.Vod
+                val mItems = if (mIsVod) vodItems else liveItems
                 if (m == ConfigMode.Tmdb) {
                     ConfigTmdbScreen(
                         state = tmdbState,
                         actions = remember(vm) { vm.tmdbActions() },
                         testing = tmdbTesting,
                     )
-                } else if (configItems.isEmpty()) {
+                } else if (mItems.isEmpty()) {
                     Column(modifier = Modifier.fillMaxSize()) {
-                        if (!vodMode) {
+                        if (!mIsVod) {
                             FollowVodCard(
                                 checked = liveFollow,
                                 subtitle = if (activeUrl.isEmpty()) {
@@ -334,7 +333,7 @@ fun ConfigManageScreen(onNavigateBack: () -> Unit) {
                         LoadStateBox(
                             state = LoadState.Empty,
                             emptyText = stringResource(
-                                if (vodMode) R.string.config_empty_subscribe
+                                if (mIsVod) R.string.config_empty_subscribe
                                 else R.string.config_empty_live_source
                             ),
                             errorText = "",
@@ -344,10 +343,10 @@ fun ConfigManageScreen(onNavigateBack: () -> Unit) {
                         )
                     }
                 } else {
-                    val ordered = remember(configItems, activeUrl, liveActiveUrl, liveFollow, vodMode) {
-                        configItems.sortedByDescending {
+                    val mOrdered = remember(mItems, activeUrl, liveActiveUrl, liveFollow, mIsVod) {
+                        mItems.sortedByDescending {
                             val url = parseSubscribe(it).url
-                            if (vodMode) url == activeUrl else !liveFollow && url == liveActiveUrl
+                            if (mIsVod) url == activeUrl else !liveFollow && url == liveActiveUrl
                         }
                     }
                     val cardContent: @Composable (String, Modifier) -> Unit = { value, cardModifier ->
@@ -364,7 +363,7 @@ fun ConfigManageScreen(onNavigateBack: () -> Unit) {
                             )
                             (ctx as? Activity)?.finish()
                         }
-                        val inUse = if (isVod) {
+                        val inUse = if (mIsVod) {
                             item.url == activeUrl || HistoryHelper.isApiLineSourceOf(item.url, activeUrl)
                         } else {
                             !liveFollow && (
@@ -386,14 +385,14 @@ fun ConfigManageScreen(onNavigateBack: () -> Unit) {
                                     // 已经在这个接口上，再点一次就是“用这个接口去看”，直接回首页宫格
                                     goHome()
                                 } else {
-                                    vm.requestSwitch(item, isVod)
+                                    vm.requestSwitch(item, mIsVod)
                                 }
                             },
                             onLongClick = { vm.longPressSelect(value) },
                             onCheckedChange = { checked ->
                                 if (checked) {
-                                    vm.requestSwitch(item, isVod)
-                                } else if (!isVod) {
+                                    vm.requestSwitch(item, mIsVod)
+                                } else if (!mIsVod) {
                                     vm.followLiveNow()
                                 } else {
                                     goHome()
@@ -414,7 +413,7 @@ fun ConfigManageScreen(onNavigateBack: () -> Unit) {
                         ),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        if (!vodMode) {
+                        if (!mIsVod) {
                             item(key = "Live#follow") {
                                 FollowVodCard(
                                     checked = liveFollow,
@@ -428,7 +427,7 @@ fun ConfigManageScreen(onNavigateBack: () -> Unit) {
                                 )
                             }
                         }
-                        items(ordered, key = { it }) { value -> cardContent(value, Modifier.animateItem()) }
+                        items(mOrdered, key = { "${m.name}#$it" }) { value -> cardContent(value, Modifier.animateItem()) }
                     }
                 }
             }
@@ -469,7 +468,7 @@ fun ConfigManageScreen(onNavigateBack: () -> Unit) {
             initialUrl = editing?.url.orEmpty(),
             onDismiss = {
                 addDialogOpen = false
-                vm.closeEdit()
+                vm.editTarget.value = null
             },
             onSave = { name, url ->
                 if (editing != null) vm.commitEdit(isVod, editing, name, url) else vm.commitAdd(isVod, name, url)
@@ -511,8 +510,8 @@ fun ConfigManageScreen(onNavigateBack: () -> Unit) {
             disabledUrls = disabledUrls,
             onDismiss = { repoSheetOpen = false },
             onSelect = { url ->
-                val name = HistoryHelper.apiLineName(
-                    repoEntries.firstOrNull { HistoryHelper.apiLineUrl(it) == url }.orEmpty(),
+                val name = HistoryHelper.getApiLineName(
+                    repoEntries.firstOrNull { HistoryHelper.getApiLineUrl(it) == url }.orEmpty(),
                 )
                 vm.requestSwitch(SubscribeSource(name, url), isVod)
                 if (vm.pendingSwitch.value != null) repoSheetOpen = false
@@ -541,7 +540,7 @@ private fun RepoSwitchSheet(
             modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
         ) {
             entries.forEachIndexed { index, entry ->
-                val url = HistoryHelper.apiLineUrl(entry)
+                val url = HistoryHelper.getApiLineUrl(entry)
                 SettingsCard(
                     position = when {
                         entries.size <= 1 -> SettingsCardPosition.SINGLE
@@ -552,7 +551,7 @@ private fun RepoSwitchSheet(
                     color = MaterialTheme.colorScheme.surfaceBright,
                 ) {
                     SettingsOptionRow(
-                        title = HistoryHelper.apiLineName(entry),
+                        title = HistoryHelper.getApiLineName(entry),
                         selected = url == activeUrl,
                         onClick = onClick@{
                             if (accepted) return@onClick
@@ -572,9 +571,7 @@ private fun RepoSwitchSheet(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier
-                                        .widthIn(max = 180.dp)
-                                        .marqueeOnOverflow(),
+                                    modifier = Modifier.widthIn(max = 180.dp),
                                 )
                             }
                         },
@@ -640,9 +637,7 @@ private fun SubscribeCard(
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .weight(1f, fill = false)
-                            .marqueeOnOverflow(),
+                        modifier = Modifier.weight(1f, fill = false),
                     )
                     if (disabled) {
                         Spacer(Modifier.width(8.dp))
@@ -651,7 +646,6 @@ private fun SubscribeCard(
                 }
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    modifier = Modifier.marqueeOnOverflow(),
                     text = item.url,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

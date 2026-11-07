@@ -7,7 +7,6 @@ import com.github.avbox.osc.api.ApiConfig
 import com.github.avbox.osc.api.DanmakuApi
 import com.github.avbox.osc.io.FileUtils
 import com.github.avbox.osc.player.engine.MediaSources
-import com.github.avbox.osc.player.engine.SourcePolicy
 import com.github.avbox.osc.sourcedata.SourceViewModel
 import com.github.avbox.osc.util.AppLog
 import java.nio.charset.StandardCharsets
@@ -22,15 +21,13 @@ import org.json.JSONObject
 
 class PlaybackFetch(private val controller: PlaybackController) {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var sourceViewModel: SourceViewModel? = null
     private var collectJob: Job? = null
-    private var danmuJob: Job? = null
 
     fun init() {
         val vm = SourceViewModel()
         sourceViewModel = vm
-        collectJob = scope.launch {
+        collectJob = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate).launch {
             vm.playResult.flow.collect { info -> handlePlayResult(info) }
         }
     }
@@ -38,8 +35,6 @@ class PlaybackFetch(private val controller: PlaybackController) {
     fun release() {
         collectJob?.cancel()
         collectJob = null
-        danmuJob?.cancel()
-        danmuJob = null
     }
 
     fun deliver(info: JSONObject?) {
@@ -144,7 +139,7 @@ class PlaybackFetch(private val controller: PlaybackController) {
                     controller.setWebUserAgent(if (ua == null) null else ua.trim { it <= ' ' })
                 }
                 if (parse || jx) {
-                    val userJxList = (playUrl.isEmpty() && (ApiConfig.get().vipParseFlags ?: mutableListOf()).contains(flag)) || jx
+                    val userJxList = (playUrl.isEmpty() && (ApiConfig.get().getVipParseFlags() ?: mutableListOf()).contains(flag)) || jx
                     controller.initParse(flag, userJxList, playUrl, url)
                 } else {
                     if (view != null) view.showParse(false)
@@ -183,7 +178,7 @@ class PlaybackFetch(private val controller: PlaybackController) {
         val filename = name + if (name.lowercase(Locale.ROOT).endsWith(ext)) "" else ext
         var url = obj.optString("url", "")
         val data = obj.optString("data", "")
-        if (!TextUtils.isEmpty(data) && (TextUtils.isEmpty(url) || SourcePolicy.isLocalProxyUrl(url))) {
+        if (!TextUtils.isEmpty(data) && (TextUtils.isEmpty(url) || PlayerHelper.isLocalProxyUrl(url))) {
             url = "data:text/plain;base64," + Base64.encodeToString(data.toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP)
             val view = controller.viewBridge()
             return if (view == null) url else "$url#" + view.encodeUrl(filename)
@@ -204,12 +199,17 @@ class PlaybackFetch(private val controller: PlaybackController) {
         val vod = controller.vod() ?: return
         val series = controller.currentSeries(vod.playFlag, vod.playIndex)
         val key = controller.progressKey()
-        danmuJob?.cancel()
-        danmuJob = scope.launch {
-            val url = DanmakuApi.search(vod.name, if (series == null) "" else series.name)
-            if (!TextUtils.equals(key, controller.progressKey())) return@launch
-            checkDanmu(url ?: "", null)
-        }
+        DanmakuApi.search(vod.name, if (series == null) "" else series.name, object : DanmakuApi.SearchCallback {
+            override fun onFound(url: String) {
+                if (!TextUtils.equals(key, controller.progressKey())) return
+                checkDanmu(url, null)
+            }
+
+            override fun onNotFound() {
+                if (!TextUtils.equals(key, controller.progressKey())) return
+                checkDanmu("", null)
+            }
+        })
     }
 
     private fun checkDanmu(danmaku: String, onFailed: Runnable?) {

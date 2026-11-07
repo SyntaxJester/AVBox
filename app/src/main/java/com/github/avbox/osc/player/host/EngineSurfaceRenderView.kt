@@ -7,7 +7,7 @@ import android.util.AttributeSet
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.View
-import com.github.avbox.osc.player.core.KernelPlayer
+import com.github.avbox.osc.player.KernelPlayer
 import com.github.avbox.osc.util.AppLog
 
 class EngineSurfaceRenderView @JvmOverloads constructor(

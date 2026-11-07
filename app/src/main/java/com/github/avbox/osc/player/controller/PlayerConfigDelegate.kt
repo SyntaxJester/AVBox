@@ -2,17 +2,15 @@ package com.github.avbox.osc.player.controller
 
 import android.os.SystemClock
 import com.github.avbox.osc.R
-import com.github.avbox.osc.player.core.DecodeDecision
-import com.github.avbox.osc.player.core.VideoCodecInfo
+import com.github.avbox.osc.player.PlayerHelper
+import com.github.avbox.osc.player.VideoCodecInfo
 import com.github.avbox.osc.player.effect.PictureEffects
 import com.github.avbox.osc.player.effect.anime4k.Anime4kSettings
 import com.github.avbox.osc.player.effect.anime4k.Anime4kTier
 import com.github.avbox.osc.player.state.ParamsChoice
 import com.github.avbox.osc.player.state.ParamsSheetState
 import com.github.avbox.osc.player.state.PictureParamsState
-import com.github.avbox.osc.player.state.PlaybackSettingsState
 import com.github.avbox.osc.player.state.SelectDialogState
-import com.github.avbox.osc.player.thirdparty.PlayerCatalog
 import com.github.avbox.osc.util.AppLog
 import com.github.avbox.osc.util.PlayerUtils
 import kotlinx.coroutines.flow.Flow
@@ -42,11 +40,11 @@ internal class PlayerConfigDelegate(private val host: VideoPlayerController) {
         val cfg = host.playerConfig ?: return
         try {
             val playerType = cfg.getInt("pl")
-            host.state.updatePlayerType(playerType)
+            host.state.playerType = playerType
             val start = cfg.getInt("st")
             val end = cfg.getInt("et")
-            host.state.updateTimeStartText(if (start == 0) "" else PlayerUtils.stringForTime(start * 1000))
-            host.state.updateTimeEndText(if (end == 0) "" else PlayerUtils.stringForTime(end * 1000))
+            host.state.timeStartText = if (start == 0) "" else PlayerUtils.stringForTime(start * 1000)
+            host.state.timeEndText = if (end == 0) "" else PlayerUtils.stringForTime(end * 1000)
             refreshParamsSheet()
         } catch (e: JSONException) {
             AppLog.e("VideoPlayerController", e)
@@ -69,7 +67,7 @@ internal class PlayerConfigDelegate(private val host: VideoPlayerController) {
         val cfg = host.playerConfig ?: return null
         val speed = cfg.optDouble("sp", 1.0).toFloat()
         val playerType = cfg.optInt("pl", 2)
-        val players = sheetPlayerOrder(PlayerCatalog.all())
+        val players = sheetPlayerOrder(PlayerHelper.getExistPlayerTypes())
         val scaleType = cfg.optInt("sc", 0)
         return ParamsSheetState(
             speed = ParamsChoice(
@@ -78,32 +76,32 @@ internal class PlayerConfigDelegate(private val host: VideoPlayerController) {
                 onSelect = { applySpeed(speedOptions[it]) },
             ),
             player = ParamsChoice(
-                options = players.map { PlayerCatalog.name(it) },
+                options = players.map { PlayerHelper.getPlayerName(it) },
                 selected = players.indexOf(playerType).coerceAtLeast(0),
                 onSelect = { applyPlayer(players[it]) },
             ),
             scale = ParamsChoice(
-                options = (0..5).map { PlayerTextFormat.scaleName(it) },
+                options = (0..5).map { PlayerHelper.getScaleName(it) },
                 selected = scaleType.coerceIn(0, 5),
                 onSelect = { applyScale(it) },
             ),
             picture = PictureParamsState(
                 preset = PictureEffects.preset(),
-                tuning = PictureEffects.custom,
+                tuning = PictureEffects.custom(),
                 unavailableReason = PictureEffects.unavailableReason(),
-                anime4kTierText = host.context.getString(Anime4kTier.byName(PlaybackSettingsState.config.anime4kTier).labelRes),
-                anime4kEnabled = PlaybackSettingsState.config.anime4kEnabled,
+                anime4kTierText = host.context.getString(Anime4kTier.current().labelRes),
+                anime4kEnabled = Anime4kSettings.enabled(),
                 anime4kUnavailable = PictureEffects.anime4kUnavailable(),
                 anime4kSharpen = Anime4kSettings.sharpen(),
-                anime4kDeblur = PlaybackSettingsState.config.anime4kDeblur,
+                anime4kDeblur = Anime4kSettings.deblur(),
                 onAnime4kToggled = {
-                    PlaybackSettingsState.anime4kEnabled = it
+                    Anime4kSettings.setEnabled(it)
                     restartForPictureIfNeeded()
                     refreshParamsSheet()
                 },
                 onAnime4kSharpenChanged = { PictureEffects.setAnime4kSharpen(it) },
                 onAnime4kDeblurToggled = {
-                    PlaybackSettingsState.anime4kDeblur = it
+                    Anime4kSettings.setDeblur(it)
                     restartForPictureIfNeeded()
                     refreshParamsSheet()
                 },
@@ -113,7 +111,7 @@ internal class PlayerConfigDelegate(private val host: VideoPlayerController) {
                     refreshParamsSheet()
                 },
                 onTuningChanged = {
-                    PictureEffects.custom = it
+                    PictureEffects.setCustom(it)
                     restartForPictureIfNeeded()
                 },
                 onReset = {
@@ -141,7 +139,7 @@ internal class PlayerConfigDelegate(private val host: VideoPlayerController) {
 
     internal fun refreshParamsSheet() {
         if (host.state.paramsSheet == null) return
-        host.state.openParamsSheet(buildParamsSheet())
+        host.state.paramsSheet = buildParamsSheet()
     }
 
     private fun restartForPictureIfNeeded() {
@@ -174,12 +172,12 @@ internal class PlayerConfigDelegate(private val host: VideoPlayerController) {
             host.context.getString(R.string.player_decode_soft),
         ),
         selected = pendingDecodeIndex(pending, info)
-            ?: DecodeDecision.decodeDisplayIndex(info.kind, configured),
+            ?: PlayerHelper.decodeDisplayIndex(info.kind, configured),
         onSelect = { applyDecode(if (it == 1) "软解码" else "硬解码") }, // i18n: keep
     )
 
     private fun pendingDecodeIndex(pending: PendingDecode?, info: VideoCodecInfo): Int? =
-        DecodeDecision.pendingDecodeIndex(
+        PlayerHelper.pendingDecodeIndex(
             pending?.value,
             pending?.at ?: 0L,
             pending?.generation ?: 0,
@@ -190,43 +188,69 @@ internal class PlayerConfigDelegate(private val host: VideoPlayerController) {
 
     private fun decodeDisplayedIndex(cfg: JSONObject): Int =
         pendingDecodeIndex(pendingDecode.value, host.videoCodecFlow.value)
-            ?: DecodeDecision.decodeDisplayIndex(host.videoCodecFlow.value.kind, configuredExo(cfg))
+            ?: PlayerHelper.decodeDisplayIndex(host.videoCodecFlow.value.kind, configuredExo(cfg))
 
     fun applySpeed(value: Float) {
         host.actions.keepControlsAlive()
-        host.listener?.updatePlayerCfg { it.put("sp", value.toDouble()) }
-        host.state.updateSpeedOld(value)
-        host.videoView?.setSpeed(value)
+        try {
+            val cfg = host.playerConfig ?: return
+            cfg.put("sp", value.toDouble())
+            updatePlayerCfgState()
+            host.listener?.updatePlayerCfg()
+            host.speedOld = value
+            host.videoView?.setSpeed(value)
+        } catch (e: JSONException) {
+            AppLog.e("VideoPlayerController", e)
+        }
     }
 
     fun applyScale(index: Int) {
         host.actions.keepControlsAlive()
-        host.listener?.updatePlayerCfg { it.put("sc", index) }
-        host.videoView?.setScreenScaleType(index)
+        try {
+            val cfg = host.playerConfig ?: return
+            cfg.put("sc", index)
+            updatePlayerCfgState()
+            host.listener?.updatePlayerCfg()
+            host.videoView?.setScreenScaleType(index)
+        } catch (e: JSONException) {
+            AppLog.e("VideoPlayerController", e)
+        }
     }
 
     fun applyPlayer(playerType: Int) {
         host.actions.keepControlsAlive()
-        val cfg = host.playerConfig ?: return
-        if (playerType == cfg.optInt("pl", 2)) return
-        host.listener?.updatePlayerCfg(suppressAutoSwitch = true) { it.put("pl", playerType) }
-        host.listener?.replay(false)
+        try {
+            val cfg = host.playerConfig ?: return
+            if (playerType == cfg.optInt("pl", 2)) return
+            cfg.put("pl", playerType)
+            host.listener?.setAllowSwitchPlayer(false)
+            updatePlayerCfgState()
+            host.listener?.updatePlayerCfg()
+            host.listener?.replay(false)
+        } catch (e: JSONException) {
+            AppLog.e("VideoPlayerController", e)
+        }
     }
 
     fun applyDecode(value: String) {
         host.actions.keepControlsAlive()
-        val cfg = host.playerConfig ?: return
-        if (decodeDisplayedIndex(cfg) == (if (value == "软解码") 1 else 0)) return // i18n: keep
-        pendingDecode.value = PendingDecode(
-            value,
-            SystemClock.elapsedRealtime(),
-            host.videoCodecFlow.value.generation,
-        )
-        host.listener?.updatePlayerCfg(suppressDecodeFallback = true) {
-            it.put("exo", value) // i18n: keep
-            it.put("exoSet", 1)
+        try {
+            val cfg = host.playerConfig ?: return
+            if (decodeDisplayedIndex(cfg) == (if (value == "软解码") 1 else 0)) return // i18n: keep
+            cfg.put("exo", value) // i18n: keep
+            cfg.put("exoSet", 1)
+            pendingDecode.value = PendingDecode(
+                value,
+                SystemClock.elapsedRealtime(),
+                host.videoCodecFlow.value.generation,
+            )
+            host.listener?.setAllowDecodeFallback(false)
+            updatePlayerCfgState()
+            host.listener?.updatePlayerCfg()
+            host.listener?.replay(false)
+        } catch (e: JSONException) {
+            AppLog.e("VideoPlayerController", e)
         }
-        host.listener?.replay(false)
     }
 
     fun applySpeedWhenReady() {
@@ -261,7 +285,14 @@ internal class PlayerConfigDelegate(private val host: VideoPlayerController) {
 
     fun setTimeMark(key: String, seconds: Int) {
         host.actions.keepControlsAlive()
-        host.listener?.updatePlayerCfg { it.put(key, seconds) }
+        try {
+            val cfg = host.playerConfig ?: return
+            cfg.put(key, seconds)
+            updatePlayerCfgState()
+            host.listener?.updatePlayerCfg()
+        } catch (e: JSONException) {
+            AppLog.e("VideoPlayerController", e)
+        }
     }
 
     fun showScaleDialog() {
@@ -270,14 +301,14 @@ internal class PlayerConfigDelegate(private val host: VideoPlayerController) {
             val scaleType = cfg.getInt("sc")
             val scales = ArrayList<String>()
             for (i in 0..5) {
-                scales.add(PlayerTextFormat.scaleName(i))
+                scales.add(PlayerHelper.getScaleName(i))
             }
-            host.state.openSelectDialog(SelectDialogState(
+            host.state.selectDialog = SelectDialogState(
                 tip = host.context.getString(R.string.player_select_scale),
                 items = scales,
                 defaultIndex = scaleType.coerceIn(0, 5),
                 onSelected = { index -> applyScale(index) },
-            ))
+            )
         } catch (e: JSONException) {
             AppLog.e("VideoPlayerController", e)
         }
@@ -288,12 +319,12 @@ internal class PlayerConfigDelegate(private val host: VideoPlayerController) {
             val cfg = host.playerConfig ?: return
             val speed = cfg.getDouble("sp").toFloat()
             val speeds = speedOptions.map { "${it}x" }
-            host.state.openSelectDialog(SelectDialogState(
+            host.state.selectDialog = SelectDialogState(
                 tip = host.context.getString(R.string.player_select_speed),
                 items = speeds,
                 defaultIndex = speedIndex(speed),
                 onSelected = { index -> applySpeed(speedOptions[index]) },
-            ))
+            )
         } catch (e: JSONException) {
             AppLog.e("VideoPlayerController", e)
         }

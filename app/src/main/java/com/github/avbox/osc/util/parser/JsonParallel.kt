@@ -1,5 +1,6 @@
 package com.github.avbox.osc.util.parser
 import android.util.Base64
+import com.github.catvod.crawler.SpiderDebug
 import com.github.avbox.osc.util.HeaderGuard
 import com.github.avbox.osc.util.AppLog
 import org.json.JSONObject
@@ -59,7 +60,7 @@ object JsonParallel {
                     val parseUrl = jx[jxName] ?: continue
                     task.futures.add(completionService.submit(Callable<JSONObject?> {
                         try {
-                            val reqHeaders = JsonParallel.reqHeader(parseUrl)
+                            val reqHeaders = JsonParallel.getReqHeader(parseUrl)
                             val realUrl = reqHeaders["url"]
                             reqHeaders.remove("url")
                             val headers = Headers.Builder().apply { reqHeaders.forEach { (name, value) -> add(name, value) } }.build()
@@ -73,7 +74,7 @@ object JsonParallel {
                             val response = call.execute()
                             val json = response.body.string()
 
-                            val taskResult = if (json.isEmpty()) null else WebViewJs.jsonParse(url, json)
+                            val taskResult = if (json.isEmpty()) null else Utils.jsonParse(url, json)
                             taskResult?.put("jxFrom", jxName)
                             taskResult
                         } catch (th: Throwable) {
@@ -92,21 +93,21 @@ object JsonParallel {
                                 try {
                                     future.cancel(true)
                                 } catch (t: Throwable) {
-                                    AppLog.d("JsonParallel", "" + t.message)
+                                    SpiderDebug.log(t)
                                 }
                             }
                             task.futures.clear()
                             break
                         }
                     } catch (th: Throwable) {
-                        AppLog.d("JsonParallel", "" + th.message)
+                        SpiderDebug.log(th)
                     }
                 }
                 if (pTaskResult != null)
                     return pTaskResult
             }
         } catch (th: Throwable) {
-            AppLog.d("JsonParallel", "" + th.message)
+            SpiderDebug.log(th)
         } finally {
             task.cancel()
             if (currentTask === task) currentTask = null
@@ -122,7 +123,7 @@ object JsonParallel {
         }
     }
     @JvmStatic
-    fun reqHeader(url: String): HashMap<String, String> {
+    fun getReqHeader(url: String): HashMap<String, String> {
         val reqHeaders = HashMap<String, String>()
         reqHeaders["url"] = url
         if (url.contains("cat_ext")) {

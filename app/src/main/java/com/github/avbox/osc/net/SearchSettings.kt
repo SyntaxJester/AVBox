@@ -1,23 +1,12 @@
 package com.github.avbox.osc.net
 
-import com.github.avbox.osc.util.StringUtils
+import com.github.avbox.osc.util.HawkConfig
 import com.github.avbox.osc.util.KV
-import com.github.avbox.osc.util.KVKeys
+import com.github.avbox.osc.util.StringUtils
 
 object SearchSettings {
 
     enum class SearchLayout { Horizontal, Vertical }
-
-    /** 搜索范围：全站 / 站内（当前首页站点）/ 选中（搜索设置里勾选的站点）。 */
-    enum class SearchScope { All, Current, Selected }
-
-    private const val KEY_SEARCH_SCOPE = "search_scope"
-
-    private const val VALUE_SCOPE_ALL = "all"
-
-    private const val VALUE_SCOPE_CURRENT = "current"
-
-    private const val VALUE_SCOPE_SELECTED = "selected"
 
     private const val KEY_EXACT_MATCH = "search_exact_match"
 
@@ -28,23 +17,6 @@ object SearchSettings {
     private const val VALUE_LAYOUT_VERTICAL = "vertical"
 
     private const val KEY_EMPTY_SOURCES = "search_sources_empty"
-
-    fun scope(): SearchScope = when (KV.get(KEY_SEARCH_SCOPE, VALUE_SCOPE_ALL)) {
-        VALUE_SCOPE_CURRENT -> SearchScope.Current
-        VALUE_SCOPE_SELECTED -> SearchScope.Selected
-        else -> SearchScope.All
-    }
-
-    fun setScope(scope: SearchScope) {
-        KV.put(
-            KEY_SEARCH_SCOPE,
-            when (scope) {
-                SearchScope.Current -> VALUE_SCOPE_CURRENT
-                SearchScope.Selected -> VALUE_SCOPE_SELECTED
-                else -> VALUE_SCOPE_ALL
-            },
-        )
-    }
 
     fun isExactMatchEnabled(): Boolean = KV.get(KEY_EXACT_MATCH, false)
 
@@ -66,44 +38,32 @@ object SearchSettings {
         )
     }
 
-    private fun emptyApis(): Set<String> {
-        val raw: String = KV.get<String>(KEY_EMPTY_SOURCES, "")
-        if (raw.isEmpty()) return emptySet()
-        return raw.split(",").filter { it.isNotBlank() }.toSet()
-    }
-
-    private fun setUpEmpty(api: String, empty: Boolean) {
-        val set = emptyApis().toMutableSet()
-        if (empty) set.add(api) else set.remove(api)
-        if (set.isEmpty()) KV.delete(KEY_EMPTY_SOURCES) else KV.put<String>(KEY_EMPTY_SOURCES, set.joinToString(","))
-    }
-
     fun isSourcesEmpty(): Boolean {
-        val api = KV.get(KVKeys.API_URL, "")
+        val api = KV.get(HawkConfig.API_URL, "")
         return api.isNotEmpty() && emptyApis().contains(api)
     }
 
     fun currentSelection(): Set<String>? {
-        val api = KV.get(KVKeys.API_URL, "")
+        val api = KV.get(HawkConfig.API_URL, "")
         if (api.isEmpty()) return null
         if (isSourcesEmpty()) return emptySet()
-        val stored = KV.get<HashMap<String, HashMap<String, String>>>(KVKeys.SOURCES_FOR_SEARCH) ?: return null
+        val stored = KV.get<HashMap<String, HashMap<String, String>>>(HawkConfig.SOURCES_FOR_SEARCH) ?: return null
         val picked = stored[api] ?: return null
         return if (picked.isEmpty()) null else picked.keys.toSet()
     }
 
     fun putSourcesForSearch(checked: Set<String>) {
-        val api = KV.get(KVKeys.API_URL, "")
+        val api = KV.get(HawkConfig.API_URL, "")
         if (api.isEmpty()) return
         val searchable = SearchHelper.getSources().keys
         val picked = checked.filter { it in searchable }
-        val all = KV.get<HashMap<String, HashMap<String, String>>>(KVKeys.SOURCES_FOR_SEARCH) ?: HashMap()
+        val all = KV.get<HashMap<String, HashMap<String, String>>>(HawkConfig.SOURCES_FOR_SEARCH) ?: HashMap()
         if (picked.isEmpty() || picked.containsAll(searchable)) {
             all.remove(api)
         } else {
             all[api] = HashMap<String, String>().apply { picked.forEach { this[it] = "1" } }
         }
-        if (all.isEmpty()) KV.delete(KVKeys.SOURCES_FOR_SEARCH) else KV.put(KVKeys.SOURCES_FOR_SEARCH, all)
+        if (all.isEmpty()) KV.delete(HawkConfig.SOURCES_FOR_SEARCH) else KV.put(HawkConfig.SOURCES_FOR_SEARCH, all)
         setUpEmpty(api, picked.isEmpty() && searchable.isNotEmpty())
     }
 
@@ -113,4 +73,13 @@ object SearchSettings {
     }
 
     internal fun normalize(text: String?): String = StringUtils.normalizeTitle(text)
+
+    private fun emptyApis(): Set<String> =
+        KV.get(KEY_EMPTY_SOURCES, "").split('\n').filter { it.isNotEmpty() }.toSet()
+
+    private fun setUpEmpty(api: String, empty: Boolean) {
+        val next = emptyApis().toMutableSet()
+        if (empty) next.add(api) else next.remove(api)
+        if (next.isEmpty()) KV.delete(KEY_EMPTY_SOURCES) else KV.put(KEY_EMPTY_SOURCES, next.joinToString("\n"))
+    }
 }

@@ -62,7 +62,7 @@ object SourceHelper {
 
     @JvmStatic
     fun isHomeSource(sourceKey: String?): Boolean {
-        return !TextUtils.isEmpty(sourceKey) && sourceKey == ApiConfig.get().homeSourceBean().key
+        return !TextUtils.isEmpty(sourceKey) && sourceKey == ApiConfig.get().getHomeSourceBean().key
     }
 
     @JvmStatic
@@ -114,7 +114,7 @@ object SourceHelper {
         val future: Future<String> = SPIDER_POOL.submit(Callable<String> {
             var result: String? = url
             if (url.startsWith("http://127.0.0.1")) {
-                var path = url.replace(Regex("^http.+/file/"), FileUtils.rootPath() + "/")
+                var path = url.replace(Regex("^http.+/file/"), FileUtils.getRootPath() + "/")
                 path = path.replace(Regex("localhost/"), "/")
                 result = FileUtils.readFileToString(path, "UTF-8")
                 val raw = requireNotNull(result) { "extend content read failed" }
@@ -144,7 +144,7 @@ object SourceHelper {
     }
 
     @JvmStatic
-    fun fixUrlDirect(extendCache: ConcurrentHashMap<String, String>, gson: Gson, extend: String?): String? {
+    fun getFixUrlDirect(extendCache: ConcurrentHashMap<String, String>, gson: Gson, extend: String?): String? {
         if (extend.isNullOrEmpty()) return ""
         val url = extend
         if (!url.startsWith("http")) return url
@@ -155,7 +155,7 @@ object SourceHelper {
         var result: String? = url
         try {
             if (url.startsWith("http://127.0.0.1")) {
-                var path = url.replace(Regex("^http.+/file/"), FileUtils.rootPath() + "/")
+                var path = url.replace(Regex("^http.+/file/"), FileUtils.getRootPath() + "/")
                 path = path.replace(Regex("localhost/"), "/")
                 result = FileUtils.readFileToString(path, "UTF-8")
                 val raw = requireNotNull(result) { "extend content read failed" }

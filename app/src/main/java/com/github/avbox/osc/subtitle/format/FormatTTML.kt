@@ -369,7 +369,7 @@ class FormatTTML : TimedTextFileFormat {
             }
 
         } else {
-            value = Style.rgbValue("name", color)
+            value = Style.getRGBValue("name", color)
             if (value == null || value.isEmpty()) {
                 value = "ffffffff"
                 tto.warnings += "Unrecoginzed color: " + color + "\n\n"
@@ -381,7 +381,7 @@ class FormatTTML : TimedTextFileFormat {
 
     private fun parseTimeExpression(timeExpression: String, tto: TimedTextObject, doc: Document): Int {
         var timeExpression = timeExpression
-        var seconds = 0
+        var mSeconds = 0
         if (timeExpression.contains(":")) {
             val parts = RegexUtils.getPattern(":").split(timeExpression)
             if (parts.size == 3) {
@@ -391,7 +391,7 @@ class FormatTTML : TimedTextFileFormat {
                 h = parts[0].toInt()
                 m = parts[1].toInt()
                 s = parts[2].toFloat()
-                seconds = h * 3600000 + m * 60000 + (s * 1000).toInt()
+                mSeconds = h * 3600000 + m * 60000 + (s * 1000).toInt()
             } else if (parts.size == 4) {
                 var h: Int
                 var m: Int
@@ -411,7 +411,7 @@ class FormatTTML : TimedTextFileFormat {
                 m = parts[1].toInt()
                 s = parts[2].toInt()
                 f = parts[3].toFloat()
-                seconds = h * 3600000 + m * 60000 + s * 1000 + (f * 1000 / frameRate).toInt()
+                mSeconds = h * 3600000 + m * 60000 + s * 1000 + (f * 1000 / frameRate).toInt()
             } else {
             }
 
@@ -422,16 +422,16 @@ class FormatTTML : TimedTextFileFormat {
             try {
                 time = timeExpression.toDouble()
                 if (metric.equals("h", ignoreCase = true))
-                    seconds = (time * 3600000).toInt()
+                    mSeconds = (time * 3600000).toInt()
 
                 else if (metric.equals("m", ignoreCase = true))
-                    seconds = (time * 60000).toInt()
+                    mSeconds = (time * 60000).toInt()
 
                 else if (metric.equals("s", ignoreCase = true))
-                    seconds = (time * 1000).toInt()
+                    mSeconds = (time * 1000).toInt()
 
                 else if (metric.equals("ms", ignoreCase = true))
-                    seconds = time.toInt()
+                    mSeconds = time.toInt()
 
                 else if (metric.equals("f", ignoreCase = true)) {
                     var frameRate: Int
@@ -439,7 +439,7 @@ class FormatTTML : TimedTextFileFormat {
                     if (n != null) {
                         val s = n.nodeValue
                         frameRate = s.toInt()
-                        seconds = (time * 1000 / frameRate).toInt()
+                        mSeconds = (time * 1000 / frameRate).toInt()
                     }
 
                 } else if (metric.equals("t", ignoreCase = true)) {
@@ -448,7 +448,7 @@ class FormatTTML : TimedTextFileFormat {
                     if (n != null) {
                         val s = n.nodeValue
                         tickRate = s.toInt()
-                        seconds = (time * 1000 / tickRate).toInt()
+                        mSeconds = (time * 1000 / tickRate).toInt()
                     }
 
                 } else {
@@ -459,7 +459,7 @@ class FormatTTML : TimedTextFileFormat {
             }
         }
 
-        return seconds
+        return mSeconds
     }
 
 }

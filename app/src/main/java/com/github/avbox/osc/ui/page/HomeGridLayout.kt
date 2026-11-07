@@ -51,7 +51,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -116,10 +115,21 @@ fun HomeGridLayout(
         titleMeasurer.measure("M", style = MaterialTheme.typography.titleSmall).size.height.toDp()
     }
 
-    val activeSortId by vm.activeSortId.collectAsStateWithLifecycle()
-    val selectedSortId = activeSortId.orEmpty()
+    var selectedSortId by remember { mutableStateOf("") }
     var filterOpen by remember { mutableStateOf(false) }
     val gridStates = remember(sourceKey?.key) { mutableMapOf<String, LazyGridState>() }
+
+    LaunchedEffect(sorts) {
+        val kept = selectedSortId.isNotEmpty() && sorts.any { it.id == selectedSortId }
+        if (!kept) {
+            selectedSortId = vm.activeSortId?.takeIf { id -> sorts.any { it.id == id } }
+                ?: sorts.firstOrNull()?.id.orEmpty()
+        }
+    }
+
+    LaunchedEffect(selectedSortId) {
+        if (selectedSortId.isNotEmpty()) vm.ensureLoaded(selectedSortId)
+    }
 
     val partition = partitions.firstOrNull { it.sort.id == selectedSortId }
     val sort = partition?.sort ?: sorts.firstOrNull { it.id == selectedSortId }
@@ -135,7 +145,7 @@ fun HomeGridLayout(
             HomeSortTabRow(
                 sorts = sorts,
                 selectedId = selectedSortId,
-                onSelect = { vm.ensureLoaded(it) },
+                onSelect = { selectedSortId = it },
                 showFilter = sort?.filters?.isNotEmpty() == true,
                 onFilter = { filterOpen = true },
                 startInset = navStart,
@@ -153,16 +163,9 @@ fun HomeGridLayout(
             val tabSort = tabPartition?.sort ?: sorts.firstOrNull { it.id == tabId }
             val tabGridState = gridStates.getOrPut(tabId) { LazyGridState() }
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            val isLandscape = LocalConfiguration.current.screenWidthDp >
-                LocalConfiguration.current.screenHeightDp
-            val gridColumns = WindowSize.smartGridColumns(
+            val gridColumns = WindowSize.gridColumns(
                 availableWidthDp = (maxWidth - 32.dp - navStart).value.toInt(),
-                availableHeightDp = (
-                    maxHeight - HomeGridContentTopPadding - 24.dp
-                    ).value.toInt(),
                 minColumns = 3,
-                minRows = 1,
-                landscape = isLandscape,
             )
             LazyVerticalGrid(
                 columns = GridCells.Fixed(gridColumns),
@@ -178,8 +181,7 @@ fun HomeGridLayout(
                     start = 16.dp + navStart,
                     end = 16.dp,
                     top = HomeGridContentTopPadding,
-                    bottom = (if (isLandscape) 24.dp else 88.dp) +
-                        contentPadding.calculateBottomPadding(),
+                    bottom = 88.dp + contentPadding.calculateBottomPadding(),
                 ),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(HomeGridItemSpacing),

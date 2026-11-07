@@ -2,10 +2,7 @@ package com.github.avbox.osc.player
 
 import android.content.Context
 import android.webkit.WebView
-import com.github.avbox.osc.bean.VodInfo
-import com.github.avbox.osc.player.core.KernelPlayer
-import com.github.avbox.osc.player.core.VideoCodecInfo
-import com.github.avbox.osc.player.core.PlayState
+import com.github.avbox.osc.player.state.PlayState
 import org.json.JSONObject
 import java.util.HashMap
 
@@ -44,7 +41,8 @@ interface PlaybackViewBridge {
     /** 已下发给播放器的地址；与 webPlayUrl 不一致说明内容还在切换途中。 */
     fun currentUrl(): String?
 
-    fun onSessionVodUpdated(vod: VodInfo)
+    /** 通知控制器本轮内容地址，用于识别切换途中的陈旧进度。 */
+    fun onContentUrlSet(url: String?)
 
     fun releasePlayer()
 
@@ -66,13 +64,17 @@ interface PlaybackViewBridge {
 
     fun onNewPlayStarted(sameContent: Boolean)
 
-    fun applyPlayerConfigToView()
+    fun applyPlayerConfigToView(forceKernel: Int)
 
     fun useTextureRenderForAudio()
 
     fun switchRenderToTexture()
 
     fun ensureRenderViewMatchesConfig()
+
+    fun setAudioOnlyMode(audioOnly: Boolean)
+
+    fun isAudioOnlyMode(): Boolean
 
     fun playExternalPlayer(
         playerType: Int,

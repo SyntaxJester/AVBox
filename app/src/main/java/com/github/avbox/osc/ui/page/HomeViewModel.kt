@@ -3,21 +3,18 @@ package com.github.avbox.osc.ui.page
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.github.avbox.osc.R
-import com.github.avbox.osc.api.AppBootstrap
 import com.github.avbox.osc.api.ApiConfig
 import com.github.avbox.osc.api.SortAdjuster
-import com.github.avbox.osc.api.TmdbPoster
+import com.github.avbox.osc.base.App
 import com.github.avbox.osc.bean.AbsSortXml
 import com.github.avbox.osc.bean.AbsXml
 import com.github.avbox.osc.bean.Movie
 import com.github.avbox.osc.bean.MovieSort
 import com.github.avbox.osc.bean.SourceBean
-import com.github.avbox.osc.bean.TmdbPosterCache
 import com.github.avbox.osc.sourcedata.SourceRuntimeState
 import com.github.avbox.osc.sourcedata.SourceViewModel
-import com.github.avbox.osc.boot.BootGuard
-import com.github.avbox.osc.util.AppContextHolder
-import com.github.avbox.osc.util.KVKeys
+import com.github.avbox.osc.util.BootGuard
+import com.github.avbox.osc.util.HawkConfig
 import com.github.avbox.osc.util.HistoryHelper
 import com.github.avbox.osc.util.HomeSettings
 import com.github.avbox.osc.util.KV
@@ -34,28 +31,18 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
-import com.github.avbox.osc.data.AppGraph
-import com.github.avbox.osc.ui.components.toVodInfo
-import kotlinx.coroutines.withContext
+import org.json.JSONObject
 
-class HomeViewModel : ViewModel(), TmdbPosterCache {
-
-    override fun tmdbCachedPoster(name: String?, year: Int, altName: String?): String? =
-        TmdbPoster.cachedPoster(name, year, altName)
-
+class HomeViewModel : ViewModel() {
     private fun str(resId: Int, vararg args: Any): String {
-        val context = AppContextHolder.context() ?: return ""
-        return LanguageManager.localized(context).getString(resId, *args)
+        val app = App.getInstance() ?: return ""
+        return LanguageManager.localized(app).getString(resId, *args)
     }
 
     sealed interface PartitionState {
@@ -86,32 +73,21 @@ class HomeViewModel : ViewModel(), TmdbPosterCache {
         const val HERO_VIDEO_COUNT = 5
     }
 
-    private val _currentSource = MutableStateFlow<SourceBean?>(null)
-    val currentSource = _currentSource.asStateFlow()
-    private val _sources = MutableStateFlow<List<SourceBean>>(emptyList())
-    val sources = _sources.asStateFlow()
-    private val _subscribeItems = MutableStateFlow<List<SubscribeSource>>(emptyList())
-    val subscribeItems = _subscribeItems.asStateFlow()
-    private val _activeSubscribeIndex = MutableStateFlow(-1)
-    val activeSubscribeIndex = _activeSubscribeIndex.asStateFlow()
-    private val _allSorts = MutableStateFlow<List<MovieSort.SortData>>(emptyList())
-    val allSorts = _allSorts.asStateFlow()
-    private val _sorts = MutableStateFlow<List<MovieSort.SortData>>(emptyList())
-    val sorts = _sorts.asStateFlow()
-    private val _rec = MutableStateFlow(Rec(PartitionState.Loading, emptyList()))
-    val rec = _rec.asStateFlow()
-    private val _partitions = MutableStateFlow<List<Partition>>(emptyList())
-    val partitions = _partitions.asStateFlow()
+    val currentSource = MutableStateFlow<SourceBean?>(null)
+    val sources = MutableStateFlow<List<SourceBean>>(emptyList())
+    val subscribeItems = MutableStateFlow<List<SubscribeSource>>(emptyList())
+    val activeSubscribeIndex = MutableStateFlow(-1)
+    val allSorts = MutableStateFlow<List<MovieSort.SortData>>(emptyList())
+    val sorts = MutableStateFlow<List<MovieSort.SortData>>(emptyList())
+    val rec = MutableStateFlow(Rec(PartitionState.Loading, emptyList()))
+    val partitions = MutableStateFlow<List<Partition>>(emptyList())
 
-    private val _pageLoading = MutableStateFlow(true)
-    val pageLoading = _pageLoading.asStateFlow()
+    val pageLoading = MutableStateFlow(true)
     private val sortsLoaded = MutableStateFlow(false)
     private val bootReady = MutableStateFlow(false)
-    private val _pageErrorEvents = MutableSharedFlow<String>(extraBufferCapacity = 1)
-    val pageErrorEvents: SharedFlow<String> = _pageErrorEvents.asSharedFlow()
+    val pageErrorEvents = MutableSharedFlow<String>(extraBufferCapacity = 1)
 
-    private val _sortLoadFailed = MutableStateFlow(false)
-    val sortLoadFailed = _sortLoadFailed.asStateFlow()
+    val sortLoadFailed = MutableStateFlow(false)
     private var sortRetried = false
     private val listRetried = HashSet<String>()
 
@@ -127,45 +103,16 @@ class HomeViewModel : ViewModel(), TmdbPosterCache {
     private var watchdogJob: Job? = null
     private var watchdogGrace = 0
 
-    private val _activeSortId = MutableStateFlow<String?>(null)
-    val activeSortId: StateFlow<String?> = _activeSortId.asStateFlow()
+    var activeSortId: String? = null
+        private set
 
     var defaultLiveLaunched = false
-        private set
-
     var lastBackTime = 0L
-        private set
 
-    fun markDefaultLiveLaunched() {
-        defaultLiveLaunched = true
-    }
-
-    fun onBackPressedOnce(): Boolean {
-        val now = System.currentTimeMillis()
-        if (now - lastBackTime < 2000) return true
-        lastBackTime = now
-        return false
-    }
-
-    suspend fun isVideoCollected(video: Movie.Video): Boolean = withContext(Dispatchers.IO) {
-        AppGraph.collectRepository.isVodCollect(video.sourceKey, video.id)
-    }
-
-    fun toggleVideoCollect(video: Movie.Video, toCollect: Boolean) {
-        viewModelScope.launch(Dispatchers.IO) {
-            if (toCollect) {
-                AppGraph.collectRepository.insertVodCollect(video.sourceKey, toVodInfo(video))
-            } else {
-                AppGraph.collectRepository.deleteVodCollect(video.sourceKey, toVodInfo(video))
-            }
-        }
-    }
-
-    private val _actionMessages = MutableSharedFlow<String>(
+    val actionMessages = MutableSharedFlow<String>(
         extraBufferCapacity = 8,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
-    val actionMessages: SharedFlow<String> = _actionMessages.asSharedFlow()
 
     init {
         scope.launch { sortViewModel.sortResult.flow.collect { onSortResult(it) } }
@@ -173,7 +120,7 @@ class HomeViewModel : ViewModel(), TmdbPosterCache {
         scope.launch {
             actionViewModel.actionResult.flow.collect { json ->
                 val msg = json?.optString("msg").orEmpty()
-                if (msg.isNotEmpty()) _actionMessages.tryEmit(msg)
+                if (msg.isNotEmpty()) actionMessages.tryEmit(msg)
             }
         }
         scope.launch {
@@ -182,8 +129,8 @@ class HomeViewModel : ViewModel(), TmdbPosterCache {
                 reload()
             }
         }
-        _sources.value = ApiConfig.get().switchSourceBeanList()
-        _currentSource.value = ApiConfig.get().homeSourceBean()
+        sources.value = ApiConfig.get().getSwitchSourceBeanList()
+        currentSource.value = ApiConfig.get().getHomeSourceBean()
         refreshSubscribes()
         scope.launch {
             AppBootstrap.state.collect {
@@ -198,8 +145,8 @@ class HomeViewModel : ViewModel(), TmdbPosterCache {
             combine(bootReady, rec, sortsLoaded) { ready, r, loaded ->
                 ready && loaded && r.state != PartitionState.Loading
             }.collect { ready ->
-                if (ready && _pageLoading.value) {
-                    _pageLoading.value = false
+                if (ready && pageLoading.value) {
+                    pageLoading.value = false
                 }
             }
         }
@@ -220,26 +167,26 @@ class HomeViewModel : ViewModel(), TmdbPosterCache {
     fun switchSource(bean: SourceBean) {
         AppLog.i("echo--sort-switch: key=${bean.key}")
         ApiConfig.get().setSourceBean(bean)
-        _currentSource.value = bean
+        currentSource.value = bean
         loadHome()
     }
 
     /** 刷新站点列表与订阅源列表（不重载首页内容） */
     fun refreshSources() {
-        _sources.value = ApiConfig.get().switchSourceBeanList()
+        sources.value = ApiConfig.get().getSwitchSourceBeanList()
         refreshSubscribes()
     }
 
     /**
      * 列表刷新：真正重新读取当前订阅源。
      *
-     * 之前只做 sources.value = ApiConfig.get().switchSourceBeanList()，
+     * 之前只做 sources.value = ApiConfig.get().getSwitchSourceBeanList()，
      * 读的是内存里已解析好的那份——站点管理改动的是磁盘上的 lscript.json，
      * 内存那份没重新解析，所以点刷新看不出任何变化。
      * 这里对本地脚本源重新扫描目录并 parseJson，才拿得到增删后的站点。
      */
     fun refreshSourceList() {
-        val url = KV.get(KVKeys.API_URL, "")
+        val url = KV.get(HawkConfig.API_URL, "")
         if (!LocalScriptSource.isLocalScript(url)) {
             refreshSources()
             return
@@ -282,34 +229,34 @@ class HomeViewModel : ViewModel(), TmdbPosterCache {
 
     fun refreshSubscribes() {
         val items = vodSubscribes()
-        val active = KV.get(KVKeys.API_URL, "")
-        _subscribeItems.value = items
-        _activeSubscribeIndex.value = items.indexOfFirst {
+        val active = KV.get(HawkConfig.API_URL, "")
+        subscribeItems.value = items
+        activeSubscribeIndex.value = items.indexOfFirst {
             it.url == active || HistoryHelper.isApiLineSourceOf(it.url, active)
         }
     }
 
     fun loadHome() {
-        _sources.value = ApiConfig.get().switchSourceBeanList()
+        sources.value = ApiConfig.get().getSwitchSourceBeanList()
         refreshSubscribes()
-        val home = ApiConfig.get().homeSourceBean()
+        val home = ApiConfig.get().getHomeSourceBean()
         loadingSourceKey = if (home.key.isNullOrEmpty()) null else home.key
-        AppLog.i("echo--sort-loadHome: key=${loadingSourceKey} name=${home.name} srcCount=${_sources.value.size}")
-        _currentSource.value = home
-        _pageLoading.value = true
+        AppLog.i("echo--sort-loadHome: key=${loadingSourceKey} name=${home.name} srcCount=${sources.value.size}")
+        currentSource.value = home
+        pageLoading.value = true
         sortsLoaded.value = false
-        _sortLoadFailed.value = false
+        sortLoadFailed.value = false
         sortRetried = false
         watchdogGrace = 0
         listRetried.clear()
-        _rec.value = Rec(PartitionState.Loading, emptyList())
-        _partitions.value = emptyList()
+        rec.value = Rec(PartitionState.Loading, emptyList())
+        partitions.value = emptyList()
         val staleLoaders = ArrayList(loaders.values)
         loaders.clear()
         staleLoaders.forEach { it.release() }
         loadGeneration++
         armWatchdog()
-        sortViewModel.getSort(loadingSourceKey, HomeSettings.layout == HomeSettings.HomeLayout.Horizontal)
+        sortViewModel.getSort(loadingSourceKey, HomeSettings.current() == HomeSettings.HomeLayout.Horizontal)
     }
 
     private fun onHomeLoadTimeout() {
@@ -320,28 +267,28 @@ class HomeViewModel : ViewModel(), TmdbPosterCache {
             armWatchdog()
             return
         }
-        val recLoading = _rec.value.state == PartitionState.Loading
-        val partitionLoading = _partitions.value.any { it.state == PartitionState.Loading }
+        val recLoading = rec.value.state == PartitionState.Loading
+        val partitionLoading = partitions.value.any { it.state == PartitionState.Loading }
         if (!recLoading && !partitionLoading) return
         if (recLoading) {
-            _rec.value = Rec(PartitionState.Error, emptyList())
+            rec.value = Rec(PartitionState.Error, emptyList())
         }
         if (partitionLoading) {
-            _partitions.value = _partitions.value.map { p ->
+            partitions.value = partitions.value.map { p ->
                 if (p.state == PartitionState.Loading) p.copy(state = PartitionState.Error) else p
             }
         }
-        _pageErrorEvents.tryEmit(
+        pageErrorEvents.tryEmit(
             if (recLoading) str(R.string.home_load_failed)
             else str(R.string.home_load_partial_timeout)
         )
-        _pageLoading.value = false
+        pageLoading.value = false
     }
 
     fun retryPartition(partition: Partition) {
         if (partition.state != PartitionState.Error) return
         listRetried.remove(partition.sort.id)
-        _partitions.value = _partitions.value.map {
+        partitions.value = partitions.value.map {
             if (it.sort.id == partition.sort.id) it.copy(state = PartitionState.Loading) else it
         }
         requestPartition(partition, Partition.FIRST_PAGE)
@@ -350,41 +297,41 @@ class HomeViewModel : ViewModel(), TmdbPosterCache {
     fun retrySort() {
         val key = loadingSourceKey ?: return
         AppLog.i("echo--sort-manual-retry: key=$key")
-        _sortLoadFailed.value = false
+        sortLoadFailed.value = false
         sortRetried = true
-        _rec.value = Rec(PartitionState.Loading, emptyList())
+        rec.value = Rec(PartitionState.Loading, emptyList())
         sortsLoaded.value = false
-        _pageLoading.value = true
+        pageLoading.value = true
         watchdogGrace = 0
         armWatchdog()
-        sortViewModel.getSort(key, HomeSettings.layout == HomeSettings.HomeLayout.Horizontal)
+        sortViewModel.getSort(key, HomeSettings.current() == HomeSettings.HomeLayout.Horizontal)
     }
 
     fun ensureLoaded(sortId: String) {
-        _activeSortId.value = sortId
-        val current = _partitions.value.firstOrNull { it.sort.id == sortId } ?: return
+        activeSortId = sortId
+        val current = partitions.value.firstOrNull { it.sort.id == sortId } ?: return
         if (current.state != PartitionState.Idle) return
-        _partitions.value = _partitions.value.map {
+        partitions.value = partitions.value.map {
             if (it.sort.id == sortId) it.copy(state = PartitionState.Loading) else it
         }
         requestPartition(current, Partition.FIRST_PAGE)
     }
 
     fun onLayoutChanged() {
-        if (HomeSettings.layout != HomeSettings.HomeLayout.Horizontal) return
-        val idle = _partitions.value.filter { it.state == PartitionState.Idle }
+        if (HomeSettings.current() != HomeSettings.HomeLayout.Horizontal) return
+        val idle = partitions.value.filter { it.state == PartitionState.Idle }
         if (idle.isNotEmpty()) {
-            _partitions.value = _partitions.value.map {
+            partitions.value = partitions.value.map {
                 if (it.state == PartitionState.Idle) it.copy(state = PartitionState.Loading) else it
             }
             idle.forEach { p -> requestPartition(p, Partition.FIRST_PAGE) }
         }
         val key = loadingSourceKey
-        val hasRecSort = _allSorts.value.any { it.id == "my0" }
-        if (key != null && hasRecSort && _rec.value.videos.isEmpty() &&
-            _rec.value.state != PartitionState.Loading
+        val hasRecSort = allSorts.value.any { it.id == "my0" }
+        if (key != null && hasRecSort && rec.value.videos.isEmpty() &&
+            rec.value.state != PartitionState.Loading
         ) {
-            _rec.value = Rec(PartitionState.Loading, emptyList())
+            rec.value = Rec(PartitionState.Loading, emptyList())
             recViewModel.getSort(key, true)
         }
     }
@@ -392,12 +339,12 @@ class HomeViewModel : ViewModel(), TmdbPosterCache {
     private fun onSortResult(absXml: AbsSortXml?) {
         val key = loadingSourceKey
         if (key == null) {
-            AppLog.i("echo--sort-null-key: srcName=${_currentSource.value?.name} srcCount=${_sources.value.size} absXml=${absXml != null} reloading=$configReloading")
+            AppLog.i("echo--sort-null-key: srcName=${currentSource.value?.name} srcCount=${sources.value.size} absXml=${absXml != null} reloading=$configReloading")
             if (configReloading) return
-            _rec.value = Rec(PartitionState.Empty, emptyList())
-            _partitions.value = emptyList()
-            _sorts.value = emptyList()
-            _allSorts.value = emptyList()
+            rec.value = Rec(PartitionState.Empty, emptyList())
+            partitions.value = emptyList()
+            sorts.value = emptyList()
+            allSorts.value = emptyList()
             sortsLoaded.value = true
             return
         }
@@ -410,15 +357,15 @@ class HomeViewModel : ViewModel(), TmdbPosterCache {
             if (!sortRetried) {
                 sortRetried = true
                 AppLog.i("echo--sort-retry: src=$key")
-                sortViewModel.getSort(key, HomeSettings.layout == HomeSettings.HomeLayout.Horizontal)
+                sortViewModel.getSort(key, HomeSettings.current() == HomeSettings.HomeLayout.Horizontal)
                 return
             }
             AppLog.i("echo--sort-failed: src=$key")
-            _sortLoadFailed.value = true
-            _rec.value = Rec(PartitionState.Empty, emptyList())
-            _partitions.value = emptyList()
-            _sorts.value = emptyList()
-            _allSorts.value = emptyList()
+            sortLoadFailed.value = true
+            rec.value = Rec(PartitionState.Empty, emptyList())
+            partitions.value = emptyList()
+            sorts.value = emptyList()
+            allSorts.value = emptyList()
             sortsLoaded.value = true
             return
         }
@@ -430,13 +377,13 @@ class HomeViewModel : ViewModel(), TmdbPosterCache {
         } else {
             SortAdjuster.adjustSort(key, ArrayList(), true)
         }
-        _allSorts.value = adjusted
+        allSorts.value = adjusted
 
         val recSort = adjusted.firstOrNull { it.id == "my0" }
         if (recSort != null) {
             loadRec(absXml)
         } else {
-            _rec.value = Rec(PartitionState.Empty, emptyList())
+            rec.value = Rec(PartitionState.Empty, emptyList())
         }
 
         val visible = adjusted.filter { it.id != "my0" }
@@ -448,24 +395,24 @@ class HomeViewModel : ViewModel(), TmdbPosterCache {
                 scope.launch {
                     delay(2000)
                     if (loadingSourceKey == key && loadGeneration == gen) {
-                        sortViewModel.getSort(key, HomeSettings.layout == HomeSettings.HomeLayout.Horizontal)
+                        sortViewModel.getSort(key, HomeSettings.current() == HomeSettings.HomeLayout.Horizontal)
                     }
                 }
                 return
             }
             AppLog.i("echo--sort-empty-final: src=$key sortSize=${absXml.classes?.sortList?.size}")
-            _sortLoadFailed.value = true
-            _rec.value = Rec(PartitionState.Empty, emptyList())
-            _partitions.value = emptyList()
-            _sorts.value = emptyList()
-            _allSorts.value = emptyList()
+            sortLoadFailed.value = true
+            rec.value = Rec(PartitionState.Empty, emptyList())
+            partitions.value = emptyList()
+            sorts.value = emptyList()
+            allSorts.value = emptyList()
             sortsLoaded.value = true
             return
         }
-        _sorts.value = visible
-        val vertical = HomeSettings.layout == HomeSettings.HomeLayout.Vertical
-        val active = _activeSortId.value?.takeIf { id -> visible.any { it.id == id } } ?: visible.firstOrNull()?.id
-        _activeSortId.value = active
+        sorts.value = visible
+        val vertical = HomeSettings.current() == HomeSettings.HomeLayout.Vertical
+        val active = activeSortId?.takeIf { id -> visible.any { it.id == id } } ?: visible.firstOrNull()?.id
+        activeSortId = active
         val newPartitions = visible.map { sort ->
             if (vertical && sort.id != active) {
                 Partition(sort, PartitionState.Idle, emptyList(), Partition.FIRST_PAGE, 0)
@@ -473,7 +420,7 @@ class HomeViewModel : ViewModel(), TmdbPosterCache {
                 Partition(sort, PartitionState.Loading, emptyList(), Partition.FIRST_PAGE, 0)
             }
         }
-        _partitions.value = newPartitions
+        partitions.value = newPartitions
         AppLog.i("echo--sort-partitions: n=${newPartitions.size}")
         sortsLoaded.value = true
         newPartitions
@@ -483,7 +430,7 @@ class HomeViewModel : ViewModel(), TmdbPosterCache {
 
     private fun loadRec(absXml: AbsSortXml?) {
         val videos = absXml?.videoList ?: emptyList()
-        _rec.value = if (videos.isEmpty()) Rec(PartitionState.Empty, videos) else Rec(PartitionState.Ready, videos)
+        rec.value = if (videos.isEmpty()) Rec(PartitionState.Empty, videos) else Rec(PartitionState.Ready, videos)
     }
 
     private fun onRecResult(absXml: AbsSortXml?) {
@@ -524,11 +471,11 @@ class HomeViewModel : ViewModel(), TmdbPosterCache {
         if (absXml == null && page == Partition.FIRST_PAGE) {
             if (listRetried.add(sortId)) {
                 AppLog.i("echo--list-retry: sort=$sortId pg=$page")
-                val current = _partitions.value.firstOrNull { it.sort.id == sortId } ?: return
+                val current = partitions.value.firstOrNull { it.sort.id == sortId } ?: return
                 requestPartition(current, Partition.FIRST_PAGE)
             } else {
                 AppLog.i("echo--list-failed: sort=$sortId pg=$page")
-                _partitions.value = _partitions.value.map { p ->
+                partitions.value = partitions.value.map { p ->
                     if (p.sort.id == sortId) p.copy(state = PartitionState.Error) else p
                 }
             }
@@ -537,7 +484,7 @@ class HomeViewModel : ViewModel(), TmdbPosterCache {
         val videos = absXml?.movie?.videoList ?: emptyList()
         AppLog.i("echo--list-result: src=${loadingSourceKey} sort=$sortId pg=$page n=${videos.size}")
         val maxPage = absXml?.movie?.pagecount ?: 0
-        _partitions.value = _partitions.value.map { p ->
+        partitions.value = partitions.value.map { p ->
             if (p.sort.id != sortId) {
                 p
             } else if (videos.isEmpty() && page == Partition.FIRST_PAGE) {
@@ -551,11 +498,11 @@ class HomeViewModel : ViewModel(), TmdbPosterCache {
     }
 
     private fun fillRecFromPartition() {
-        if (_rec.value.videos.isNotEmpty()) return
-        val first = _partitions.value.firstOrNull {
+        if (rec.value.videos.isNotEmpty()) return
+        val first = partitions.value.firstOrNull {
             it.state == PartitionState.Ready && it.videos.isNotEmpty()
         } ?: return
-        _rec.value = Rec(PartitionState.Ready, first.videos.take(HERO_VIDEO_COUNT))
+        rec.value = Rec(PartitionState.Ready, first.videos.take(HERO_VIDEO_COUNT))
     }
 
     fun loadMorePartition(partition: Partition) {
@@ -567,7 +514,7 @@ class HomeViewModel : ViewModel(), TmdbPosterCache {
 
     fun applyFilter(partition: Partition, filterSelect: Map<String, String>) {
         partition.sort.filterSelect = HashMap(filterSelect)
-        _partitions.value = _partitions.value.map {
+        partitions.value = partitions.value.map {
             if (it.sort.id == partition.sort.id) {
                 Partition(it.sort, PartitionState.Loading, emptyList(), Partition.FIRST_PAGE, 0)
             } else {
@@ -582,14 +529,14 @@ class HomeViewModel : ViewModel(), TmdbPosterCache {
     }
 
     fun refreshPartitions() {
-        val vertical = HomeSettings.layout == HomeSettings.HomeLayout.Vertical
-        val active = _activeSortId.value
+        val vertical = HomeSettings.current() == HomeSettings.HomeLayout.Vertical
+        val active = activeSortId
         val targets = if (vertical) {
-            _partitions.value.filter { it.sort.id == active }
+            partitions.value.filter { it.sort.id == active }
         } else {
-            _partitions.value
+            partitions.value
         }
-        _partitions.value = _partitions.value.map { p ->
+        partitions.value = partitions.value.map { p ->
             if (targets.any { it.sort.id == p.sort.id }) {
                 Partition(p.sort, PartitionState.Loading, emptyList(), Partition.FIRST_PAGE, 0)
             } else {

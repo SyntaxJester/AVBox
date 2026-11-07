@@ -5,7 +5,7 @@ import android.app.Activity
 object SubtitleHelper {
 
     @JvmStatic
-    fun subtitleTextAutoSize(activity: Activity?): Int {
+    fun getSubtitleTextAutoSize(activity: Activity?): Int {
         val screenSqrt = ScreenUtils.getSqrt(activity ?: return 16)
         var subtitleTextSize = 16
         if (screenSqrt > 7.0 && screenSqrt <= 13.0) {
@@ -20,44 +20,54 @@ object SubtitleHelper {
 
     @JvmStatic
     fun getTextSize(activity: Activity?): Int {
-        val autoSize = subtitleTextAutoSize(activity)
-        val subtitleConfigSize = KV.get(KVKeys.SUBTITLE_TEXT_SIZE, autoSize)
+        val autoSize = getSubtitleTextAutoSize(activity)
+        val subtitleConfigSize = KV.get(HawkConfig.SUBTITLE_TEXT_SIZE, autoSize)
         return subtitleConfigSize
     }
 
     @JvmStatic
     fun setTextSize(size: Int) {
-        KV.put(KVKeys.SUBTITLE_TEXT_SIZE, size)
+        KV.put(HawkConfig.SUBTITLE_TEXT_SIZE, size)
     }
 
     @JvmStatic
-    var timeDelay: Int
-        get() = KV.get(KVKeys.SUBTITLE_TIME_DELAY, 0)
-        set(value) {
-            KV.put(KVKeys.SUBTITLE_TIME_DELAY, value)
-        }
+    fun getTimeDelay(): Int {
+        val subtitleConfigTimeDelay = KV.get(HawkConfig.SUBTITLE_TIME_DELAY, 0)
+        return subtitleConfigTimeDelay
+    }
 
     @JvmStatic
-    var exoSubtitleScale: Int
-        get() = KV.get(KVKeys.SUBTITLE_EXO_SCALE, 100)
-        set(value) {
-            KV.put(KVKeys.SUBTITLE_EXO_SCALE, value)
-        }
+    fun setTimeDelay(delay: Int) {
+        KV.put(HawkConfig.SUBTITLE_TIME_DELAY, delay)
+    }
 
     @JvmStatic
-    var exoSubtitlePosition: Float
-        get() = KV.get(KVKeys.SUBTITLE_EXO_POSITION, 0.0f)
-        set(value) {
-            KV.put(KVKeys.SUBTITLE_EXO_POSITION, value)
-        }
+    fun getExoSubtitleScale(): Int {
+        return KV.get(HawkConfig.SUBTITLE_EXO_SCALE, 100)
+    }
+
+    @JvmStatic
+    fun setExoSubtitleScale(scale: Int) {
+        KV.put(HawkConfig.SUBTITLE_EXO_SCALE, scale)
+    }
+
+    @JvmStatic
+    fun getExoSubtitlePosition(): Float {
+        return KV.get(HawkConfig.SUBTITLE_EXO_POSITION, 0.0f)
+    }
+
+    @JvmStatic
+    fun setExoSubtitlePosition(position: Float) {
+        KV.put(HawkConfig.SUBTITLE_EXO_POSITION, position)
+    }
 
     @JvmStatic
     fun reset() {
-        KV.delete(KVKeys.SUBTITLE_TEXT_SIZE)
-        KV.delete(KVKeys.SUBTITLE_TIME_DELAY)
-        KV.delete(KVKeys.SUBTITLE_TEXT_STYLE)
-        KV.delete(KVKeys.SUBTITLE_EXO_SCALE)
-        KV.delete(KVKeys.SUBTITLE_EXO_POSITION)
+        KV.delete(HawkConfig.SUBTITLE_TEXT_SIZE)
+        KV.delete(HawkConfig.SUBTITLE_TIME_DELAY)
+        KV.delete(HawkConfig.SUBTITLE_TEXT_STYLE)
+        KV.delete(HawkConfig.SUBTITLE_EXO_SCALE)
+        KV.delete(HawkConfig.SUBTITLE_EXO_POSITION)
     }
 
 }

@@ -8,10 +8,10 @@ enum class ProgressPhase {
 
 object ProgressUiGate {
 
-    fun accept(phase: ProgressPhase, armedGen: Int, kernelGen: Int): Boolean {
+    fun accept(phase: ProgressPhase, contentUrl: String?, currentUrl: String?): Boolean {
         if (phase != ProgressPhase.ACTIVE) return false
-        if (armedGen < 0) return false
-        return armedGen == kernelGen
+        if (contentUrl.isNullOrEmpty()) return false
+        return contentUrl == currentUrl
     }
 }
 

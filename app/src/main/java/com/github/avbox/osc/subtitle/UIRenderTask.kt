@@ -28,18 +28,18 @@ package com.github.avbox.osc.subtitle
 import com.github.avbox.osc.subtitle.model.Subtitle
 import com.github.avbox.osc.subtitle.runtime.AppTaskExecutor
 
-class UIRenderTask(private val subtitleChangeListener: SubtitleEngine.OnSubtitleChangeListener?) : Runnable {
+class UIRenderTask(private val mOnSubtitleChangeListener: SubtitleEngine.OnSubtitleChangeListener?) : Runnable {
 
-    private var renderSubtitle: Subtitle? = null
+    private var mSubtitle: Subtitle? = null
 
     override fun run() {
-        if (subtitleChangeListener != null) {
-            subtitleChangeListener.onSubtitleChanged(renderSubtitle)
+        if (mOnSubtitleChangeListener != null) {
+            mOnSubtitleChangeListener.onSubtitleChanged(mSubtitle)
         }
     }
 
     fun execute(subtitle: Subtitle?) {
-        renderSubtitle = subtitle
+        mSubtitle = subtitle
         AppTaskExecutor.mainThread().execute(this)
     }
 }

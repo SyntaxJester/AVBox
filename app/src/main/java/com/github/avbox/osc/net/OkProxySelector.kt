@@ -24,7 +24,7 @@ class OkProxySelector : ProxySelector() {
     @Volatile
     var suspendSiteProxy: Boolean = false
 
-    val proxy: MutableList<ProxyRule> = CopyOnWriteArrayList()
+    private val proxy: MutableList<ProxyRule> = CopyOnWriteArrayList()
     private val system: ProxySelector? = ProxySelector.getDefault()
 
     @Synchronized
@@ -40,6 +40,10 @@ class OkProxySelector : ProxySelector() {
     @Synchronized
     fun clear() {
         proxy.clear()
+    }
+
+    fun getProxy(): List<ProxyRule> {
+        return proxy
     }
 
     private fun fallback(uri: URI?): List<java.net.Proxy> {

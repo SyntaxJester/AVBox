@@ -7,20 +7,20 @@ import com.github.avbox.osc.bean.VodInfo
 import com.github.avbox.osc.data.AppGraph
 import com.github.avbox.osc.data.PlaybackProgress
 import com.github.avbox.osc.data.WatchProgressStore
-import com.github.avbox.osc.player.core.SlowOpenSignal
+import com.github.avbox.osc.event.RefreshEvent
 import com.github.avbox.osc.player.engine.MediaSources
 import com.github.avbox.osc.player.engine.SourcePolicy
-import com.github.avbox.osc.player.core.PlayState
-import com.github.avbox.osc.player.thirdparty.PlayerCatalog
+import com.github.avbox.osc.player.state.PlayState
 import com.github.avbox.osc.server.ControlManager
 import com.github.avbox.osc.sourcedata.SourceViewModel
 import com.github.avbox.osc.util.DefaultConfig
-import com.github.avbox.osc.util.KVKeys
+import com.github.avbox.osc.util.HawkConfig
 import com.github.avbox.osc.util.ImgUtil
 import com.github.avbox.osc.util.KV
 import com.github.avbox.osc.util.AppLog
 import com.github.avbox.osc.util.MD5
-import com.github.avbox.osc.sourcedata.Thunder
+import com.github.avbox.osc.util.thunder.Thunder
+import org.greenrobot.eventbus.EventBus
 import org.json.JSONException
 import org.json.JSONObject
 import java.net.URLEncoder
@@ -34,8 +34,6 @@ class PlaybackStarter(private val host: Host) {
 
     interface Host {
         fun attemptState(): PlaybackAttemptState
-
-        fun updateAttemptState(block: (PlaybackAttemptState) -> PlaybackAttemptState)
 
         fun view(): PlaybackViewBridge?
 
@@ -121,9 +119,10 @@ class PlaybackStarter(private val host: Host) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     fun play(reset: Boolean) {
-        val prepareOnly = host.attemptState().castPrepareOnly
+        val st = host.attemptState()
+        val prepareOnly = st.castPrepareOnly
         if (prepareOnly) AppLog.i("echo-cast prepare: resolve only, no playback side effects")
-        host.updateAttemptState { it.copy(switchStopPending = false) }
+        st.switchStopPending = false
         host.resolverNextGen()
         host.invalidatePreload()
         host.view()?.hidePreloadReadyTip()
@@ -138,7 +137,8 @@ class PlaybackStarter(private val host: Host) {
             KernelReusePolicy.decide(kernelPresent, false, false, reuseAllowed) == KernelDecision.REUSE
         }
         if (!prepareOnly) {
-            host.updateAttemptState { it.copy(switchingPlayback = true) }
+            st.switchingPlayback = true
+            st.audioPlayback = false
             val sameContentRestart = !reset && host.isSameContentRestart()
             host.view()?.onNewPlayStarted(sameContentRestart)
             host.view()?.clearArtwork()
@@ -152,6 +152,7 @@ class PlaybackStarter(private val host: Host) {
             val startedKey = host.startedProgressKey()
             val sameContentReuse = startedKey != null
                 && !KernelReusePolicy.isCrossContentSwitch(startedKey, host.progressKey())
+            EventBus.getDefault().post(RefreshEvent(RefreshEvent.TYPE_REFRESH, host.vod()))
             if (sameContentReuse) {
                 host.view()?.showTip("", true, false)
             } else {
@@ -188,12 +189,12 @@ class PlaybackStarter(private val host: Host) {
             PlaybackProgress.onEpisodeStart(host.vod())
         }
         host.startResolvePlayUrlTimeout()
-        val inherit = host.attemptState()
-        if (inherit.pendingInheritProgress > 0 && !TextUtils.isEmpty(inherit.pendingInheritKey)) {
-            if (!prepareOnly) host.inheritProgressFrom(inherit.pendingInheritKey, inherit.pendingInheritProgress)
-            AppLog.i("echo-switchSource inherit progress " + inherit.pendingInheritProgress + "ms from " + inherit.pendingInheritKey)
+        if (st.pendingInheritProgress > 0 && !TextUtils.isEmpty(st.pendingInheritKey)) {
+            if (!prepareOnly) host.inheritProgressFrom(st.pendingInheritKey, st.pendingInheritProgress)
+            AppLog.i("echo-switchSource inherit progress " + st.pendingInheritProgress + "ms from " + st.pendingInheritKey)
         }
-        host.updateAttemptState { it.copy(pendingInheritKey = null, pendingInheritProgress = 0) }
+        st.pendingInheritKey = null
+        st.pendingInheritProgress = 0
         if (reset && !prepareOnly) {
             host.clearInheritProgress()
             WatchProgressStore.clear(host.progressOwner(), host.progressKey())
@@ -270,10 +271,13 @@ class PlaybackStarter(private val host: Host) {
     fun playUrl(url: String, headers: HashMap<String, String>?) {
         host.syncDecodeFromGlobal()
         val target = attachProxySiteKey(url)
-        host.updateAttemptState { it.copy(localProxySession = SourcePolicy.isLocalProxyUrl(target)) }
+        host.attemptState().localProxySession = SourcePolicy.isLocalProxyUrl(target)
         SlowOpenSignal.reset()
         host.startSwitchLinePlayTimeout(MediaSources.isoHeaders(headers))
-        if (!KV.get(KVKeys.M3U8_PURIFY, false)) {
+        if (!target.startsWith("data:application")) {
+            EventBus.getDefault().post(RefreshEvent(RefreshEvent.TYPE_REFRESH, target))
+        }
+        if (!KV.get(HawkConfig.M3U8_PURIFY, false)) {
             goPlayUrl(target, headers)
             return
         }
@@ -292,8 +296,9 @@ class PlaybackStarter(private val host: Host) {
     }
 
     fun goPlayUrl(url: String, headers: HashMap<String, String>?) {
-        host.updateAttemptState { it.copy(isoSession = MediaSources.isoHeaders(headers)) }
-        if (host.attemptState().castAborted) {
+        val st = host.attemptState()
+        st.isoSession = MediaSources.isoHeaders(headers)
+        if (st.castAborted) {
             AppLog.i("echo-cast abort: drop late play url")
             host.cancelPlayTimeout()
             return
@@ -305,29 +310,28 @@ class PlaybackStarter(private val host: Host) {
         }
         val bridge = host.view()
         if (bridge == null || !bridge.isPageAlive()) return
-        val generation = host.resolverCurrentGen()
-        playUrlGeneration = generation
+        playUrlGeneration = host.resolverCurrentGen()
         val finalUrl = url
         scope.launch {
             val live = host.view()
             if (live == null || !live.isPageAlive()) return@launch
-            if (host.attemptState().switchStopPending) {
+            if (st.switchStopPending) {
                 AppLog.i("echo-ignore goPlayUrl while source switching")
                 return@launch
             }
-            if (host.attemptState().castAborted) {
+            if (st.castAborted) {
                 AppLog.i("echo-cast abort: drop late play url")
                 host.cancelPlayTimeout()
                 return@launch
             }
-            if (generation != host.resolverCurrentGen()) {
+            if (playUrlGeneration != host.resolverCurrentGen()) {
                 AppLog.i("echo-ignore goPlayUrl of stale parse result")
                 host.resolverCancelParseTimeout()
                 return@launch
             }
             host.setWebPlayUrl(finalUrl)
             host.stopParse()
-            if (host.attemptState().castPrepareOnly) {
+            if (st.castPrepareOnly) {
                 host.closeCastPrepare()
                 host.cancelPlayTimeout()
                 AppLog.i("echo-cast prepare: url resolved, keep playback off")
@@ -337,7 +341,7 @@ class PlaybackStarter(private val host: Host) {
             var targetUrl = finalUrl
             try {
                 val playerType = requireNotNull(host.playerCfg()).getInt("pl")
-                if (playerType >= 10 && PlayerCatalog.exists(playerType)) {
+                if (playerType >= 10 && PlayerHelper.getPlayerExist(playerType)) {
                     host.view()?.releasePlayer()
                     val vod = host.vod()
                     val seriesMap = vod?.seriesMap
@@ -352,7 +356,7 @@ class PlaybackStarter(private val host: Host) {
                         series[vod.playIndex]
                     }
                     val playTitle = requireNotNull(vod).name + if (vs == null) "" else " " + vs.name
-                    host.view()?.showTip(PlaybackController.str(R.string.player_call_external_play, PlayerCatalog.name(playerType)), true, false)
+                    host.view()?.showTip(PlaybackController.str(R.string.player_call_external_play, PlayerHelper.getPlayerName(playerType)), true, false)
                     val progress = host.getSavedProgress(host.progressKey())
                     val callResult = host.view()?.playExternalPlayer(
                         playerType, targetUrl, playTitle, host.playSubtitle(), headers, progress
@@ -360,7 +364,7 @@ class PlaybackStarter(private val host: Host) {
                     host.view()?.showTip(
                         PlaybackController.str(
                             R.string.player_call_external_result,
-                            PlayerCatalog.name(playerType),
+                            PlayerHelper.getPlayerName(playerType),
                             if (callResult) PlaybackController.str(R.string.common_success) else PlaybackController.str(R.string.common_failed)
                         ),
                         callResult,
@@ -375,31 +379,16 @@ class PlaybackStarter(private val host: Host) {
             val forceExoPlayer = targetUrl.startsWith("data:application/dash+xml;base64,")
                 || targetUrl.contains(".mpd") || targetUrl.contains("type=mpd")
             if (targetUrl.startsWith("data:application/dash+xml;base64,")) {
-                host.view()?.applyPlayerConfigToView()
-                requireNotNull(App.getInstance()) { "app instance not ready" }
-                App.dashData = targetUrl.split("base64,")[1]
+                host.view()?.applyPlayerConfigToView(2)
+                requireNotNull(App.getInstance()) { "app instance not ready" }.setDashData(targetUrl.split("base64,")[1])
                 targetUrl = ControlManager.get().getAddress(true) + "dash/proxy.mpd"
             } else if (targetUrl.contains(".mpd") || targetUrl.contains("type=mpd")) {
-                host.view()?.applyPlayerConfigToView()
+                host.view()?.applyPlayerConfigToView(2)
             } else {
-                host.view()?.applyPlayerConfigToView()
+                host.view()?.applyPlayerConfigToView(0)
             }
             if (PlaybackController.looksLikeAudioUrl(targetUrl)) {
                 host.view()?.useTextureRenderForAudio()
-            }
-            if (host.attemptState().castAborted) {
-                AppLog.i("echo-cast abort: drop play url at fire")
-                host.cancelPlayTimeout()
-                return@launch
-            }
-            if (generation != host.resolverCurrentGen()) {
-                AppLog.i("echo-ignore play url at fire: stale generation")
-                return@launch
-            }
-            if (host.attemptState().castPrepareOnly) {
-                AppLog.i("echo-cast prepare: drop play url at fire")
-                host.cancelPlayTimeout()
-                return@launch
             }
             host.view()?.startVideoPlayback(targetUrl, headers, forceExoPlayer)
         }

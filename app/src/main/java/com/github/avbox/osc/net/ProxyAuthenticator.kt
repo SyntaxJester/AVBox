@@ -25,7 +25,7 @@ class ProxyAuthenticator(private val selector: OkProxySelector?) : okhttp3.Authe
 
     private fun findUserInfo(requestHost: String?, proxyHost: String?): String? {
         if (selector == null || requestHost == null || proxyHost == null) return null
-        for (item in selector.proxy) {
+        for (item in selector.getProxy()) {
             if (matchesHost(item, requestHost)) {
                 val userInfo = item.getUserInfo(proxyHost)
                 if (userInfo != null) return userInfo

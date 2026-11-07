@@ -39,9 +39,9 @@ class IsoExtractorsFactory(
 
         val DEFAULT_READER_FACTORY: TsPayloadReader.Factory =
             BdTsPayloadReaderFactory(
-                lpcmEnabled = { IsoSettings.lpcmEnabled },
-                trueHdCoreEnabled = { IsoSettings.trueHdCoreEnabled },
-                pgsEnabled = { IsoSettings.pgsEnabled },
+                lpcmEnabled = { IsoSettings.lpcmEnabled() },
+                trueHdCoreEnabled = { IsoSettings.trueHdCoreEnabled() },
+                pgsEnabled = { IsoSettings.pgsEnabled() },
                 languageForPid = { pid -> IsoPlaylistState.languageForPid(pid) },
             )
     }

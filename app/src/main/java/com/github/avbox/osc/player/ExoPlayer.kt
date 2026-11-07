@@ -9,26 +9,20 @@ import androidx.media3.common.Effect
 import androidx.media3.common.Format
 import androidx.media3.common.Player
 import androidx.media3.common.text.Cue
-import com.github.avbox.osc.player.core.CodecPreferences
-import com.github.avbox.osc.player.core.KernelPlayer
-import com.github.avbox.osc.player.core.PlayState
-import com.github.avbox.osc.player.core.PlaybackStateMachine
-import com.github.avbox.osc.player.core.PlayerDecodeKind
-import com.github.avbox.osc.player.core.TrackInfo
-import com.github.avbox.osc.player.core.TrackInfoBean
-import com.github.avbox.osc.player.core.VideoCodecObserver
-import com.github.avbox.osc.player.core.deriveKernelPlayState
 import com.github.avbox.osc.player.engine.AudioCodecChoice
+import com.github.avbox.osc.player.engine.CodecPreferences
 import com.github.avbox.osc.player.engine.PlayerEngine
 import com.github.avbox.osc.player.engine.PlayerEngineConfig
-import com.github.avbox.osc.player.effect.PictureEffectHost
 import com.github.avbox.osc.player.effect.PictureEffects
-import com.github.avbox.osc.util.KVKeys
+import com.github.avbox.osc.player.state.PlayState
+import com.github.avbox.osc.player.state.PlaybackStateMachine
+import com.github.avbox.osc.player.state.deriveKernelPlayState
+import com.github.avbox.osc.util.HawkConfig
 import com.github.avbox.osc.util.KV
 import com.github.avbox.osc.util.AppLog
 import kotlinx.coroutines.flow.StateFlow
 
-class ExoPlayer(context: Context) : KernelPlayer(), PictureEffectHost {
+class ExoPlayer(context: Context) : KernelPlayer() {
 
     private val appContext: Context = context.applicationContext
 
@@ -48,7 +42,11 @@ class ExoPlayer(context: Context) : KernelPlayer(), PictureEffectHost {
 
     private var useDiskCacheFlag = false
 
-    var videoCodecObserver: VideoCodecObserver? = null
+    private var videoCodecObserver: VideoCodecObserver? = null
+
+    fun setVideoCodecObserver(observer: VideoCodecObserver?) {
+        videoCodecObserver = observer
+    }
 
     private var contentKeyValue = ""
 
@@ -59,27 +57,27 @@ class ExoPlayer(context: Context) : KernelPlayer(), PictureEffectHost {
     override fun initPlayer() {
         val config = PlayerEngineConfig(
             bufferTimes = bufferTimes(),
-            tunnelingRequested = KV.get(KVKeys.PLAY_TUNNEL, false),
-            surfaceRender = KV.get(KVKeys.PLAY_RENDER, 1) == 1,
-            preferAac = KV.get(KVKeys.PLAY_PREFER_AAC, false),
+            tunnelingRequested = KV.get(HawkConfig.PLAY_TUNNEL, false),
+            surfaceRender = KV.get(HawkConfig.PLAY_RENDER, 1) == 1,
+            preferAac = KV.get(HawkConfig.PLAY_PREFER_AAC, false),
             dynamicScheduling = KV.get(
-                KVKeys.EXO_VIDEO_DYNAMIC_SCHEDULING,
-                KVKeys.EXO_VIDEO_DYNAMIC_SCHEDULING_DEFAULT,
+                HawkConfig.EXO_VIDEO_DYNAMIC_SCHEDULING,
+                HawkConfig.EXO_VIDEO_DYNAMIC_SCHEDULING_DEFAULT,
             ),
             playbackLooper = if (PreloadManagerHolder.enabled()) PreloadManagerHolder.preloadLooper() else null,
             preloadTargetChecker = { url, headers -> PreloadManagerHolder.isPreloadTargetUrl(url, headers) },
-            playCacheEnabled = { KV.get(KVKeys.PLAY_CACHE, false) },
+            playCacheEnabled = { KV.get(HawkConfig.PLAY_CACHE, false) },
             videoCodecObserver = videoCodecObserver,
         )
         val newEngine = PlayerEngine(appContext, config)
         engine = newEngine
-        newEngine.useDiskCache = useDiskCacheFlag
+        newEngine.setUseDiskCache(useDiskCacheFlag)
         newEngine.setContentKey(contentKeyValue)
         pendingSpeed?.let { newEngine.setSpeed(it) }
         newEngine.videoSizeListener = PlayerEngine.VideoSizeListener { width, height, rotation ->
-            playerEventListener?.onVideoSizeChanged(width, height)
+            mPlayerEventListener?.onVideoSizeChanged(width, height)
             if (rotation > 0) {
-                playerEventListener?.onInfo(MEDIA_INFO_VIDEO_ROTATION_CHANGED, rotation)
+                mPlayerEventListener?.onInfo(MEDIA_INFO_VIDEO_ROTATION_CHANGED, rotation)
             }
         }
         newEngine.playbackStateListener = { state -> dispatchPlaybackState(state) }
@@ -87,7 +85,7 @@ class ExoPlayer(context: Context) : KernelPlayer(), PictureEffectHost {
         newEngine.retryAsHlsListener = { awaitingPrepared = true }
         newEngine.addErrorListener { _, _ ->
             stateMachine.onError()
-            playerEventListener?.onError()
+            mPlayerEventListener?.onError()
         }
         newEngine.setOnCuesListener { cues -> onCuesListener?.onCues(cues) }
         AppLog.i("echo-m7b-engine-bridge-ready")
@@ -95,7 +93,7 @@ class ExoPlayer(context: Context) : KernelPlayer(), PictureEffectHost {
 
     override fun setDataSource(path: String, headers: Map<String, String>?) {
         stateMachine.onContentReplaced()
-        engine?.setDataSource(path, headers, KV.get(KVKeys.PLAYER_IS_LIVE, false))
+        engine?.setDataSource(path, headers, KV.get(HawkConfig.PLAYER_IS_LIVE, false))
     }
 
     override fun prepareAsync() {
@@ -201,6 +199,12 @@ class ExoPlayer(context: Context) : KernelPlayer(), PictureEffectHost {
         engine?.detachVideoSurface()
     }
 
+    fun setAudioOnlyMode(audioOnly: Boolean) {
+        engine?.setAudioOnlyMode(audioOnly)
+    }
+
+    fun isAudioOnlyMode(): Boolean = engine?.isAudioOnlyMode == true
+
     override fun setVolume(leftVolume: Float, rightVolume: Float) {
         engine?.setVolume(leftVolume, rightVolume)
     }
@@ -219,7 +223,7 @@ class ExoPlayer(context: Context) : KernelPlayer(), PictureEffectHost {
                 awaitingPrepared = false
                 stateMachine.onPrepared()
                 stateMachine.onRenderingStart()
-                val listener = playerEventListener ?: return
+                val listener = mPlayerEventListener ?: return
                 listener.onPrepared()
                 listener.onInfo(MEDIA_INFO_RENDERING_START, 0)
             }
@@ -228,17 +232,17 @@ class ExoPlayer(context: Context) : KernelPlayer(), PictureEffectHost {
         when (state) {
             Player.STATE_BUFFERING -> {
                 stateMachine.onBufferingStart()
-                playerEventListener?.onInfo(MEDIA_INFO_BUFFERING_START, engine?.bufferedPercentage ?: 0)
+                mPlayerEventListener?.onInfo(MEDIA_INFO_BUFFERING_START, engine?.bufferedPercentage ?: 0)
             }
 
             Player.STATE_READY -> {
                 stateMachine.onBufferingEnd(engine?.kernelIsPlaying == true)
-                playerEventListener?.onInfo(MEDIA_INFO_BUFFERING_END, engine?.bufferedPercentage ?: 0)
+                mPlayerEventListener?.onInfo(MEDIA_INFO_BUFFERING_END, engine?.bufferedPercentage ?: 0)
             }
 
             Player.STATE_ENDED -> {
                 stateMachine.onCompletion()
-                playerEventListener?.onCompletion()
+                mPlayerEventListener?.onCompletion()
             }
         }
     }
@@ -265,7 +269,7 @@ class ExoPlayer(context: Context) : KernelPlayer(), PictureEffectHost {
             current.kernelSuppressed,
         ) ?: return
         if (stateMachine.alignWithKernel(next)) {
-            playerEventListener?.onKernelPlayStateChanged()
+            mPlayerEventListener?.onKernelPlayStateChanged()
         }
     }
 
@@ -276,24 +280,24 @@ class ExoPlayer(context: Context) : KernelPlayer(), PictureEffectHost {
 
     fun setUseDiskCache(enabled: Boolean) {
         useDiskCacheFlag = enabled
-        engine?.useDiskCache = enabled
+        engine?.setUseDiskCache(enabled)
     }
 
     fun notifyVideoOutputResolution(width: Int, height: Int) {
         engine?.notifyVideoOutputResolution(width, height)
     }
 
-    override fun redrawVideoFrame() {
+    fun redrawVideoFrame() {
         engine?.redrawVideoFrame()
     }
 
-    override fun applyVideoEffects(effects: List<Effect>) {
+    fun applyVideoEffects(effects: List<Effect>) {
         engine?.applyVideoEffects(effects)
     }
 
-    override fun isPictureEffectsActive(): Boolean = engine?.isPictureEffectsActive ?: false
+    fun isPictureEffectsActive(): Boolean = engine?.isPictureEffectsActive ?: false
 
-    override fun isPictureHdrSource(): Boolean = engine?.isPictureHdrSource ?: false
+    fun isPictureHdrSource(): Boolean = engine?.isPictureHdrSource ?: false
 
     val isTunnelingEnabled: Boolean
         get() = engine?.isTunnelingEnabled ?: false
@@ -372,7 +376,7 @@ class ExoPlayer(context: Context) : KernelPlayer(), PictureEffectHost {
     fun lastErrorTenBitFormat(): Boolean = engine?.lastErrorTenBitFormat ?: false
 
     private fun bufferTimes(): Int {
-        val value = KV.get(KVKeys.BUFFER_TIMES, KVKeys.BUFFER_TIMES_DEFAULT)
+        val value = KV.get(HawkConfig.BUFFER_TIMES, HawkConfig.BUFFER_TIMES_DEFAULT)
         return value.coerceIn(1, 10)
     }
 
@@ -393,10 +397,10 @@ class ExoPlayer(context: Context) : KernelPlayer(), PictureEffectHost {
 
         @JvmStatic
         fun setPreferSoftwareDecode(prefer: Boolean) {
-            CodecPreferences.preferSoftwareDecode = prefer
+            CodecPreferences.setPreferSoftwareDecode(prefer)
         }
 
         @JvmStatic
-        fun isPreferSoftwareDecode(): Boolean = CodecPreferences.preferSoftwareDecode
+        fun isPreferSoftwareDecode(): Boolean = CodecPreferences.isPreferSoftwareDecode()
     }
 }

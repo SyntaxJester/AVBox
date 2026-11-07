@@ -51,7 +51,6 @@ import com.github.avbox.osc.ui.theme.cardContainer
 import com.github.avbox.osc.util.TimeAgoUnit
 import com.github.avbox.osc.util.timeAgoValueOf
 import kotlin.math.roundToInt
-import com.github.avbox.osc.ui.components.marqueeOnOverflow
 
 internal const val PROGRESS_ENTER_DURATION_MS = 600
 
@@ -128,12 +127,8 @@ internal fun HistoryRow(
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .marqueeOnOverflow(),
                 )
                 Text(
-                    modifier = Modifier.marqueeOnOverflow(),
                     text = listOf(episodeLabel, watchedLabel.orEmpty())
                         .filter { it.isNotEmpty() }
                         .joinToString(HistoryMetaSeparator),
@@ -205,7 +200,6 @@ internal fun HistoryRow(
                     .joinToString(HistoryMetaSeparator)
                 if (metaText.isNotEmpty()) {
                     Text(
-                        modifier = Modifier.marqueeOnOverflow(),
                         text = metaText,
                         style = MaterialTheme.typography.bodySmall,
                         color = if (item.sourceUnavailable) {

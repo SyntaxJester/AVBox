@@ -46,7 +46,7 @@ import com.github.avbox.osc.subtitle.SubtitleEngine
 import com.github.avbox.osc.subtitle.model.Subtitle
 import com.github.avbox.osc.util.MD5
 
-import com.github.avbox.osc.player.core.KernelPlayer
+import com.github.avbox.osc.player.KernelPlayer
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -58,7 +58,7 @@ class SimpleSubtitleView : TextView,
     SubtitleEngine, SubtitleEngine.OnSubtitleChangeListener,
     SubtitleEngine.OnSubtitlePreparedListener {
 
-    private lateinit var subtitleEngine: SubtitleEngine
+    private lateinit var mSubtitleEngine: SubtitleEngine
 
     @JvmField
     var isInternal: Boolean = false
@@ -67,7 +67,7 @@ class SimpleSubtitleView : TextView,
     var hasInternal: Boolean = false
 
     private lateinit var backGroundText: TextView
-    var lyricMode: Boolean = false
+    private var lyricMode: Boolean = false
 
     constructor(context: Context) : super(context) {
         backGroundText = TextView(context)
@@ -86,9 +86,9 @@ class SimpleSubtitleView : TextView,
     }
 
     private fun init() {
-        subtitleEngine = DefaultSubtitleEngine()
-        subtitleEngine.setOnSubtitlePreparedListener(this)
-        subtitleEngine.setOnSubtitleChangeListener(this)
+        mSubtitleEngine = DefaultSubtitleEngine()
+        mSubtitleEngine.setOnSubtitlePreparedListener(this)
+        mSubtitleEngine.setOnSubtitleChangeListener(this)
     }
 
     override fun onSubtitlePrepared(subtitles: List<Subtitle>?) {
@@ -132,25 +132,29 @@ class SimpleSubtitleView : TextView,
 
     override fun setSubtitlePath(path: String?) {
         isInternal = false
-        subtitleEngine.setSubtitlePath(path)
+        mSubtitleEngine.setSubtitlePath(path)
     }
 
     override fun setSubtitleDelay(milliseconds: Int?) {
-        subtitleEngine.setSubtitleDelay(milliseconds)
+        mSubtitleEngine.setSubtitleDelay(milliseconds)
     }
 
     override fun setPlaySubtitleCacheKey(cacheKey: String?) {
-        subtitleEngine.setPlaySubtitleCacheKey(cacheKey)
+        mSubtitleEngine.setPlaySubtitleCacheKey(cacheKey)
     }
 
     fun setMergeSameTime(mergeSameTime: Boolean) {
-        if (subtitleEngine is DefaultSubtitleEngine) {
-            (subtitleEngine as DefaultSubtitleEngine).mergeSameTime = mergeSameTime
+        if (mSubtitleEngine is DefaultSubtitleEngine) {
+            (mSubtitleEngine as DefaultSubtitleEngine).setMergeSameTime(mergeSameTime)
         }
     }
 
+    fun setLyricMode(lyricMode: Boolean) {
+        this.lyricMode = lyricMode
+    }
+
     override fun getPlaySubtitleCacheKey(): String? {
-        return subtitleEngine.getPlaySubtitleCacheKey()
+        return mSubtitleEngine.getPlaySubtitleCacheKey()
     }
 
     fun clearSubtitleCache() {
@@ -164,39 +168,39 @@ class SimpleSubtitleView : TextView,
     }
 
     override fun reset() {
-        subtitleEngine.reset()
+        mSubtitleEngine.reset()
     }
 
     override fun start() {
-        subtitleEngine.start()
+        mSubtitleEngine.start()
     }
 
     override fun pause() {
-        subtitleEngine.pause()
+        mSubtitleEngine.pause()
     }
 
     override fun resume() {
-        subtitleEngine.resume()
+        mSubtitleEngine.resume()
     }
 
     override fun stop() {
-        subtitleEngine.stop()
+        mSubtitleEngine.stop()
     }
 
     override fun destroy() {
-        subtitleEngine.destroy()
+        mSubtitleEngine.destroy()
     }
 
     override fun bindToMediaPlayer(mediaPlayer: KernelPlayer?) {
-        subtitleEngine.bindToMediaPlayer(mediaPlayer)
+        mSubtitleEngine.bindToMediaPlayer(mediaPlayer)
     }
 
     override fun setOnSubtitlePreparedListener(listener: SubtitleEngine.OnSubtitlePreparedListener?) {
-        subtitleEngine.setOnSubtitlePreparedListener(listener)
+        mSubtitleEngine.setOnSubtitlePreparedListener(listener)
     }
 
     override fun setOnSubtitleChangeListener(listener: SubtitleEngine.OnSubtitleChangeListener?) {
-        subtitleEngine.setOnSubtitleChangeListener(listener)
+        mSubtitleEngine.setOnSubtitleChangeListener(listener)
     }
 
     override fun onDetachedFromWindow() {

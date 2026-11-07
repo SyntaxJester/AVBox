@@ -8,9 +8,9 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.Window
 import android.widget.FrameLayout
-import com.github.avbox.osc.player.BasePlayerView
-import com.github.avbox.osc.player.PlayerKernelView
-import com.github.avbox.osc.player.core.PlayState
+import com.github.avbox.osc.player.AppPlayerView
+import com.github.avbox.osc.player.MyVideoView
+import com.github.avbox.osc.player.state.PlayState
 import com.github.avbox.osc.util.GestureHelper
 import com.github.avbox.osc.util.PlayerUtils
 import kotlin.math.abs
@@ -18,7 +18,7 @@ import kotlin.math.abs
 class ComposeLiveController(
     context: Context,
 ) : FrameLayout(context),
-    BasePlayerView.VideoControllerHost,
+    AppPlayerView.VideoControllerHost,
     GestureDetector.OnGestureListener,
     GestureDetector.OnDoubleTapListener,
     View.OnTouchListener {
@@ -40,9 +40,13 @@ class ComposeLiveController(
         fun onGesturePercent(isBrightness: Boolean, percent: Int) {}
     }
 
-    var listener: LiveControlListener? = null
+    private var listener: LiveControlListener? = null
 
-    private var videoView: PlayerKernelView? = null
+    fun setListener(listener: LiveControlListener) {
+        this.listener = listener
+    }
+
+    private var videoView: MyVideoView? = null
 
     private val gestureDetector: GestureDetector = GestureDetector(context, this)
     private val audioManager: AudioManager =
@@ -52,12 +56,15 @@ class ComposeLiveController(
     private var firstTouch = false
     private var changeBrightness = false
     private var changeVolume = false
+    private var playState = PlayState.IDLE
+
     init {
         @Suppress("ClickableViewAccessibility")
         setOnTouchListener(this)
     }
 
     override fun setPlayState(playState: PlayState) {
+        this.playState = playState
         listener?.onPlayStateChanged(playState)
     }
 
@@ -74,8 +81,8 @@ class ComposeLiveController(
     }
 
     private fun gesturePlaybackState(): Boolean {
-        val view = videoView ?: return false
-        return when (view.playState) {
+        if (videoView == null) return false
+        return when (playState) {
             PlayState.PLAYING, PlayState.PAUSED, PlayState.BUFFERING, PlayState.BUFFERED -> true
             else -> false
         }

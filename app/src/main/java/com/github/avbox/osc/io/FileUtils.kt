@@ -10,7 +10,7 @@ import com.github.avbox.osc.util.AppLog
 import com.github.avbox.osc.util.LocalAddress
 import com.github.avbox.osc.util.MD5
 import com.github.avbox.osc.util.StringUtils
-import com.github.avbox.osc.util.UserAgentPool
+import com.github.avbox.osc.util.UA
 import com.google.gson.Gson
 import com.google.gson.JsonObject
 
@@ -124,13 +124,13 @@ object FileUtils {
     }
 
     @JvmStatic
-    fun rootPath(): String {
+    fun getRootPath(): String {
         return Environment.getExternalStorageDirectory().absolutePath
     }
 
     @JvmStatic
     fun getLocal(path: String): File {
-        return File(path.replace("file:/", rootPath()))
+        return File(path.replace("file:/", getRootPath()))
     }
 
     @JvmStatic
@@ -139,7 +139,7 @@ object FileUtils {
     }
 
     @JvmStatic
-    fun cachePath(): String {
+    fun getCachePath(): String {
         return getCacheDir().absolutePath
     }
 
@@ -277,7 +277,7 @@ object FileUtils {
 
     @JvmStatic
     fun cleanPlayerCache() {
-        val thunderCachePath = cachePath() + "/thunder/"
+        val thunderCachePath = getCachePath() + "/thunder/"
         val thunderCacheDir = File(thunderCachePath)
         try {
             if (thunderCacheDir.exists()) cleanDirectory(thunderCacheDir)
@@ -289,10 +289,10 @@ object FileUtils {
     private const val EXTERNAL_CACHE_KEEP_DIR = "config"
 
     @JvmStatic
-    fun cacheSize(): Long {
+    fun getCacheSize(): Long {
         var size = directorySize(getCacheDir(), null)
         val externalCacheDir = requireNotNull(AppContextHolder.context()) { "app context not initialized" }.externalCacheDir
-        if (externalCacheDir != null && externalCacheDir.absolutePath != cachePath()) {
+        if (externalCacheDir != null && externalCacheDir.absolutePath != getCachePath()) {
             size += directorySize(externalCacheDir, EXTERNAL_CACHE_KEEP_DIR)
         }
         return size
@@ -352,7 +352,7 @@ object FileUtils {
     fun purgeExoCacheIfPending() {
         val flag = pendingExoClearFlag()
         if (!flag.exists()) return
-        val exoDir = File(externalCachePath(), EXO_CACHE_DIR_NAME)
+        val exoDir = File(getExternalCachePath(), EXO_CACHE_DIR_NAME)
         AppLog.i("echo-exo-cache-purge-start: " + exoDir.absolutePath)
         try {
             deleteFileTree(exoDir)
@@ -382,14 +382,14 @@ object FileUtils {
     @JvmStatic
     fun clearSpiderCacheFiles() {
         cleanDirectory(File(getFilePath() + "/csp/"))
-        cleanDirectory(File(cachePath() + "/jar/"))
-        cleanDirectory(File(cachePath() + "/py/"))
-        cleanDirectory(File(cachePath() + "/catvod_jsapi/"))
+        cleanDirectory(File(getCachePath() + "/jar/"))
+        cleanDirectory(File(getCachePath() + "/py/"))
+        cleanDirectory(File(getCachePath() + "/catvod_jsapi/"))
         clearJsModuleCache()
     }
 
     private fun clearJsModuleCache() {
-        val externalCacheDir = File(externalCachePath())
+        val externalCacheDir = File(getExternalCachePath())
         val files = externalCacheDir.listFiles() ?: return
         for (file in files) {
             if (file != null && file.name.startsWith("qjscache_")) {
@@ -424,7 +424,7 @@ object FileUtils {
     }
 
     @JvmStatic
-    fun fileNameWithoutExt(filePath: String): String {
+    fun getFileNameWithoutExt(filePath: String): String {
         if (TextUtils.isEmpty(filePath)) return ""
         var fileName = filePath
         var p = fileName.lastIndexOf(File.separatorChar)
@@ -490,9 +490,9 @@ object FileUtils {
                     rel = netStr
                 }
             } else if (name.startsWith("assets://")) {
-                rel = asOpen(name.substring(9))
+                rel = getAsOpen(name.substring(9))
             } else if (isAsFile(name, "js/lib")) {
-                rel = asOpen("js/lib/" + name)
+                rel = getAsOpen("js/lib/" + name)
             } else if (name.startsWith("file://")) {
                 rel = get(LocalAddress.get() + "file/" + name.replace("file:///", "")
                         .replace("file://", ""))
@@ -528,7 +528,7 @@ object FileUtils {
     }
 
     @JvmStatic
-    fun asOpen(name: String): String {
+    fun getAsOpen(name: String): String {
         try {
             val ins = requireNotNull(AppContextHolder.context()) { "app context not initialized" }.assets.open(name)
             val data = ByteArray(ins.available())
@@ -598,27 +598,27 @@ object FileUtils {
     @JvmStatic
     fun get(str: String, headerMap: Map<String, String>?): String {
         val headers = headerMap ?: HashMap<String, String>().also {
-            it["User-Agent"] = if (str.startsWith("https://gitcode.net/")) UserAgentPool.random() else "okhttp/3.15"
+            it["User-Agent"] = if (str.startsWith("https://gitcode.net/")) UA.random() else "okhttp/3.15"
         }
         return OkHttp.string(str, headers)
     }
 
     @JvmStatic
     fun open(str: String): File {
-        return File(externalCachePath() + "/qjscache_" + str + ".js")
+        return File(getExternalCachePath() + "/qjscache_" + str + ".js")
     }
 
     @JvmStatic
-    fun externalCachePath(): String {
+    fun getExternalCachePath(): String {
         val externalCacheDir = requireNotNull(AppContextHolder.context()) { "app context not initialized" }.externalCacheDir
         if (externalCacheDir == null) {
-            return cachePath()
+            return getCachePath()
         }
         return externalCacheDir.absolutePath
     }
 
     @JvmStatic
-    fun externalFilesPath(): String {
+    fun getExternalFilesPath(): String {
         val externalFilesDir = requireNotNull(AppContextHolder.context()) { "app context not initialized" }.getExternalFilesDir(null)
         if (externalFilesDir == null) {
             return getFilePath()

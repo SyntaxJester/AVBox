@@ -2,7 +2,7 @@ package com.github.avbox.osc.data
 
 import android.text.TextUtils
 import com.github.avbox.osc.bean.VodInfo
-import com.github.avbox.osc.util.KVKeys
+import com.github.avbox.osc.util.HawkConfig
 import com.github.avbox.osc.util.HistoryHelper
 import com.github.avbox.osc.util.HistoryMerge
 import com.github.avbox.osc.util.KV
@@ -20,7 +20,7 @@ interface HistoryRepository {
 
     suspend fun getVodInfo(sourceKey: String, vodId: String): VodInfo?
 
-    fun observeVodRecords(cid: String?, limit: Int): Flow<List<VodInfo>>
+    fun observeVodRecords(cid: String?): Flow<List<VodInfo>>
 
     suspend fun sweepDuplicates()
 
@@ -73,18 +73,19 @@ internal class RoomHistoryRepository(
         return null
     }
 
-    override fun observeVodRecords(cid: String?, limit: Int): Flow<List<VodInfo>> =
+    override fun observeVodRecords(cid: String?): Flow<List<VodInfo>> =
         records().observeAll(cid).map { recordList ->
-            recordList.take(limit).mapNotNull { parseRecord(it) }
+            val hisNum = HistoryHelper.getHisNum(KV.get(HawkConfig.HISTORY_NUM, 0))
+            recordList.take(hisNum).mapNotNull { parseRecord(it) }
         }
 
     private fun parseRecord(record: VodRecord): VodInfo? {
         try {
             if (record.dataJson != null && !TextUtils.isEmpty(record.dataJson)) {
                 val parsed = vodInfoGson().fromJson<VodInfo>(record.dataJson, vodInfoType())
-                if (parsed.name != null) {
-                    return parsed.copy(sourceKey = record.sourceKey, updateTime = record.updateTime)
-                }
+                parsed.sourceKey = record.sourceKey
+                parsed.updateTime = record.updateTime
+                if (parsed.name != null) return parsed
             }
         } catch (e: Exception) {
             AppLog.e("RoomHistoryRepository", e)
@@ -116,7 +117,7 @@ internal class RoomHistoryRepository(
         record.updateTime = System.currentTimeMillis()
         record.dataJson = vodInfoGson().toJson(vodInfo)
         dao.insert(record)
-        val hisNum = HistoryHelper.getHisNum(KV.get(KVKeys.HISTORY_NUM, 0))
+        val hisNum = HistoryHelper.getHisNum(KV.get(HawkConfig.HISTORY_NUM, 0))
         if (dao.getCount(cid) > hisNum) {
             dao.reserver(cid, hisNum)
         }

@@ -5,13 +5,13 @@ import android.os.Looper
 import com.github.avbox.osc.data.HistoryWriter
 import com.github.avbox.osc.data.PlaybackProgress
 import com.github.avbox.osc.data.WatchProgressStore
-import com.github.avbox.osc.player.core.PlayState
+import com.github.avbox.osc.player.state.PlayState
 import com.github.avbox.osc.util.AppLog
 
 class PlaybackProgressSampler(private val host: Host) {
 
     interface Host {
-        fun playerView(): PlayerKernelView?
+        fun playerView(): MyVideoView?
         fun playbackController(): PlaybackController
         fun isLive(): Boolean
     }

@@ -14,6 +14,8 @@ interface PlaybackHostApi {
 
     fun selectQuality(position: Int): Boolean
 
+    fun setAutoSwitchLineEnabled(enabled: Boolean)
+
     fun setPreviewMode(previewMode: Boolean)
 
     fun toggleControllerControls()

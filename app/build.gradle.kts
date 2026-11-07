@@ -136,6 +136,7 @@ dependencies {
         exclude(group = "xpp3", module = "xpp3_min")
     }
     implementation(libs.mmkv)
+    implementation(libs.eventbus)
     implementation(libs.danmaku.flame.master)
 
     implementation(libs.media3.exoplayer)

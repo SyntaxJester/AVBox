@@ -9,6 +9,11 @@ internal class DetailAdjustEffect : GlEffect {
 
     @Volatile
     var profile: PictureProfile = PictureProfile.OFF
+        private set
+
+    fun setProfile(profile: PictureProfile) {
+        this.profile = profile
+    }
 
     override fun toGlShaderProgram(context: Context, useHdr: Boolean): GlShaderProgram =
         DetailAdjustShaderProgram(useHdr, this)

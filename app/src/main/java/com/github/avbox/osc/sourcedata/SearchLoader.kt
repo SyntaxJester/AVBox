@@ -1,11 +1,11 @@
 package com.github.avbox.osc.sourcedata
 
 import android.text.TextUtils
-import com.github.catvod.crawler.SpiderReaper
 import com.github.avbox.osc.api.ApiConfig
 import com.github.avbox.osc.bean.AbsXml
 import com.github.avbox.osc.bean.SourceBean
 import com.github.avbox.osc.util.AppLog
+import com.github.avbox.osc.util.SpiderReaper
 import com.google.gson.Gson
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -101,7 +101,7 @@ class SearchLoader(
             } catch (e: UnsupportedEncodingException) {
                 AppLog.e("SourceViewModel", e)
             }
-            SourceHelper.fixUrlDirect(extendCache, gson, sourceBean.ext) to queryWd
+            SourceHelper.getFixUrlDirect(extendCache, gson, sourceBean.ext) to queryWd
         }
 
         try {

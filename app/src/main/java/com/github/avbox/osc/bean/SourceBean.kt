@@ -25,11 +25,11 @@ class SourceBean {
 
     var type: Int = 0
 
-    var searchable: Int = 0
+    private var searchable: Int = 0
 
-    var quickSearch: Int = 0
+    private var quickSearch: Int = 0
 
-    var changeable: Int = 1
+    private var changeable: Int = 1
 
     var filterable: Int = 0
 
@@ -46,13 +46,6 @@ class SourceBean {
         }
 
     var jar: String? = null
-        get() = safeString(field)
-        set(value) {
-            field = safeString(value)
-        }
-
-    /** 内置 html 站点的页面地址（配置顶层字段，不是 ext 里的键） */
-    var homePage: String? = null
         get() = safeString(field)
         set(value) {
             field = safeString(value)
@@ -89,11 +82,11 @@ class SourceBean {
             field = safeString(value)
         }
 
-    var hide: Int = 0
+    private var hide: Int = 0
 
-    var indexs: Int = 0
+    private var indexs: Int = 0
 
-    var danmaku: Int = 1
+    private var danmaku: Int = 1
 
     var header: MutableMap<String, String>? = null
         get() = field ?: Collections.emptyMap<String, String>()
@@ -102,22 +95,40 @@ class SourceBean {
 
     fun isSearchable(): Boolean = searchable != 0
 
+    fun setSearchable(value: Int) {
+        searchable = value
+    }
 
     fun isQuickSearch(): Boolean = quickSearch != 0
 
+    fun setQuickSearch(value: Int) {
+        quickSearch = value
+    }
 
     fun isChangeable(): Boolean = changeable != 0
 
+    fun setChangeable(value: Int) {
+        changeable = value
+    }
 
     val isIndexSource: Boolean
         get() = indexs == 1
 
+    fun setIndexs(value: Int) {
+        indexs = value
+    }
 
     fun isHidden(): Boolean = hide == 1
 
+    fun setHide(value: Int) {
+        hide = value
+    }
 
     fun isDanmakuEnabled(): Boolean = danmaku != 0
 
+    fun setDanmaku(value: Int) {
+        danmaku = value
+    }
 
-    fun playTimeoutSeconds(): Int = if (timeout > 0) Math.max(5, Math.min(60, timeout)) else 15
+    fun getPlayTimeoutSeconds(): Int = if (timeout > 0) Math.max(5, Math.min(60, timeout)) else 15
 }

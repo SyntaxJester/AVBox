@@ -22,7 +22,6 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import com.github.catvod.crawler.SpiderReaper
 import com.github.avbox.osc.R
 import com.github.avbox.osc.api.ApiConfig
 import com.github.avbox.osc.base.App
@@ -33,9 +32,10 @@ import com.github.avbox.osc.util.DefaultConfig
 import com.github.avbox.osc.util.HeaderGuard
 import com.github.avbox.osc.util.AppLog
 import com.github.avbox.osc.util.LanguageManager
+import com.github.avbox.osc.util.SpiderReaper
 import com.github.avbox.osc.util.VideoParseRuler
 import com.github.avbox.osc.util.net.Http
-import com.github.avbox.osc.net.SuperParse
+import com.github.avbox.osc.util.parser.SuperParse
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -119,7 +119,7 @@ class PlayUrlResolver(private val host: Host) {
     @Volatile
     private var jsonJob: Job? = null
 
-    private var sysWebView: WebView? = null
+    private var mSysWebView: WebView? = null
 
     @Volatile
     private var webSniffGeneration: Int = -1
@@ -140,7 +140,7 @@ class PlayUrlResolver(private val host: Host) {
         var parseBean: ParseBean? = null
         host.view()?.showParse(useParse)
         if (useParse) {
-            parseBean = ApiConfig.get().defaultParseBean
+            parseBean = ApiConfig.get().getDefaultParse()
         } else {
             if (playUrl.startsWith("json:")) {
                 val bean = ParseBean()
@@ -480,7 +480,7 @@ class PlayUrlResolver(private val host: Host) {
     }
 
     fun loadWebView(url: String?) {
-        if (sysWebView == null) {
+        if (mSysWebView == null) {
             initWebView()
         }
         loadUrl(url)
@@ -488,8 +488,8 @@ class PlayUrlResolver(private val host: Host) {
 
     fun initWebView() {
         val bridge = host.view() ?: return
-        sysWebView = bridge.newSniffWebView()
-        val web = sysWebView ?: return
+        mSysWebView = bridge.newSniffWebView()
+        val web = mSysWebView ?: return
         configWebViewSys(web)
     }
 
@@ -498,7 +498,7 @@ class PlayUrlResolver(private val host: Host) {
         if (bridge == null || !bridge.isPageAlive()) return
         webSniffGeneration = parseGeneration.get()
         bridge.runOnUi {
-            sysWebView?.let { web ->
+            mSysWebView?.let { web ->
                 val target = url ?: return@let
                 web.stopLoading()
                 host.webUserAgent()?.let { web.settings.userAgentString = it }
@@ -529,14 +529,14 @@ class PlayUrlResolver(private val host: Host) {
     fun stopLoadWebView(destroy: Boolean) {
         val bridge = host.view() ?: return
         bridge.runOnUi {
-            sysWebView?.let { web ->
+            mSysWebView?.let { web ->
                 web.stopLoading()
                 web.loadUrl("about:blank")
                 if (destroy) {
                     web.clearCache(true)
                     web.removeAllViews()
                     web.destroy()
-                    sysWebView = null
+                    mSysWebView = null
                     webSniffGeneration = -1
                 }
             }
@@ -615,8 +615,8 @@ class PlayUrlResolver(private val host: Host) {
                 result: JsPromptResult,
             ): Boolean = true
         }
-        val sysWebClient = SysWebClient()
-        webView.webViewClient = sysWebClient
+        val mSysWebClient = SysWebClient()
+        webView.webViewClient = mSysWebClient
         webView.setBackgroundColor(Color.BLACK)
     }
 

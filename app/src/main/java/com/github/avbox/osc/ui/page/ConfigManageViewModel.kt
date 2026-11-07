@@ -8,20 +8,18 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.github.avbox.osc.R
-import com.github.avbox.osc.api.AppBootstrap
 import com.github.avbox.osc.api.ApiConfig
-import com.github.avbox.osc.api.ConfigRepository
+import com.github.avbox.osc.base.App
 import com.github.avbox.osc.io.removeLocalCopy
 import com.github.avbox.osc.util.ApiLineSignal
-import com.github.avbox.osc.boot.BootGuard
-import com.github.avbox.osc.util.AppContextHolder
-import com.github.avbox.osc.util.KVKeys
+import com.github.avbox.osc.util.BootGuard
+import com.github.avbox.osc.util.HawkConfig
 import com.github.avbox.osc.util.HistoryHelper
 import com.github.avbox.osc.util.KV
 import com.github.avbox.osc.util.AppLog
 import com.github.avbox.osc.util.LanguageManager
-import com.github.avbox.osc.api.TmdbApi
-import com.github.avbox.osc.api.TmdbPoster
+import com.github.avbox.osc.util.TmdbApi
+import com.github.avbox.osc.util.TmdbPoster
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -80,18 +78,14 @@ data class ConfigTmdbActions(
 
 enum class TmdbTest { None, Api, Image }
 
-internal fun sanitizeConfigText(value: String): String =
-    value.filterNot { it.isISOControl() }.trim()
-
 internal fun parseSubscribe(value: String): SubscribeSource {
     val index = value.indexOf(SUBSCRIBE_SPLIT)
     return if (index < 0) {
-        val cleaned = sanitizeConfigText(value)
-        SubscribeSource(cleaned, cleaned)
+        SubscribeSource(value.trim(), value.trim())
     } else {
         SubscribeSource(
-            sanitizeConfigText(value.substring(0, index)),
-            sanitizeConfigText(value.substring(index + SUBSCRIBE_SPLIT.length)),
+            value.substring(0, index).trim(),
+            value.substring(index + SUBSCRIBE_SPLIT.length),
         )
     }
 }
@@ -99,41 +93,30 @@ internal fun parseSubscribe(value: String): SubscribeSource {
 internal const val SUBSCRIBE_SPLIT = "\t"
 
 internal fun vodSubscribes(): List<SubscribeSource> =
-    KV.get(KVKeys.SUBSCRIBE_LIST, ArrayList<String>()).map { parseSubscribe(it) }
+    KV.get(HawkConfig.SUBSCRIBE_LIST, ArrayList<String>()).map { parseSubscribe(it) }
 
 class ConfigManageViewModel(
     private val tmdbClientFactory: () -> TmdbApi.TmdbClient,
 ) : ViewModel() {
 
-    private val _vodItems = MutableStateFlow(loadSubscribes(SubscribeMode.Vod))
-    val vodItems = _vodItems.asStateFlow()
-    private val _liveItems = MutableStateFlow(loadSubscribes(SubscribeMode.Live))
-    val liveItems = _liveItems.asStateFlow()
-    private val _activeUrl = MutableStateFlow(KV.get(KVKeys.API_URL, ""))
-    val activeUrl = _activeUrl.asStateFlow()
-    private val _liveActiveUrl = MutableStateFlow(KV.get(KVKeys.LIVE_API_URL, ""))
-    val liveActiveUrl = _liveActiveUrl.asStateFlow()
-    private val _liveFollow = MutableStateFlow(ApiConfig.isLiveFollowVod())
-    val liveFollow = _liveFollow.asStateFlow()
-    private val _disabledUrls = MutableStateFlow(BootGuard.disabledSources().toSet())
-    val disabledUrls = _disabledUrls.asStateFlow()
-    private val _selected = MutableStateFlow(emptySet<String>())
-    val selected = _selected.asStateFlow()
-    private val _manageMode = MutableStateFlow(false)
-    val manageMode = _manageMode.asStateFlow()
-    private val _editTarget = MutableStateFlow<SubscribeSource?>(null)
-    val editTarget: StateFlow<SubscribeSource?> = _editTarget.asStateFlow()
-    private val _pendingSwitch = MutableStateFlow<PendingSwitch?>(null)
-    val pendingSwitch = _pendingSwitch.asStateFlow()
-    private val _toastEvent = MutableStateFlow<String?>(null)
-    val toastEvent = _toastEvent.asStateFlow()
+    val vodItems = MutableStateFlow(loadSubscribes(SubscribeMode.Vod))
+    val liveItems = MutableStateFlow(loadSubscribes(SubscribeMode.Live))
+    val activeUrl = MutableStateFlow(KV.get(HawkConfig.API_URL, ""))
+    val liveActiveUrl = MutableStateFlow(KV.get(HawkConfig.LIVE_API_URL, ""))
+    val liveFollow = MutableStateFlow(ApiConfig.isLiveFollowVod())
+    val disabledUrls = MutableStateFlow(BootGuard.disabledSources().toSet())
+    val selected = MutableStateFlow(emptySet<String>())
+    val manageMode = MutableStateFlow(false)
+    val editTarget = MutableStateFlow<SubscribeSource?>(null)
+    val pendingSwitch = MutableStateFlow<PendingSwitch?>(null)
+    val toastEvent = MutableStateFlow<String?>(null)
     private val tmdbState = MutableStateFlow(
         ConfigTmdbState(
-            enabled = KV.get(KVKeys.TMDB_ENABLE, false),
-            posterStyle = TmdbPosterStyle.of(KV.get(KVKeys.TMDB_POSTER_STYLE, 0)),
-            apiKey = KV.get(KVKeys.TMDB_API_KEY, ""),
-            apiBase = KV.get(KVKeys.TMDB_API_BASE, ""),
-            imageBase = KV.get(KVKeys.TMDB_IMAGE_BASE, ""),
+            enabled = KV.get(HawkConfig.TMDB_ENABLE, false),
+            posterStyle = TmdbPosterStyle.of(KV.get(HawkConfig.TMDB_POSTER_STYLE, 0)),
+            apiKey = KV.get(HawkConfig.TMDB_API_KEY, ""),
+            apiBase = KV.get(HawkConfig.TMDB_API_BASE, ""),
+            imageBase = KV.get(HawkConfig.TMDB_IMAGE_BASE, ""),
         ),
     )
     private val tmdbTesting = MutableStateFlow(TmdbTest.None)
@@ -167,19 +150,19 @@ class ConfigManageViewModel(
     )
 
     private fun updateTmdbEnabled(enabled: Boolean) {
-        KV.put(KVKeys.TMDB_ENABLE, enabled)
+        KV.put(HawkConfig.TMDB_ENABLE, enabled)
         tmdbState.value = tmdbState.value.copy(enabled = enabled)
         TmdbPoster.notifyConfigChanged()
     }
 
     private fun updateTmdbPosterStyle(style: TmdbPosterStyle) {
-        KV.put(KVKeys.TMDB_POSTER_STYLE, style.ordinal)
+        KV.put(HawkConfig.TMDB_POSTER_STYLE, style.ordinal)
         tmdbState.value = tmdbState.value.copy(posterStyle = style)
         TmdbPoster.notifyConfigChanged()
     }
 
     private fun updateTmdbApiKey(value: String) {
-        KV.put(KVKeys.TMDB_API_KEY, value)
+        KV.put(HawkConfig.TMDB_API_KEY, value)
         tmdbState.value = tmdbState.value.copy(apiKey = value)
         TmdbPoster.notifyConfigChanged()
     }
@@ -194,7 +177,7 @@ class ConfigManageViewModel(
 
     private fun commitTmdbApiBase() {
         val normalized = TmdbApi.normalizeBaseUrl(tmdbState.value.apiBase)
-        KV.put(KVKeys.TMDB_API_BASE, normalized)
+        KV.put(HawkConfig.TMDB_API_BASE, normalized)
         tmdbState.value = tmdbState.value.copy(
             apiBase = normalized,
             apiBaseError = normalized.isNotEmpty() && !TmdbApi.isValidBaseUrl(normalized),
@@ -204,7 +187,7 @@ class ConfigManageViewModel(
 
     private fun commitTmdbImageBase() {
         val normalized = TmdbApi.normalizeBaseUrl(tmdbState.value.imageBase)
-        KV.put(KVKeys.TMDB_IMAGE_BASE, normalized)
+        KV.put(HawkConfig.TMDB_IMAGE_BASE, normalized)
         tmdbState.value = tmdbState.value.copy(
             imageBase = normalized,
             imageBaseError = normalized.isNotEmpty() && !TmdbApi.isValidBaseUrl(normalized),
@@ -217,7 +200,7 @@ class ConfigManageViewModel(
         tmdbState.value = tmdbState.value.copy(apiBaseError = false)
         val apiKey = tmdbState.value.apiKey.trim()
         if (apiKey.isEmpty()) {
-            _toastEvent.value = str(R.string.tmdb_key_required)
+            toastEvent.value = str(R.string.tmdb_key_required)
             endTmdbTest(TmdbTest.Api)
             return
         }
@@ -230,7 +213,7 @@ class ConfigManageViewModel(
                 AppLog.e("TmdbApi", e)
                 false
             }
-            _toastEvent.value = str(
+            toastEvent.value = str(
                 if (result) R.string.tmdb_test_api_ok else R.string.tmdb_test_api_fail,
             )
             endTmdbTest(TmdbTest.Api)
@@ -242,7 +225,7 @@ class ConfigManageViewModel(
         tmdbState.value = tmdbState.value.copy(imageBaseError = false)
         val apiKey = tmdbState.value.apiKey.trim()
         if (apiKey.isEmpty()) {
-            _toastEvent.value = str(R.string.tmdb_key_required)
+            toastEvent.value = str(R.string.tmdb_key_required)
             endTmdbTest(TmdbTest.Image)
             return
         }
@@ -255,7 +238,7 @@ class ConfigManageViewModel(
                 AppLog.e("TmdbApi", e)
                 false
             }
-            _toastEvent.value = str(
+            toastEvent.value = str(
                 if (result) R.string.tmdb_test_image_ok else R.string.tmdb_test_image_fail,
             )
             endTmdbTest(TmdbTest.Image)
@@ -273,36 +256,28 @@ class ConfigManageViewModel(
     }
 
     private fun str(resId: Int, vararg args: Any): String {
-        val context = AppContextHolder.context() ?: return ""
-        return LanguageManager.localized(context).getString(resId, *args)
+        val app = App.getInstance() ?: return ""
+        return LanguageManager.localized(app).getString(resId, *args)
     }
 
     fun clearToast() {
-        _toastEvent.value = null
+        toastEvent.value = null
     }
 
     fun cancelPendingSwitch() {
-        _pendingSwitch.value = null
+        pendingSwitch.value = null
     }
 
     private fun refreshActiveSnapshot() {
-        _activeUrl.value = KV.get(KVKeys.API_URL, "")
-        _liveActiveUrl.value = KV.get(KVKeys.LIVE_API_URL, "")
-        _liveFollow.value = ApiConfig.isLiveFollowVod()
-    }
-
-    fun openEdit(target: SubscribeSource?) {
-        _editTarget.value = target
-    }
-
-    fun closeEdit() {
-        _editTarget.value = null
+        activeUrl.value = KV.get(HawkConfig.API_URL, "")
+        liveActiveUrl.value = KV.get(HawkConfig.LIVE_API_URL, "")
+        liveFollow.value = ApiConfig.isLiveFollowVod()
     }
 
     fun onModeChanged() {
-        _manageMode.value = false
-        _selected.value = emptySet()
-        closeEdit()
+        manageMode.value = false
+        selected.value = emptySet()
+        editTarget.value = null
     }
 
     fun exitManageMode() {
@@ -310,31 +285,31 @@ class ConfigManageViewModel(
     }
 
     fun toggleSelected(value: String) {
-        val cur = _selected.value
+        val cur = selected.value
         setSelected(if (value in cur) cur - value else cur + value)
     }
 
     fun longPressSelect(value: String) {
-        _selected.value = setOf(value)
-        _manageMode.value = true
+        selected.value = setOf(value)
+        manageMode.value = true
     }
 
     private fun setSelected(next: Set<String>) {
-        _selected.value = next
-        if (next.isEmpty()) _manageMode.value = false
+        selected.value = next
+        if (next.isEmpty()) manageMode.value = false
     }
 
     private fun isInUse(url: String, vod: Boolean): Boolean =
         if (vod) {
-            url == _activeUrl.value || HistoryHelper.isApiLineSourceOf(url, _activeUrl.value)
+            url == activeUrl.value || HistoryHelper.isApiLineSourceOf(url, activeUrl.value)
         } else {
-            (!_liveFollow.value && url == _liveActiveUrl.value) ||
-                (!_liveFollow.value && HistoryHelper.isLiveApiLineSourceOf(url, _liveActiveUrl.value))
+            (!liveFollow.value && url == liveActiveUrl.value) ||
+                (!liveFollow.value && HistoryHelper.isLiveApiLineSourceOf(url, liveActiveUrl.value))
         }
 
     private fun activeInEitherMode(url: String): Boolean {
-        val vodApi = KV.get(KVKeys.API_URL, "")
-        val liveApi = KV.get(KVKeys.LIVE_API_URL, "")
+        val vodApi = KV.get(HawkConfig.API_URL, "")
+        val liveApi = KV.get(HawkConfig.LIVE_API_URL, "")
         return url == vodApi || url == liveApi ||
             HistoryHelper.isApiLineSourceOf(url, vodApi) ||
             HistoryHelper.isLiveApiLineSourceOf(url, liveApi)
@@ -345,29 +320,29 @@ class ConfigManageViewModel(
             loadSubscribes(SubscribeMode.Live).any { parseSubscribe(it).url == url }
 
     private fun referencedByRepo(url: String): Boolean =
-        (HistoryHelper.getApiLines().orEmpty() + HistoryHelper.liveApiLines().orEmpty())
-            .any { HistoryHelper.apiLineUrl(it) == url }
+        (HistoryHelper.getApiLines().orEmpty() + HistoryHelper.getLiveApiLines().orEmpty())
+            .any { HistoryHelper.getApiLineUrl(it) == url }
 
     private fun switchToVod(item: SubscribeSource) {
-        if (_activeUrl.value == item.url) return
+        if (activeUrl.value == item.url) return
         val followLive = applyVodSource(item)
-        _activeUrl.value = item.url
+        activeUrl.value = item.url
         if (followLive) {
-            _liveActiveUrl.value = ""
-            _liveFollow.value = true
+            liveActiveUrl.value = ""
+            liveFollow.value = true
         }
     }
 
     private fun switchToLive(item: SubscribeSource) {
-        if (!_liveFollow.value && _liveActiveUrl.value == item.url) return
+        if (!liveFollow.value && liveActiveUrl.value == item.url) return
         applyLiveSource(item)
-        _liveActiveUrl.value = item.url
-        _liveFollow.value = false
+        liveActiveUrl.value = item.url
+        liveFollow.value = false
     }
 
     fun requestSwitch(item: SubscribeSource, vod: Boolean) {
-        if (item.url in _disabledUrls.value) {
-            _pendingSwitch.value = PendingSwitch(item, vod)
+        if (item.url in disabledUrls.value) {
+            pendingSwitch.value = PendingSwitch(item, vod)
         } else if (vod) {
             switchToVod(item)
         } else {
@@ -377,39 +352,39 @@ class ConfigManageViewModel(
 
     /** 站点管理改动后强制重新加载当前订阅源（本地脚本源会重新扫描目录） */
     fun reloadActiveSource(vod: Boolean) {
-        val url = if (vod) KV.get(KVKeys.API_URL, "") else KV.get(KVKeys.LIVE_API_URL, "")
+        val url = if (vod) KV.get(HawkConfig.API_URL, "") else KV.get(HawkConfig.LIVE_API_URL, "")
         if (url.isEmpty()) return
         val item = SubscribeSource(url, url)
         if (vod) applyVodSource(item) else applyLiveSource(item)
     }
 
     fun enableAndSwitch() {
-        val pending = _pendingSwitch.value ?: return
-        _pendingSwitch.value = null
+        val pending = pendingSwitch.value ?: return
+        pendingSwitch.value = null
         BootGuard.enableSource(pending.item.url)
-        _disabledUrls.value = _disabledUrls.value - pending.item.url
+        disabledUrls.value = disabledUrls.value - pending.item.url
         if (pending.vod) switchToVod(pending.item) else switchToLive(pending.item)
     }
 
     fun followLiveNow() {
         applyLiveFollowVod()
-        _liveActiveUrl.value = ""
-        _liveFollow.value = true
-        _toastEvent.value = str(R.string.toast_live_follow_vod)
+        liveActiveUrl.value = ""
+        liveFollow.value = true
+        toastEvent.value = str(R.string.toast_live_follow_vod)
     }
 
     fun deleteSelected(mode: SubscribeMode) {
         val vod = mode == SubscribeMode.Vod
-        val items = if (vod) _vodItems.value else _liveItems.value
-        val target = _selected.value.filterNot { isInUse(parseSubscribe(it).url, vod) }
-        if (target.size != _selected.value.size) {
-            _toastEvent.value = str(R.string.toast_source_in_use)
+        val items = if (vod) vodItems.value else liveItems.value
+        val target = selected.value.filterNot { isInUse(parseSubscribe(it).url, vod) }
+        if (target.size != selected.value.size) {
+            toastEvent.value = str(R.string.toast_source_in_use)
         }
         val remaining = items.filterNot { it in target }
         KV.put(subscribeKeyOf(mode), ArrayList(remaining))
         val removedUrls = target.map { parseSubscribe(it).url }
         BootGuard.forgetSources(removedUrls)
-        _disabledUrls.value = _disabledUrls.value - removedUrls
+        disabledUrls.value = disabledUrls.value - removedUrls
         val copyUrls = removedUrls.filterNot {
             activeInEitherMode(it) || referencedBySubscribes(it) || referencedByRepo(it)
         }
@@ -417,18 +392,18 @@ class ConfigManageViewModel(
             copyCleanupScope.launch { copyUrls.forEach { removeLocalCopy(it) } }
         }
         if (vod) {
-            _vodItems.value = remaining
+            vodItems.value = remaining
             if (remaining.isEmpty()) {
                 ApiConfig.get().clearVodConfig()
-                _activeUrl.value = ""
+                activeUrl.value = ""
                 AppBootstrap.retry()
             }
         } else {
-            _liveItems.value = remaining
+            liveItems.value = remaining
             if (remaining.isEmpty()) {
                 applyLiveFollowVod()
-                _liveActiveUrl.value = ""
-                _liveFollow.value = true
+                liveActiveUrl.value = ""
+                liveFollow.value = true
             }
         }
         setSelected(emptySet())
@@ -437,7 +412,7 @@ class ConfigManageViewModel(
     fun commitAdd(vod: Boolean, name: String, url: String) {
         val mode = if (vod) SubscribeMode.Vod else SubscribeMode.Live
         val newItems = saveSubscribe(mode, name, url)
-        if (vod) _vodItems.value = newItems else _liveItems.value = newItems
+        if (vod) vodItems.value = newItems else liveItems.value = newItems
         if (newItems.size == 1) {
             val item = parseSubscribe(newItems.first())
             if (vod) switchToVod(item) else switchToLive(item)
@@ -446,7 +421,7 @@ class ConfigManageViewModel(
 
     fun addLocalSource(name: String, url: String): Boolean {
         val existed = loadSubscribes(SubscribeMode.Vod).any { parseSubscribe(it).url == url }
-        _vodItems.value = saveSubscribe(SubscribeMode.Vod, name, url)
+        vodItems.value = saveSubscribe(SubscribeMode.Vod, name, url)
         return existed
     }
 
@@ -454,15 +429,15 @@ class ConfigManageViewModel(
         if (url.isEmpty()) return
         val mode = if (vod) SubscribeMode.Vod else SubscribeMode.Live
         val newValue = (name.ifEmpty { url }) + SUBSCRIBE_SPLIT + url
-        val oldValue = _selected.value.firstOrNull { parseSubscribe(it).url == target.url }
+        val oldValue = selected.value.firstOrNull { parseSubscribe(it).url == target.url }
         val updated = updateSubscribe(mode, target, name, url)
-        if (vod) _vodItems.value = updated else _liveItems.value = updated
-        if (oldValue != null) _selected.value = _selected.value - oldValue + newValue
-        closeEdit()
+        if (vod) vodItems.value = updated else liveItems.value = updated
+        if (oldValue != null) selected.value = selected.value - oldValue + newValue
+        editTarget.value = null
         val item = parseSubscribe(newValue)
         if (vod) {
-            if (target.url == _activeUrl.value && url != _activeUrl.value) switchToVod(item)
-        } else if (!_liveFollow.value && target.url == _liveActiveUrl.value && url != _liveActiveUrl.value) {
+            if (target.url == activeUrl.value && url != activeUrl.value) switchToVod(item)
+        } else if (!liveFollow.value && target.url == liveActiveUrl.value && url != liveActiveUrl.value) {
             switchToLive(item)
         }
     }
@@ -471,16 +446,23 @@ class ConfigManageViewModel(
         AppBootstrap.switchVodSubscription(item.url)
 
     private fun applyLiveSource(item: SubscribeSource) {
-        ConfigRepository.switchLiveSource(item.url)
+        HistoryHelper.setLiveApiHistory(item.url)
+        KV.put(HawkConfig.LIVE_API_URL, item.url)
+        if (!HistoryHelper.isLiveApiLineHistory(item.url)) HistoryHelper.clearLiveApiLineList()
+        ApiConfig.get().clearLiveHosts()
+        ApiConfig.get().invalidateLiveConfig()
     }
 
     private fun applyLiveFollowVod() {
-        ConfigRepository.switchLiveSource("")
+        KV.put(HawkConfig.LIVE_API_URL, "")
+        HistoryHelper.clearLiveApiLineList()
+        ApiConfig.get().clearLiveHosts()
+        ApiConfig.get().invalidateLiveConfig()
     }
 
     private fun subscribeKeyOf(mode: SubscribeMode): String = when (mode) {
-        SubscribeMode.Vod -> KVKeys.SUBSCRIBE_LIST
-        SubscribeMode.Live -> KVKeys.LIVE_SUBSCRIBE_LIST
+        SubscribeMode.Vod -> HawkConfig.SUBSCRIBE_LIST
+        SubscribeMode.Live -> HawkConfig.LIVE_SUBSCRIBE_LIST
     }
 
     private fun loadSubscribes(mode: SubscribeMode): List<String> =

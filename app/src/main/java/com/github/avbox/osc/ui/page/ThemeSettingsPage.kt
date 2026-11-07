@@ -60,7 +60,6 @@ import com.github.avbox.osc.ui.components.SettingsCardPosition
 import com.github.avbox.osc.ui.components.SettingsGroup
 import com.github.avbox.osc.ui.components.SettingsSwitch
 import com.github.avbox.osc.ui.components.SettingsSwitchRow
-import com.github.avbox.osc.ui.theme.TextScrollState
 import com.github.avbox.osc.ui.components.ThemeColorPickerSheet
 import com.github.avbox.osc.ui.components.TopBarActionBox
 import com.github.avbox.osc.ui.theme.AppThemeState
@@ -133,8 +132,9 @@ fun ThemeSettingsScreen(onNavigateBack: () -> Unit) {
                     CustomThemeSwitchRow(
                         checked = isCustom,
                         onCheckedChange = { checked ->
-                            AppThemeState.source =
-                                if (checked) ThemeSource.CUSTOM else ThemeSource.SYSTEM
+                            AppThemeState.setSource(
+                                if (checked) ThemeSource.CUSTOM else ThemeSource.SYSTEM,
+                            )
                         },
                     )
                 }
@@ -142,13 +142,13 @@ fun ThemeSettingsScreen(onNavigateBack: () -> Unit) {
                     SettingsSwitchRow(
                         title = stringResource(R.string.theme_pure_black),
                         checked = config.pureBlack,
-                        onCheckedChange = { AppThemeState.pureBlack = it },
+                        onCheckedChange = { AppThemeState.setPureBlack(it) },
                     )
                 }
                 ThemeCard(SettingsCardPosition.MIDDLE) {
                     ThemeModeRow(
                         currentMode = config.mode,
-                        onModeSelected = { AppThemeState.mode = it },
+                        onModeSelected = { AppThemeState.setMode(it) },
                     )
                 }
                 ThemeCard(SettingsCardPosition.MIDDLE, enabled = isCustom) {
@@ -156,7 +156,7 @@ fun ThemeSettingsScreen(onNavigateBack: () -> Unit) {
                         currentSeed = config.seedArgb,
                         style = config.style,
                         enabled = isCustom,
-                        onSeedSelected = { AppThemeState.seed = it },
+                        onSeedSelected = { AppThemeState.setSeed(it) },
                     )
                 }
                 ThemeCard(SettingsCardPosition.MIDDLE, enabled = isCustom) {
@@ -170,7 +170,7 @@ fun ThemeSettingsScreen(onNavigateBack: () -> Unit) {
                     VariantSelectorRow(
                         currentStyle = config.style,
                         enabled = isCustom,
-                        onStyleSelected = { AppThemeState.style = it },
+                        onStyleSelected = { AppThemeState.setStyle(it) },
                     )
                 }
             }
@@ -205,14 +205,14 @@ fun ThemeSettingsScreen(onNavigateBack: () -> Unit) {
                     SettingsSwitchRow(
                         title = stringResource(R.string.theme_nav_bar),
                         checked = glassConfig.navbarEnabled,
-                        onCheckedChange = { LiquidGlassState.navbarEnabled = it },
+                        onCheckedChange = { LiquidGlassState.setNavbarEnabled(it) },
                     )
                 }
                 SettingsCard(SettingsCardPosition.MIDDLE) {
                     SettingsSwitchRow(
                         title = stringResource(R.string.theme_app_controls),
                         checked = glassConfig.controlsEnabled,
-                        onCheckedChange = { LiquidGlassState.controlsEnabled = it },
+                        onCheckedChange = { LiquidGlassState.setControlsEnabled(it) },
                     )
                 }
                 SettingsCard(SettingsCardPosition.MIDDLE) {
@@ -221,7 +221,7 @@ fun ThemeSettingsScreen(onNavigateBack: () -> Unit) {
                         value = blurValue,
                         valueRange = LiquidGlassState.BLUR_RANGE,
                         onValueChange = { blurValue = it },
-                        onValueChangeFinished = { LiquidGlassState.blurDp = blurValue },
+                        onValueChangeFinished = { LiquidGlassState.setBlurDp(blurValue) },
                     )
                 }
                 SettingsCard(SettingsCardPosition.MIDDLE) {
@@ -230,7 +230,7 @@ fun ThemeSettingsScreen(onNavigateBack: () -> Unit) {
                         value = distortionValue,
                         valueRange = LiquidGlassState.DISTORTION_RANGE,
                         onValueChange = { distortionValue = it },
-                        onValueChangeFinished = { LiquidGlassState.distortionDp = distortionValue },
+                        onValueChangeFinished = { LiquidGlassState.setDistortionDp(distortionValue) },
                     )
                 }
                 SettingsCard(SettingsCardPosition.MIDDLE) {
@@ -239,23 +239,15 @@ fun ThemeSettingsScreen(onNavigateBack: () -> Unit) {
                         value = translucencyValue,
                         valueRange = LiquidGlassState.TRANSLUCENCY_RANGE,
                         onValueChange = { translucencyValue = it },
-                        onValueChangeFinished = { LiquidGlassState.translucency = translucencyValue },
+                        onValueChangeFinished = { LiquidGlassState.setTranslucency(translucencyValue) },
                         valueText = "${(translucencyValue * 100f).roundToInt()}%",
-                    )
-                }
-                SettingsCard(SettingsCardPosition.MIDDLE) {
-                    SettingsSwitchRow(
-                        title = stringResource(R.string.theme_dispersion),
-                        checked = glassConfig.dispersion,
-                        onCheckedChange = { LiquidGlassState.dispersion = it },
                     )
                 }
                 SettingsCard(SettingsCardPosition.LAST) {
                     SettingsSwitchRow(
-                        title = stringResource(R.string.theme_text_scroll),
-                        subtitle = stringResource(R.string.theme_text_scroll_hint),
-                        checked = TextScrollState.enabled,
-                        onCheckedChange = { TextScrollState.enabled = it },
+                        title = stringResource(R.string.theme_dispersion),
+                        checked = glassConfig.dispersion,
+                        onCheckedChange = { LiquidGlassState.setDispersion(it) },
                     )
                 }
             }
@@ -269,7 +261,7 @@ fun ThemeSettingsScreen(onNavigateBack: () -> Unit) {
             title = stringResource(R.string.theme_custom_color),
             initialColor = config.seedArgb,
             onConfirm = { argb ->
-                AppThemeState.seed = argb
+                AppThemeState.setSeed(argb)
             },
             onDismiss = { seedPickerOpen = false },
         )

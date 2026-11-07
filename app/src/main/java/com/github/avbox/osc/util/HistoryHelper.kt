@@ -19,55 +19,55 @@ object HistoryHelper {
 
     @JvmStatic
     fun isIncognito(): Boolean {
-        return KV.get(KVKeys.INCOGNITO, false)
+        return KV.get(HawkConfig.INCOGNITO, false)
     }
 
     @JvmStatic
     fun setSearchHistory(title: String) {
         if (isIncognito()) return
-        val history = KV.get(KVKeys.SEARCH_HISTORY, ArrayList<String>())
+        val history = KV.get(HawkConfig.SEARCH_HISTORY, ArrayList<String>())
         history.remove(title)
         history.add(0, title)
         if (history.size > 20) {
             history.removeAt(history.size - 1)
         }
-        KV.put(KVKeys.SEARCH_HISTORY, history)
+        KV.put(HawkConfig.SEARCH_HISTORY, history)
     }
 
     @JvmStatic
     fun clearSearchHistory() {
-        KV.put(KVKeys.SEARCH_HISTORY, ArrayList<String>())
+        KV.put(HawkConfig.SEARCH_HISTORY, ArrayList<String>())
     }
 
     @JvmStatic
     fun removeSearchHistory(title: String) {
-        val history = KV.get(KVKeys.SEARCH_HISTORY, ArrayList<String>())
+        val history = KV.get(HawkConfig.SEARCH_HISTORY, ArrayList<String>())
         history.remove(title)
-        KV.put(KVKeys.SEARCH_HISTORY, history)
+        KV.put(HawkConfig.SEARCH_HISTORY, history)
     }
 
     @JvmStatic
     fun setLiveApiHistory(value: String) {
-        val history = KV.get(KVKeys.LIVE_API_HISTORY, ArrayList<String>())
+        val history = KV.get(HawkConfig.LIVE_API_HISTORY, ArrayList<String>())
         if (!history.contains(value)) {
             history.add(0, value)
         }
         if (history.size > 30) {
             history.removeAt(30)
         }
-        KV.put(KVKeys.LIVE_API_HISTORY, history)
+        KV.put(HawkConfig.LIVE_API_HISTORY, history)
     }
 
     @JvmStatic
     fun setApiHistory(value: String) {
-        val history = KV.get(KVKeys.API_HISTORY, ArrayList<String>())
+        val history = KV.get(HawkConfig.API_HISTORY, ArrayList<String>())
         if (!history.contains(value)) {
             history.add(0, value)
         }
         if (history.size > 30) {
             history.removeAt(30)
         }
-        KV.put(KVKeys.API_HISTORY, history)
+        KV.put(HawkConfig.API_HISTORY, history)
     }
 
     @JvmStatic
@@ -81,7 +81,7 @@ object HistoryHelper {
     }
 
     @JvmStatic
-    fun apiLineName(value: String?): String {
+    fun getApiLineName(value: String?): String {
         if (value == null) return ""
         val splitIndex = value.indexOf(API_LINE_SPLIT)
         val name = if (splitIndex >= 0) value.substring(0, splitIndex) else value
@@ -89,7 +89,7 @@ object HistoryHelper {
     }
 
     @JvmStatic
-    fun apiLineUrl(value: String?): String {
+    fun getApiLineUrl(value: String?): String {
         if (value == null) return ""
         val splitIndex = value.indexOf(API_LINE_SPLIT)
         val url = if (splitIndex >= 0) value.substring(splitIndex + API_LINE_SPLIT.length) else value
@@ -100,9 +100,9 @@ object HistoryHelper {
     fun isApiLineUrl(url: String?): Boolean {
         if (url == null || url.trim { it <= ' ' }.isEmpty()) return false
         val trimUrl = url.trim { it <= ' ' }
-        val apiLines = KV.get(KVKeys.API_LINE_LIST, ArrayList<String>())
+        val apiLines = KV.get(HawkConfig.API_LINE_LIST, ArrayList<String>())
         for (apiLine in apiLines) {
-            if (trimUrl == apiLineUrl(apiLine)) {
+            if (trimUrl == getApiLineUrl(apiLine)) {
                 return true
             }
         }
@@ -112,7 +112,7 @@ object HistoryHelper {
     @JvmStatic
     fun isApiLineSource(url: String?): Boolean {
         if (url == null || url.trim { it <= ' ' }.isEmpty()) return false
-        val source = KV.get(KVKeys.API_LINE_SOURCE, "")
+        val source = KV.get(HawkConfig.API_LINE_SOURCE, "")
         return url.trim { it <= ' ' } == source
     }
 
@@ -123,23 +123,23 @@ object HistoryHelper {
 
     @JvmStatic
     fun clearApiLineList() {
-        KV.put(KVKeys.API_LINE_LIST, ArrayList<String>())
-        KV.put(KVKeys.API_LINE_SOURCE, "")
+        KV.put(HawkConfig.API_LINE_LIST, ArrayList<String>())
+        KV.put(HawkConfig.API_LINE_SOURCE, "")
         ApiLineSignal.notifyChanged()
     }
 
     @JvmStatic
     fun getApiLines(): ArrayList<String> {
-        return KV.get(KVKeys.API_LINE_LIST, ArrayList<String>())
+        return KV.get(HawkConfig.API_LINE_LIST, ArrayList<String>())
     }
 
     @JvmStatic
     fun isLiveApiLineUrl(url: String?): Boolean {
         if (url == null || url.trim { it <= ' ' }.isEmpty()) return false
         val trimUrl = url.trim { it <= ' ' }
-        val apiLines = KV.get(KVKeys.LIVE_API_LINE_LIST, ArrayList<String>())
+        val apiLines = KV.get(HawkConfig.LIVE_API_LINE_LIST, ArrayList<String>())
         for (apiLine in apiLines) {
-            if (trimUrl == apiLineUrl(apiLine)) {
+            if (trimUrl == getApiLineUrl(apiLine)) {
                 return true
             }
         }
@@ -149,7 +149,7 @@ object HistoryHelper {
     @JvmStatic
     fun isLiveApiLineSource(url: String?): Boolean {
         if (url == null || url.trim { it <= ' ' }.isEmpty()) return false
-        return url.trim { it <= ' ' } == KV.get(KVKeys.LIVE_API_LINE_SOURCE, "")
+        return url.trim { it <= ' ' } == KV.get(HawkConfig.LIVE_API_LINE_SOURCE, "")
     }
 
     @JvmStatic
@@ -158,14 +158,14 @@ object HistoryHelper {
     }
 
     @JvmStatic
-    fun liveApiLines(): ArrayList<String> {
-        return KV.get(KVKeys.LIVE_API_LINE_LIST, ArrayList<String>())
+    fun getLiveApiLines(): ArrayList<String> {
+        return KV.get(HawkConfig.LIVE_API_LINE_LIST, ArrayList<String>())
     }
 
     @JvmStatic
     fun clearLiveApiLineList() {
-        KV.put(KVKeys.LIVE_API_LINE_LIST, ArrayList<String>())
-        KV.put(KVKeys.LIVE_API_LINE_SOURCE, "")
+        KV.put(HawkConfig.LIVE_API_LINE_LIST, ArrayList<String>())
+        KV.put(HawkConfig.LIVE_API_LINE_SOURCE, "")
         ApiLineSignal.notifyChanged()
     }
 
@@ -173,13 +173,13 @@ object HistoryHelper {
     fun isApiLineSourceOf(url: String?, activeUrl: String?): Boolean {
         if (url == null || url.trim { it <= ' ' }.isEmpty()) return false
         if (!isApiLineUrl(activeUrl)) return false
-        return url.trim { it <= ' ' } == KV.get(KVKeys.API_LINE_SOURCE, "")
+        return url.trim { it <= ' ' } == KV.get(HawkConfig.API_LINE_SOURCE, "")
     }
 
     @JvmStatic
     fun isLiveApiLineSourceOf(url: String?, activeUrl: String?): Boolean {
         if (url == null || url.trim { it <= ' ' }.isEmpty()) return false
         if (!isLiveApiLineUrl(activeUrl)) return false
-        return url.trim { it <= ' ' } == KV.get(KVKeys.LIVE_API_LINE_SOURCE, "")
+        return url.trim { it <= ' ' } == KV.get(HawkConfig.LIVE_API_LINE_SOURCE, "")
     }
 }

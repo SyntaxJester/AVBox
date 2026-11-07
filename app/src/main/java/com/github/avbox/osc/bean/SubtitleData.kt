@@ -6,7 +6,7 @@ class SubtitleData {
     @set:JvmName("setIsNew")
     var isNew: Boolean? = null
 
-    var subtitleList: List<SourceSubtitle>? = null
+    var subtitleList: List<Subtitle>? = null
 
     @get:JvmName("getIsZip")
     @set:JvmName("setIsZip")

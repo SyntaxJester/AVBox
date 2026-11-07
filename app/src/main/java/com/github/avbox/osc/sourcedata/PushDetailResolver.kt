@@ -3,19 +3,19 @@ package com.github.avbox.osc.sourcedata
 import android.text.TextUtils
 import android.util.Base64
 
-import com.github.catvod.crawler.SpiderReaper
 import com.github.avbox.osc.R
 import com.github.avbox.osc.api.ApiConfig
+import com.github.avbox.osc.base.App
 import com.github.avbox.osc.bean.AbsJson
 import com.github.avbox.osc.bean.AbsXml
 import com.github.avbox.osc.bean.Movie
 import com.github.avbox.osc.bean.SourceBean
-import com.github.avbox.osc.util.AppContextHolder
 import com.github.avbox.osc.util.BoundedCall
 import com.github.avbox.osc.util.AppLog
 import com.github.avbox.osc.util.LanguageManager
 import com.github.avbox.osc.util.RegexUtils
-import com.github.avbox.osc.sourcedata.Thunder
+import com.github.avbox.osc.util.SpiderReaper
+import com.github.avbox.osc.util.thunder.Thunder
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.CancellationException
@@ -147,7 +147,7 @@ class PushDetailResolver(private val gson: Gson, private val detailResult: Sourc
                     thunderParse = true
                     AppLog.i("echo-detail-prerender key=" + data.sourceKey)
                     detailResult.postValue(data)
-                    Thunder.parse(requireNotNull(AppContextHolder.context()) { "app context not initialized" }, video.urlBean, object : Thunder.ThunderCallback {
+                    Thunder.parse(requireNotNull(App.getInstance()) { "app instance not ready" }, video.urlBean, object : Thunder.ThunderCallback {
                         override fun status(code: Int, info: String) {
                             if (code >= 0) {
                                 AppLog.i(info)
@@ -203,8 +203,8 @@ class PushDetailResolver(private val gson: Gson, private val detailResult: Sourc
         private const val PUSH_DETAIL_TIMEOUT_MS = 15_000L
 
         private fun str(resId: Int, vararg args: Any?): String {
-            val context = AppContextHolder.context()
-            return if (context == null) "" else LanguageManager.localized(context).getString(resId, *args)
+            val app = App.getInstance()
+            return if (app == null) "" else LanguageManager.localized(app).getString(resId, *args)
         }
     }
 }

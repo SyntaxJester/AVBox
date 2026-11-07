@@ -1,5 +1,6 @@
 package com.github.avbox.osc.api
 
+import android.app.Activity
 import android.net.Uri
 import android.text.TextUtils
 import android.util.Base64
@@ -15,13 +16,12 @@ import com.github.avbox.osc.bean.ParseBean
 import com.github.avbox.osc.bean.ProxyRule
 import com.github.avbox.osc.bean.SourceBean
 import com.github.avbox.osc.io.FileUtils
-import com.github.avbox.osc.net.HttpClients
+import com.github.avbox.osc.net.OkGoHelper
 import com.github.avbox.osc.net.SearchHelper
 import com.github.avbox.osc.util.AES
 import com.github.avbox.osc.util.AdBlocker
 import com.github.avbox.osc.util.DefaultConfig
-import com.github.avbox.osc.util.KVKeys
-import com.github.avbox.osc.util.SiteProxy
+import com.github.avbox.osc.util.HawkConfig
 import com.github.avbox.osc.util.HeaderGuard
 import com.github.avbox.osc.util.HistoryHelper
 import com.github.avbox.osc.util.KV
@@ -29,6 +29,8 @@ import com.github.avbox.osc.util.AppLog
 import com.github.avbox.osc.util.LanguageManager
 import com.github.avbox.osc.util.LocalAddress
 import com.github.avbox.osc.util.RegexUtils
+import com.github.avbox.osc.util.SiteExt
+import com.github.avbox.osc.util.SiteProxy
 import com.github.avbox.osc.util.VideoParseRuler
 import com.github.avbox.osc.util.live.TxtSubscribe
 import com.google.gson.Gson
@@ -51,15 +53,15 @@ class ApiConfig private constructor() {
     @Volatile
     private var sourceBeanList: LinkedHashMap<String?, SourceBean>
     @Volatile
-    private var homeSource: SourceBean? = null
+    private var mHomeSource: SourceBean? = null
     @Volatile
-    internal var defaultParseBean: ParseBean? = null
+    private var mDefaultParse: ParseBean? = null
     @Volatile
     private var liveChannelGroupList: MutableList<LiveChannelGroup>
     @Volatile
     var parseBeanList: MutableList<ParseBean>
     @Volatile
-    internal var vipParseFlags: MutableList<String>? = null
+    private var vipParseFlags: MutableList<String>? = null
     @Volatile
     private var vodHosts: MutableMap<String, String>? = null
     @Volatile
@@ -88,10 +90,7 @@ class ApiConfig private constructor() {
     private var searchSourceBeanList: MutableList<SourceBean> = ArrayList()
 
     @Volatile
-    private var liveSettingGroups: MutableList<LiveSettingGroup> = ArrayList()
-
-    val liveSettingGroupList: List<LiveSettingGroup>
-        get() = java.util.Collections.unmodifiableList(liveSettingGroups)
+    var liveSettingGroupList: MutableList<LiveSettingGroup> = ArrayList()
 
     init {
         clearLoader()
@@ -100,37 +99,25 @@ class ApiConfig private constructor() {
         parseBeanList = ArrayList()
         searchSourceBeanList = ArrayList()
         gson = Gson()
-        KV.put(KVKeys.LIVE_GROUP_LIST, JsonArray())
+        KV.put(HawkConfig.LIVE_GROUP_LIST, JsonArray())
         loadDefaultConfig()
-        HttpClients.hostsProvider = { myHost() }
+        OkGoHelper.hostsProvider = { getMyHost() }
         SearchHelper.liveSourcesProvider = { getSourceBeanList() }
     }
 
-    suspend fun loadConfig(useCache: Boolean): String? {
+    fun loadConfig(useCache: Boolean, callback: LoadConfigCallback, activity: Activity?) {
         // 拉在线订阅不属于任何站点，先摘掉站点代理，避免上个站点的代理越界作用到订阅拉取上
         SiteProxy.suspendInfra()
-        return try {
-            configLoader.loadConfig(useCache)
-        } finally {
-            SiteProxy.resumeInfra()
-        }
+        configLoader.loadConfig(useCache, InfraAwareCallback(callback), activity)
     }
 
-    suspend fun loadLiveConfig(useCache: Boolean): String? {
+    fun loadLiveConfig(useCache: Boolean, callback: LoadConfigCallback) {
         SiteProxy.suspendInfra()
-        return try {
-            configLoader.loadLiveConfig(useCache)
-        } finally {
-            SiteProxy.resumeInfra()
-        }
+        configLoader.loadLiveConfig(useCache, InfraAwareCallback(callback))
     }
 
     fun refreshConfigIfChanged(onChanged: (String, String) -> Unit) {
         configLoader.refreshIfChanged(onChanged)
-    }
-
-    fun refreshLiveConfigIfChanged() {
-        configLoader.refreshLiveIfChanged()
     }
 
     fun applyRefreshedConfig(apiUrl: String, body: String) {
@@ -145,21 +132,26 @@ class ApiConfig private constructor() {
         return !liveChannelGroupList.isEmpty()
     }
 
+    fun shouldReloadLiveConfig(): Boolean {
+        val apiUrl = getEffectiveLiveUrl()
+        return liveChannelGroupList.isEmpty() || apiUrl != loadedLiveConfigUrl
+    }
+
     fun invalidateLiveConfig() {
         liveChannelGroupList = ArrayList()
         loadedLiveConfigUrl = ""
     }
 
-    suspend fun loadJar(useCache: Boolean, spider: String?): String? {
-        return spiderLoader.loadJar(useCache, requireNotNull(spider) { "spider url missing" })
+    fun loadJar(useCache: Boolean, spider: String?, callback: LoadConfigCallback) {
+        spiderLoader.loadJar(useCache, requireNotNull(spider) { "spider url missing" }, callback)
     }
 
     fun clearLiveConfigResult() {
         liveChannelGroupList = ArrayList()
-        spiderLoader.liveSpider = ""
+        spiderLoader.setLiveSpider("")
         spiderLoader.resetCurrentLiveSpider()
         initLiveSettings()
-        KV.put(KVKeys.LIVE_GROUP_LIST, JsonArray())
+        KV.put(HawkConfig.LIVE_GROUP_LIST, JsonArray())
     }
 
     private fun resetConfigData() {
@@ -171,10 +163,10 @@ class ApiConfig private constructor() {
         liveChannelGroupList = ArrayList()
         parseBeanList = ArrayList()
         searchSourceBeanList = ArrayList()
-        KV.put(KVKeys.LIVE_GROUP_LIST, JsonArray())
+        KV.put(HawkConfig.LIVE_GROUP_LIST, JsonArray())
         vodHosts = null
         if (isLiveFollowVod()) liveHosts = null
-        HttpClients.refreshHosts()
+        OkGoHelper.refreshHosts()
     }
 
     fun clearConfig() {
@@ -191,19 +183,19 @@ class ApiConfig private constructor() {
         val followLive = isLiveFollowVod()
         cancelPendingLoads()
         resetConfigData()
-        homeSource = null
-        KV.put(KVKeys.API_URL, "")
-        KV.put(KVKeys.HOME_API, "")
+        mHomeSource = null
+        KV.put(HawkConfig.API_URL, "")
+        KV.put(HawkConfig.HOME_API, "")
         HistoryHelper.clearApiLineList()
         if (followLive) {
-            KV.put(KVKeys.LIVE_API_URL, "")
+            KV.put(HawkConfig.LIVE_API_URL, "")
             HistoryHelper.clearLiveApiLineList()
         }
         invalidateLiveConfig()
     }
 
     fun clearLiveConfig() {
-        KV.put(KVKeys.LIVE_API_URL, "")
+        KV.put(HawkConfig.LIVE_API_URL, "")
         HistoryHelper.clearLiveApiLineList()
         clearLiveHosts()
         invalidateLiveConfig()
@@ -211,22 +203,22 @@ class ApiConfig private constructor() {
 
     fun clearLiveHosts() {
         liveHosts = null
-        HttpClients.refreshHosts()
+        OkGoHelper.refreshHosts()
     }
 
     fun invalidateVodConfig() {
         resetConfigData()
-        homeSource = null
+        mHomeSource = null
         invalidateLiveConfig()
     }
 
     private fun clearApiLinesIfUnmatched(apiUrl: String) {
-        val apiLines: ArrayList<String> = KV.get(KVKeys.API_LINE_LIST, ArrayList<String>())
+        val apiLines: ArrayList<String> = KV.get(HawkConfig.API_LINE_LIST, ArrayList<String>())
         if (apiLines.isEmpty()) {
             return
         }
         for (apiLine in apiLines) {
-            if (apiUrl == HistoryHelper.apiLineUrl(apiLine)) {
+            if (apiUrl == HistoryHelper.getApiLineUrl(apiLine)) {
                 return
             }
         }
@@ -234,7 +226,7 @@ class ApiConfig private constructor() {
     }
 
     fun parseJson(apiUrl: String, jsonStr: String) {
-        if (apiUrl != KV.get(KVKeys.API_URL, "")) {
+        if (apiUrl != KV.get(HawkConfig.API_URL, "")) {
             AppLog.debugI("echo-switch: drop stale config")
             return
         }
@@ -244,7 +236,7 @@ class ApiConfig private constructor() {
         val infoJson = gson.fromJson(jsonStr, JsonObject::class.java)
         configLogo = DefaultConfig.safeJsonString(infoJson, "logo", "")
         spiderLoader.spider = DefaultConfig.safeJsonString(infoJson, "spider", "")
-        spiderLoader.jarCache = DefaultConfig.safeJsonString(infoJson, "jarCache", "true")
+        spiderLoader.setJarCache(DefaultConfig.safeJsonString(infoJson, "jarCache", "true"))
         danmaku = DefaultConfig.safeJsonString(infoJson, "danmaku", "")
         val sites = ConfigParser.parseSites(infoJson)
         val siteMap = LinkedHashMap<String?, SourceBean>()
@@ -254,7 +246,7 @@ class ApiConfig private constructor() {
         sourceBeanList = siteMap
         val firstSite = firstVisibleSite(sites)
         if (sourceBeanList.size > 0) {
-            val home = KV.get(KVKeys.HOME_API, "")
+            val home = KV.get(HawkConfig.HOME_API, "")
             val sh = getSource(home)
             if (sh == null) {
                 assert(firstSite != null)
@@ -272,7 +264,7 @@ class ApiConfig private constructor() {
         }
         parseBeanList = parses
         if (parses.size > 0) {
-            val defaultParse = KV.get(KVKeys.DEFAULT_PARSE, "")
+            val defaultParse = KV.get(HawkConfig.DEFAULT_PARSE, "")
             if (!TextUtils.isEmpty(defaultParse)) {
                 for (pb in parses) {
                     if (pb.name == defaultParse) {
@@ -280,22 +272,22 @@ class ApiConfig private constructor() {
                     }
                 }
             }
-            if (defaultParseBean == null) {
+            if (mDefaultParse == null) {
                 setDefaultParse(parses[0])
             }
         }
 
-        val live_api_url = KV.get(KVKeys.LIVE_API_URL, "")
+        val live_api_url = KV.get(HawkConfig.LIVE_API_URL, "")
         if (live_api_url.isEmpty() || apiUrl == live_api_url) {
             AppLog.i("echo-load-config_live")
             initLiveSettings()
             if (infoJson.has("lives")) {
                 val lives_groups = infoJson.get("lives").asJsonArray
-                var live_group_index = liveGroupIndex
+                var live_group_index = getLiveGroupIndex()
                 if (live_group_index > lives_groups.size() - 1) live_group_index = 0
-                KV.put(KVKeys.LIVE_GROUP_LIST, lives_groups)
+                KV.put(HawkConfig.LIVE_GROUP_LIST, lives_groups)
                 try {
-                    liveSettingGroups[5].liveSettingItems = ConfigParser.parseLiveSettingItems(lives_groups)
+                    liveSettingGroupList[5].liveSettingItems = ConfigParser.parseLiveSettingItems(lives_groups)
                 } catch (e: Exception) {
                     AppLog.e("ApiConfig", e)
                 }
@@ -306,7 +298,7 @@ class ApiConfig private constructor() {
         }
 
         vodHosts = if (infoJson.has("hosts")) ConfigParser.parseHosts(infoJson.getAsJsonArray("hosts")) else null
-        HttpClients.refreshHosts()
+        OkGoHelper.refreshHosts()
 
         loadProxyRules(infoJson)
 
@@ -315,12 +307,20 @@ class ApiConfig private constructor() {
         ConfigApplier.applyDoh(infoJson)
         AppLog.i("echo-api-config-----------load")
         ConfigApplier.applyAds(infoJson)
-        // 订阅源自身的 proxy 规则（loadProxyRules）可能清空代理，这里按当前站点再应用一次
-        SiteProxy.apply(homeSourceBean())
+
+        // 站点级代理：启用当前站点的代理
+        SiteProxy.apply(getHomeSourceBean())
+    }
+
+    /** 站点 ext 覆盖：从本地恢复的覆盖写回站点配置 */
+    private fun applySiteExtOverrides(sites: LinkedHashMap<String?, SourceBean>) {
+        for (sb in sites.values) {
+            SiteExt.apply(sb)
+        }
     }
 
     private fun loadDefaultConfig() {
-        val defaultJson = gson.fromJson(FileUtils.asOpen("default_config.json"), JsonObject::class.java)
+        val defaultJson = gson.fromJson(FileUtils.getAsOpen("default_config.json"), JsonObject::class.java)
         if (defaultJson == null) {
             AppLog.e("ApiConfig: default_config.json unavailable")
             return
@@ -368,14 +368,14 @@ class ApiConfig private constructor() {
 
     private fun parseLiveText(apiUrl: String, content: String) {
         liveChannelGroupList = ArrayList()
-        spiderLoader.liveSpider = ""
+        spiderLoader.setLiveSpider("")
         spiderLoader.resetCurrentLiveSpider()
         initLiveSettings()
-        KV.put(KVKeys.LIVE_GROUP_LIST, JsonArray())
-        KV.put(KVKeys.EPG_URL, ConfigParser.extractLiveTextEpg(content))
-        KV.put(KVKeys.LIVE_WEB_HEADER, null)
+        KV.put(HawkConfig.LIVE_GROUP_LIST, JsonArray())
+        KV.put(HawkConfig.EPG_URL, ConfigParser.extractLiveTextEpg(content))
+        KV.put(HawkConfig.LIVE_WEB_HEADER, null)
         liveHosts = null
-        HttpClients.refreshHosts()
+        OkGoHelper.refreshHosts()
         val livesArray = TxtSubscribe.parseToJsonArray(content)
         loadLives(livesArray)
         AppLog.i("echo-live-text-config-----------load:" + apiUrl)
@@ -384,16 +384,16 @@ class ApiConfig private constructor() {
     private fun parseLiveJson(apiUrl: String, jsonStr: String) {
         liveChannelGroupList = ArrayList()
         val infoJson = gson.fromJson(jsonStr, JsonObject::class.java)
-        spiderLoader.liveSpider = DefaultConfig.safeJsonString(infoJson, "spider", "")
+        spiderLoader.setLiveSpider(DefaultConfig.safeJsonString(infoJson, "spider", ""))
         initLiveSettings()
         if (infoJson.has("lives")) {
             val lives_groups = infoJson.get("lives").asJsonArray
 
-            var live_group_index = liveGroupIndex
+            var live_group_index = getLiveGroupIndex()
             if (live_group_index > lives_groups.size() - 1) live_group_index = 0
-            KV.put(KVKeys.LIVE_GROUP_LIST, lives_groups)
+            KV.put(HawkConfig.LIVE_GROUP_LIST, lives_groups)
             try {
-                liveSettingGroups[5].liveSettingItems = ConfigParser.parseLiveSettingItems(lives_groups)
+                liveSettingGroupList[5].liveSettingItems = ConfigParser.parseLiveSettingItems(lives_groups)
             } catch (e: Exception) {
                 AppLog.e("ApiConfig", e)
             }
@@ -403,7 +403,7 @@ class ApiConfig private constructor() {
         }
 
         liveHosts = if (infoJson.has("hosts")) ConfigParser.parseHosts(infoJson.getAsJsonArray("hosts")) else null
-        HttpClients.refreshHosts()
+        OkGoHelper.refreshHosts()
         AppLog.i("echo-api-live-config-----------load")
     }
 
@@ -459,50 +459,50 @@ class ApiConfig private constructor() {
             liveSettingGroup.liveSettingItems = liveSettingItemList
             groups.add(liveSettingGroup)
         }
-        liveSettingGroups = groups
+        liveSettingGroupList = groups
         refreshLiveApiHistoryItems()
     }
 
     fun refreshLiveApiHistoryItems() {
-        if (liveSettingGroups.size < 7) return
+        if (liveSettingGroupList.size < 7) return
         val liveSettingItemList = ArrayList<LiveSettingItem>()
         val followItem = LiveSettingItem()
         followItem.itemIndex = 0
         followItem.itemName = str(R.string.live_follow_vod_source)
         liveSettingItemList.add(followItem)
-        val entries = liveConfigEntries()
+        val entries = getLiveConfigEntries()
         for (i in entries.indices) {
             val liveSettingItem = LiveSettingItem()
             liveSettingItem.itemIndex = i + 1
-            liveSettingItem.itemName = HistoryHelper.apiLineName(entries[i])
+            liveSettingItem.itemName = HistoryHelper.getApiLineName(entries[i])
             liveSettingItemList.add(liveSettingItem)
         }
-        liveSettingGroups[6].liveSettingItems = liveSettingItemList
+        liveSettingGroupList[6].liveSettingItems = liveSettingItemList
     }
 
     fun isLiveApiLineMode(): Boolean {
-        return HistoryHelper.isLiveApiLineUrl(KV.get(KVKeys.LIVE_API_URL, ""))
+        return HistoryHelper.isLiveApiLineUrl(KV.get(HawkConfig.LIVE_API_URL, ""))
     }
 
-    fun liveConfigEntries(): ArrayList<String> {
-        return if (HistoryHelper.isLiveApiLineUrl(KV.get(KVKeys.LIVE_API_URL, ""))) {
-            HistoryHelper.liveApiLines()
+    fun getLiveConfigEntries(): ArrayList<String> {
+        return if (HistoryHelper.isLiveApiLineUrl(KV.get(HawkConfig.LIVE_API_URL, ""))) {
+            HistoryHelper.getLiveApiLines()
         } else {
-            KV.get(KVKeys.LIVE_API_HISTORY, ArrayList())
+            KV.get(HawkConfig.LIVE_API_HISTORY, ArrayList())
         }
     }
 
-    fun liveConfigUrls(): ArrayList<String> {
+    fun getLiveConfigUrls(): ArrayList<String> {
         val urls = ArrayList<String>()
-        for (entry in liveConfigEntries()) {
-            val url = HistoryHelper.apiLineUrl(entry)
+        for (entry in getLiveConfigEntries()) {
+            val url = HistoryHelper.getApiLineUrl(entry)
             if (!TextUtils.isEmpty(url)) urls.add(url)
         }
         return urls
     }
 
-    fun liveApiHistoryUrl(position: Int): String {
-        val urls = liveConfigUrls()
+    fun getLiveApiHistoryUrl(position: Int): String {
+        val urls = getLiveConfigUrls()
         val index = position - 1
         if (index < 0 || index >= urls.size) return ""
         return urls[index]
@@ -546,7 +546,7 @@ class ApiConfig private constructor() {
                 liveChannelItem.channelTvgName = DefaultConfig.safeJsonString(obj, "tvg-name", "")
                 if (obj.has("parse")) {
                     try {
-                        liveChannelItem.channelParse = obj.get("parse").asInt
+                        liveChannelItem.setChannelParse(obj.get("parse").asInt)
                     } catch (ignored: Throwable) {
                         AppLog.d("ApiConfig", "channel parse flag not an int, use default")
                     }
@@ -697,13 +697,13 @@ class ApiConfig private constructor() {
             }
             if (livesOBJ.has("epg")) {
                 val epg = livesOBJ.get("epg").asString
-                KV.put(KVKeys.EPG_URL, epg)
+                KV.put(HawkConfig.EPG_URL, epg)
             } else {
-                KV.put(KVKeys.EPG_URL, "")
+                KV.put(HawkConfig.EPG_URL, "")
             }
             if (livesOBJ.has("timeout")) {
                 val timeout = Math.max(5, Math.min(30, livesOBJ.get("timeout").asInt))
-                KV.put(KVKeys.LIVE_CONNECT_TIMEOUT, (timeout + 4) / 5 - 1)
+                KV.put(HawkConfig.LIVE_CONNECT_TIMEOUT, (timeout + 4) / 5 - 1)
             }
             if (livesOBJ.has("header") && livesOBJ.get("header").isJsonObject) {
                 val headerObj = livesOBJ.getAsJsonObject("header")
@@ -717,14 +717,14 @@ class ApiConfig private constructor() {
                     }
                     liveHeader[entry.key] = value
                 }
-                KV.put(KVKeys.LIVE_WEB_HEADER, liveHeader)
+                KV.put(HawkConfig.LIVE_WEB_HEADER, liveHeader)
             } else if (livesOBJ.has("ua")) {
                 val ua = DefaultConfig.safeJsonString(livesOBJ, "ua", "")
                 val liveHeader = HashMap<String, String>()
                 liveHeader["User-Agent"] = ua
-                KV.put(KVKeys.LIVE_WEB_HEADER, liveHeader)
+                KV.put(HawkConfig.LIVE_WEB_HEADER, liveHeader)
             } else {
-                KV.put(KVKeys.LIVE_WEB_HEADER, null)
+                KV.put(HawkConfig.LIVE_WEB_HEADER, null)
             }
             val liveChannelGroup = LiveChannelGroup()
             liveChannelGroup.groupName = url
@@ -735,8 +735,8 @@ class ApiConfig private constructor() {
     }
 
     private fun resetLiveKvOnUnsupportedLine() {
-        KV.put(KVKeys.EPG_URL, "")
-        KV.put(KVKeys.LIVE_WEB_HEADER, null)
+        KV.put(HawkConfig.EPG_URL, "")
+        KV.put(HawkConfig.LIVE_WEB_HEADER, null)
     }
 
     fun setLiveJar(liveJar: String) {
@@ -756,7 +756,7 @@ class ApiConfig private constructor() {
     }
 
     fun warmSearchSpiders() {
-        warmQueue.warmSearchSpiders(ArrayList(sourceBeanList.values), homeSourceBean())
+        warmQueue.warmSearchSpiders(ArrayList(sourceBeanList.values), getHomeSourceBean())
     }
 
     fun getPyCSP(url: String): Spider {
@@ -780,7 +780,7 @@ class ApiConfig private constructor() {
     }
 
     val liveConnectTimeoutSeconds: Int
-        get() = (KV.get(KVKeys.LIVE_CONNECT_TIMEOUT, 1) + 1) * 5
+        get() = (KV.get(HawkConfig.LIVE_CONNECT_TIMEOUT, 1) + 1) * 5
 
     fun proxyLocal(param: MutableMap<String, String>): Array<Any?>? {
         return proxyEntry.proxyLocal(param)
@@ -802,6 +802,7 @@ class ApiConfig private constructor() {
         fun success()
 
         fun error(msg: String?)
+        fun notice(msg: String?)
     }
 
     interface FastParseCallback {
@@ -825,29 +826,33 @@ class ApiConfig private constructor() {
     }
 
     fun setSourceBean(sourceBean: SourceBean) {
-        this.homeSource = sourceBean
-        KV.put(KVKeys.HOME_API, sourceBean.key)
         // 站点级代理：开启的站点临时起全局代理，未开启的站点关掉
         SiteProxy.apply(sourceBean)
+        this.mHomeSource = sourceBean
+        KV.put(HawkConfig.HOME_API, sourceBean.key)
     }
 
     fun setDefaultParse(parseBean: ParseBean) {
-        val previous = this.defaultParseBean
+        val previous = this.mDefaultParse
         if (previous != null) {
             previous.isDefault = false
         }
-        this.defaultParseBean = parseBean
-        KV.put(KVKeys.DEFAULT_PARSE, parseBean.name)
+        this.mDefaultParse = parseBean
+        KV.put(HawkConfig.DEFAULT_PARSE, parseBean.name)
         parseBean.isDefault = true
+    }
+
+    fun getDefaultParse(): ParseBean? {
+        return mDefaultParse
     }
 
     fun getSourceBeanList(): List<SourceBean> {
         return ArrayList(sourceBeanList.values)
     }
 
-    fun switchSourceBeanList(): List<SourceBean> {
+    fun getSwitchSourceBeanList(): List<SourceBean> {
         val filteredList: MutableList<SourceBean> = ArrayList()
-        val homeKey = homeSourceBean().key
+        val homeKey = getHomeSourceBean().key
         for (bean in sourceBeanList.values) {
             if (bean.isHidden() && bean.key != homeKey) continue
             filteredList.add(bean)
@@ -876,14 +881,18 @@ class ApiConfig private constructor() {
         return searchSourceBeanList
     }
 
-    fun homeSourceBean(): SourceBean {
-        return homeSource ?: emptyHome
+    fun getVipParseFlags(): MutableList<String>? {
+        return vipParseFlags
     }
 
-    val channelGroupList: List<LiveChannelGroup>
-        get() = java.util.Collections.unmodifiableList(liveChannelGroupList)
+    fun getHomeSourceBean(): SourceBean {
+        return mHomeSource ?: emptyHome
+    }
 
-    fun myHost(): MutableMap<String, String> {
+    val channelGroupList: MutableList<LiveChannelGroup>
+        get() = liveChannelGroupList
+
+    fun getMyHost(): MutableMap<String, String> {
         val merged = HashMap<String, String>()
         merged.putAll(liveHosts.orEmpty())
         merged.putAll(vodHosts.orEmpty())
@@ -892,14 +901,14 @@ class ApiConfig private constructor() {
 
     private fun loadProxyRules(infoJson: JsonObject) {
         if (!infoJson.has("proxy")) {
-            HttpClients.setProxyList(null)
+            OkGoHelper.setProxyList(null)
             return
         }
         try {
-            HttpClients.setProxyList(ProxyRule.arrayFrom(infoJson.get("proxy")))
+            OkGoHelper.setProxyList(ProxyRule.arrayFrom(infoJson.get("proxy")))
         } catch (th: Throwable) {
             AppLog.e("ApiConfig", th)
-            HttpClients.setProxyList(null)
+            OkGoHelper.setProxyList(null)
         }
     }
 
@@ -982,18 +991,18 @@ class ApiConfig private constructor() {
         }
 
         @JvmStatic
-        fun effectiveLiveUrl(): String {
-            val liveApiUrl = KV.get(KVKeys.LIVE_API_URL, "")
-            return if (TextUtils.isEmpty(liveApiUrl)) KV.get(KVKeys.API_URL, "") else liveApiUrl
+        fun getEffectiveLiveUrl(): String {
+            val liveApiUrl = KV.get(HawkConfig.LIVE_API_URL, "")
+            return if (TextUtils.isEmpty(liveApiUrl)) KV.get(HawkConfig.API_URL, "") else liveApiUrl
         }
 
         @JvmStatic
         fun isLiveFollowVod(): Boolean {
-            val liveApiUrl = KV.get(KVKeys.LIVE_API_URL, "")
+            val liveApiUrl = KV.get(HawkConfig.LIVE_API_URL, "")
             if (TextUtils.isEmpty(liveApiUrl)) {
                 return true
             }
-            return liveApiUrl == KV.get(KVKeys.API_URL, "")
+            return liveApiUrl == KV.get(HawkConfig.API_URL, "")
         }
 
         @JvmStatic
@@ -1003,19 +1012,43 @@ class ApiConfig private constructor() {
         }
 
         @JvmStatic
-        fun liveGroupIndexKey(): String {
-            val liveApiUrl = KV.get(KVKeys.LIVE_API_URL, "")
+        fun getLiveGroupIndexKey(): String {
+            val liveApiUrl = KV.get(HawkConfig.LIVE_API_URL, "")
             if (liveApiUrl == null || liveApiUrl.length == 0) {
-                return KVKeys.LIVE_GROUP_INDEX
+                return HawkConfig.LIVE_GROUP_INDEX
             }
-            return KVKeys.LIVE_GROUP_INDEX + "_" + liveApiUrl
+            return HawkConfig.LIVE_GROUP_INDEX + "_" + liveApiUrl
         }
 
         @JvmStatic
-        var liveGroupIndex: Int
-            get() = KV.get(liveGroupIndexKey(), 0)
-            set(value) {
-                KV.put(liveGroupIndexKey(), value)
-            }
+        fun getLiveGroupIndex(): Int {
+            return KV.get(getLiveGroupIndexKey(), 0)
+        }
+
+        @JvmStatic
+        fun setLiveGroupIndex(index: Int) {
+            KV.put(getLiveGroupIndexKey(), index)
+        }
+    }
+
+    /** 订阅拉取结束（成功或失败）都恢复站点代理，防止一次失败把代理永久摘掉 */
+    private class InfraAwareCallback(private val delegate: LoadConfigCallback) : LoadConfigCallback {
+        private var done = false
+        private fun finish() {
+            if (done) return
+            done = true
+            SiteProxy.resumeInfra()
+        }
+        override fun success() {
+            finish()
+            delegate.success()
+        }
+        override fun error(msg: String?) {
+            finish()
+            delegate.error(msg)
+        }
+        override fun notice(msg: String?) {
+            delegate.notice(msg)
+        }
     }
 }

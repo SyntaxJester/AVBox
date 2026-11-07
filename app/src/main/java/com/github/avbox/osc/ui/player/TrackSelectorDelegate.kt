@@ -3,8 +3,8 @@ package com.github.avbox.osc.ui.player
 import android.content.Context
 import android.widget.Toast
 import com.github.avbox.osc.R
-import com.github.avbox.osc.player.PlayerKernelView
-import com.github.avbox.osc.player.core.TrackInfoBean
+import com.github.avbox.osc.player.MyVideoView
+import com.github.avbox.osc.player.TrackInfoBean
 import com.github.avbox.osc.player.state.PlayerUiState
 import com.github.avbox.osc.player.state.SelectDialogState
 import com.github.avbox.osc.util.AppLog
@@ -12,7 +12,7 @@ import com.github.avbox.osc.util.AppLog
 class TrackSelectorDelegate(private val host: Host) {
 
     interface Host {
-        fun player(): PlayerKernelView?
+        fun player(): MyVideoView?
 
         fun context(): Context
 
@@ -27,16 +27,16 @@ class TrackSelectorDelegate(private val host: Host) {
             Toast.makeText(context, context.getString(R.string.player_no_audio_track), Toast.LENGTH_SHORT).show()
             return
         }
-        val bean = trackInfo.audio
+        val bean = trackInfo.getAudio()
         if (bean.size < 1) return
         val names = ArrayList<String>()
         for (item in bean) names.add(item.name ?: "")
-        val selected = trackInfo.audioSelected(false)
+        val selected = trackInfo.getAudioSelected(false)
         AppLog.i(
             "echo-setTrack list: count=" + bean.size +
                 " selected=" + selected + " names=" + names,
         )
-        host.uiState().openSelectDialog(SelectDialogState(
+        host.uiState().selectDialog = SelectDialogState(
             context.getString(R.string.player_switch_audio_track),
             names,
             selected,
@@ -48,24 +48,24 @@ class TrackSelectorDelegate(private val host: Host) {
                 }
                 switchTrack(value, false)
             }
-        })
+        }
     }
 
     fun selectVideoTrack() {
         val view = host.player() ?: return
         val context = host.context()
         val trackInfo = view.mediaPlayer?.getTrackInfo()
-        if (trackInfo == null || trackInfo.video.isEmpty()) {
+        if (trackInfo == null || trackInfo.getVideo().isEmpty()) {
             Toast.makeText(context, context.getString(R.string.player_no_video_track), Toast.LENGTH_SHORT).show()
             return
         }
-        val tracks = trackInfo.video
+        val tracks = trackInfo.getVideo()
         val names = ArrayList<String>()
         for (item in tracks) names.add(item.name ?: "")
-        host.uiState().openSelectDialog(SelectDialogState(
+        host.uiState().selectDialog = SelectDialogState(
             context.getString(R.string.player_switch_video_track),
             names,
-            trackInfo.videoSelected(false),
+            trackInfo.getVideoSelected(false),
         ) { pos ->
             if (pos >= 0 && pos < tracks.size) {
                 val value = tracks[pos]
@@ -74,7 +74,7 @@ class TrackSelectorDelegate(private val host: Host) {
                 }
                 switchTrack(value, true)
             }
-        })
+        }
     }
 
     private fun switchTrack(track: TrackInfoBean, seekBack: Boolean) {

@@ -52,7 +52,7 @@ class MD5 {
         }
 
         @JvmStatic
-        fun fileMd5(f: File): String {
+        fun getFileMd5(f: File): String {
             val sb = StringBuffer("")
             try {
                 val md = MessageDigest.getInstance("MD5")

@@ -1,6 +1,7 @@
 package com.github.avbox.osc.util
 
 import android.app.Activity
+import com.github.avbox.osc.util.AppLog
 
 import java.util.Stack
 
@@ -14,11 +15,6 @@ class ActivityStack private constructor() {
 
     fun isActivity(): Boolean {
         return activityStack?.isEmpty() == false
-    }
-
-    /** 供宿主判定「是否还有播放页在前端」使用，返回当前 Activity 快照。 */
-    fun activities(): List<Activity> {
-        return activityStack?.toList() ?: emptyList()
     }
 
     fun currentActivity(): Activity {
@@ -91,7 +87,7 @@ class ActivityStack private constructor() {
             System.exit(code)
         } catch (e: Exception) {
             activityStack?.clear()
-            AppLog.e("AppManager", e)
+            AppLog.e("ActivityStack", e)
         }
     }
 

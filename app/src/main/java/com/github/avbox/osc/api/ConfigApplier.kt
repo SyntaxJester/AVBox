@@ -1,11 +1,12 @@
 package com.github.avbox.osc.api
 
+import com.github.avbox.osc.ad.audio.AdAudioFingerprintRuntime
 import com.github.avbox.osc.bean.ParseBean
-import com.github.avbox.osc.net.HttpClients
+import com.github.avbox.osc.net.OkGoHelper
 import com.github.avbox.osc.util.AdBlocker
 import com.github.avbox.osc.util.DefaultConfig
 import com.github.avbox.osc.util.AppLog
-import com.github.avbox.osc.player.usecase.M3u8
+import com.github.avbox.osc.util.M3u8
 import com.github.avbox.osc.util.VideoParseRuler
 import com.google.gson.JsonObject
 
@@ -98,7 +99,7 @@ object ConfigApplier {
                 AppLog.e("ApiConfig", e)
             }
         }
-        HttpClients.applyDohConfig(dohJson)
+        OkGoHelper.applyDohConfig(dohJson)
     }
 
     @JvmStatic
@@ -109,6 +110,41 @@ object ConfigApplier {
                     AdBlocker.addAdHost(host.asString)
                 }
             }
+        }
+        applyAudioFingerprintRules(infoJson)
+    }
+
+    /**
+     * 解析站点配置中的音频指纹广告规则。
+     *
+     * 支持两种写法：
+     * 1. `adRules` 为对象：{"schemaVersion":2,"algorithm":"spectral-sequence-v2","rules":[...]}
+     * 2. `adRules` 为数组：直接是 rules 数组，内部包装成标准结构
+     */
+    @JvmStatic
+    fun applyAudioFingerprintRules(infoJson: JsonObject) {
+        try {
+            if (!infoJson.has("adRules")) return
+            val element = infoJson.get("adRules")
+            if (element.isJsonNull) {
+                AdAudioFingerprintRuntime.setRules(null)
+                return
+            }
+            val payload: JsonObject = if (element.isJsonObject) {
+                element.asJsonObject
+            } else if (element.isJsonArray) {
+                val wrapper = JsonObject()
+                wrapper.addProperty("schemaVersion", 2)
+                wrapper.addProperty("algorithm", "spectral-sequence-v2")
+                wrapper.add("rules", element.asJsonArray)
+                wrapper
+            } else {
+                return
+            }
+            if (!payload.has("rules")) return
+            AdAudioFingerprintRuntime.setRules(payload.toString())
+        } catch (e: Throwable) {
+            AppLog.e("ApiConfig", e)
         }
     }
 

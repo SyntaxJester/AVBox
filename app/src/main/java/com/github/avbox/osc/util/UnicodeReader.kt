@@ -39,6 +39,10 @@ class UnicodeReader : Reader {
         internalIn?.close()
     }
 
+    fun getEncoding(): String? {
+        return encoding
+    }
+
     @Throws(IOException::class)
     protected fun init(input: InputStream, defaultEncoding: String?) {
         val tempIn = PushbackInputStream(input, 4)

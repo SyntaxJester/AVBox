@@ -8,7 +8,7 @@ import com.github.avbox.osc.server.ControlManager
 import com.github.avbox.osc.server.RemoteServer
 import com.github.avbox.osc.util.AppLog
 import com.github.avbox.osc.util.LanguageManager
-import com.github.avbox.osc.player.usecase.M3u8
+import com.github.avbox.osc.util.M3u8
 import com.github.avbox.osc.util.RegexUtils
 import com.github.avbox.osc.util.net.Http
 import kotlinx.coroutines.CancellationException

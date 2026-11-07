@@ -9,7 +9,7 @@ import com.github.avbox.osc.net.Preconnect
 import com.github.avbox.osc.sourcedata.SourceHelper
 import com.github.avbox.osc.sourcedata.SourceViewModel
 import com.github.avbox.osc.util.DefaultConfig
-import com.github.avbox.osc.util.KVKeys
+import com.github.avbox.osc.util.HawkConfig
 import com.github.avbox.osc.util.HistoryHelper
 import com.github.avbox.osc.util.KV
 import com.github.avbox.osc.util.AppLog
@@ -20,7 +20,6 @@ import org.json.JSONObject
 
 class PreloadCoordinator(
     private val sourceViewModel: SourceViewModel?,
-    private val onReplayReady: () -> Unit,
 ) {
 
     class Snapshot(
@@ -112,9 +111,8 @@ class PreloadCoordinator(
         }
         if (replayReadyPending) {
             replayReadyPending = false
-            if (snapshot.nextKey == preloadedKey && PreloadManagerHolder.completedUrl.value != null) {
-                AppLog.i("echo-preload-ready-replay")
-                onReplayReady()
+            if (snapshot.nextKey == preloadedKey) {
+                PreloadManagerHolder.replayReadyIfCompleted()
             }
         }
         val cooldownRemain = bufferingCooldownUntil - System.currentTimeMillis()
@@ -205,7 +203,7 @@ class PreloadCoordinator(
             return
         }
         if (url.contains(".m3u8") &&
-            KV.get(KVKeys.M3U8_PURIFY, false) &&
+            KV.get(HawkConfig.M3U8_PURIFY, false) &&
             !DefaultConfig.noAd(snapshot.playFlag)
         ) {
             AppLog.i("echo-preload-giveup: m3u8 purify on, url=" + url)

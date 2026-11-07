@@ -34,21 +34,21 @@ import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import androidx.media3.exoplayer.util.EventLogger
 import androidx.media3.exoplayer.video.VideoFrameMetadataListener
-import com.github.avbox.osc.player.core.EffectCanvas
-import com.github.avbox.osc.player.core.PlayerDecodeKind
-import com.github.avbox.osc.player.core.RedrawPolicy
-import com.github.avbox.osc.player.core.RetryPolicy
-import com.github.avbox.osc.player.core.SlowOpenSignal
-import com.github.avbox.osc.player.core.TrackInfo
-import com.github.avbox.osc.player.core.TrackInfoBean
-import com.github.avbox.osc.player.core.VideoCodecObserver
+import com.github.avbox.osc.ad.audio.AdAudioFingerprintRuntime
+import com.github.avbox.osc.player.PlayerDecodeKind
+import com.github.avbox.osc.player.RetryPolicy
+import com.github.avbox.osc.player.SlowOpenSignal
+import com.github.avbox.osc.player.TrackInfo
+import com.github.avbox.osc.player.TrackInfoBean
+import com.github.avbox.osc.player.VideoCodecObserver
 import com.github.avbox.osc.player.effect.PictureEffects
+import com.github.avbox.osc.player.effect.RedrawPolicy
 import com.github.avbox.osc.player.effect.ReplayableCacheVideoRenderer
 import com.github.avbox.osc.player.engine.iso.IsoPlaylistState
 import com.github.avbox.osc.player.engine.iso.IsoSeekAction
 import com.github.avbox.osc.player.engine.iso.IsoSessionSignal
 import com.github.avbox.osc.player.engine.iso.isoSeekAction
-import com.github.avbox.osc.player.core.KernelPlayback
+import com.github.avbox.osc.player.state.KernelPlayback
 import com.github.avbox.osc.util.AppLog
 import okhttp3.OkHttpClient
 import java.util.ArrayList
@@ -92,8 +92,6 @@ class PlayerEngine(
         override fun trackSelector(): DefaultTrackSelector = this@PlayerEngine.trackSelector
 
         override fun internalPlayer(): ExoPlayer? = this@PlayerEngine.internalPlayer
-
-        override fun appContext(): Context = this@PlayerEngine.appContext
     })
 
     private var internalPlayer: ExoPlayer? = null
@@ -112,7 +110,7 @@ class PlayerEngine(
     @Volatile
     private var isoSession = false
 
-    var useDiskCache = false
+    private var useDiskCache = false
 
     @Volatile
     private var startPositionMs = 0L
@@ -138,6 +136,7 @@ class PlayerEngine(
     private var pendingOutputHeight = 0
     private var outputSurfacePresent = false
     private var redrawScheduled = false
+    private var audioOnlyRequested = false
     private var videoOutputInvalid = false
     private var videoRenderersDisabled = false
 
@@ -257,6 +256,11 @@ class PlayerEngine(
     }
 
     init {
+        // 注册音频指纹广告跳过回调
+        AdAudioFingerprintRuntime.attachSeek { ms ->
+            val exo = internalPlayer ?: return@attachSeek
+            exo.seekTo(ms)
+        }
         val exo = createPlayer()
         internalPlayer = exo
         applyPlaybackParameters()
@@ -358,7 +362,7 @@ class PlayerEngine(
             return
         }
         val cached = if (mode == SourcePolicy.CacheMode.PRELOAD_TARGET) {
-            mediaSources.preloadTargetMediaSource(playPath, headers)
+            mediaSources.getPreloadTargetMediaSource(playPath, headers)
         } else {
             mediaSources.getMediaSource(playPath, headers, true)
         }
@@ -412,7 +416,7 @@ class PlayerEngine(
                 AppLog.i("echo-iso-start-zero: drop resume $startPositionMs")
             }
             val built = try {
-                mediaSources.isoMediaSource(path, copyHeaders(headers), seekMs)
+                mediaSources.getIsoMediaSource(path, copyHeaders(headers), seekMs)
             } catch (e: Exception) {
                 AppLog.e("echo-iso-prepare-fail:$seekMs ${e.message}")
                 return false
@@ -481,7 +485,7 @@ class PlayerEngine(
         val path = currentPlayPath ?: return false
         val headers = currentHeaders ?: return false
         val source = try {
-            mediaSources.isoMediaSource(path, copyHeaders(headers), positionMs)
+            mediaSources.getIsoMediaSource(path, copyHeaders(headers), positionMs)
         } catch (e: Exception) {
             AppLog.e("echo-iso-seek-rebuild-fail:$positionMs ${e.message}")
             return false
@@ -504,6 +508,7 @@ class PlayerEngine(
             it.clearMediaItems()
         }
         resetSessionFlags()
+        AdAudioFingerprintRuntime.reset()
     }
 
     fun release() {
@@ -513,6 +518,7 @@ class PlayerEngine(
             it.release()
         }
         internalPlayer = null
+        audioOnlyRequested = false
         videoOutputInvalid = false
         videoRenderersDisabled = false
         pendingOutputWidth = 0
@@ -520,6 +526,9 @@ class PlayerEngine(
         outputSurfacePresent = false
         speedPlaybackParameters = null
         config.videoCodecObserver?.onCodecReleased()
+        // 释放音频指纹
+        AdAudioFingerprintRuntime.stopListening()
+        AdAudioFingerprintRuntime.attachSeek(null)
     }
 
     val isPlaying: Boolean
@@ -684,7 +693,7 @@ class PlayerEngine(
         get() = speedPlaybackParameters?.speed ?: 1f
 
     val tcpSpeed: Long
-        get() = NetworkSpeed.netSpeed(appContext)
+        get() = NetworkSpeed.getNetSpeed(appContext)
 
     fun addErrorListener(listener: ErrorListener) {
         if (!errorListeners.contains(listener)) {
@@ -714,10 +723,23 @@ class PlayerEngine(
     val isTunnelingEnabled: Boolean
         get() = tunnelingEnabled
 
+    val isAudioOnlyMode: Boolean
+        get() = audioOnlyRequested
+
+    fun setAudioOnlyMode(audioOnly: Boolean) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { setAudioOnlyMode(audioOnly) }
+            return
+        }
+        if (audioOnly == audioOnlyRequested) return
+        audioOnlyRequested = audioOnly
+        applyRendererEnablement()
+    }
+
     private fun applyRendererEnablement() {
         val exo = internalPlayer ?: return
         if (videoRendererIndices.isEmpty()) return
-        val disable = videoOutputInvalid
+        val disable = audioOnlyRequested || videoOutputInvalid
         if (disable == videoRenderersDisabled) return
         val rendererCount = exo.rendererCount
         val builder = trackSelector.buildUponParameters()
@@ -731,8 +753,8 @@ class PlayerEngine(
         videoRenderersDisabled = disable
         trackSelector.setParameters(builder.build())
         AppLog.i(
-            "echo-surface renderers disabled=$disable videoRenderers=$applied" +
-                " outputInvalid=$videoOutputInvalid",
+            "echo-music audio-only mode=$disable videoRenderers=$applied" +
+                " requested=$audioOnlyRequested outputInvalid=$videoOutputInvalid",
         )
     }
 
@@ -799,7 +821,7 @@ class PlayerEngine(
     fun notifyVideoOutputResolution(width: Int, height: Int) {
         val exo = internalPlayer ?: return
         if (width <= 0 || height <= 0) return
-        EffectCanvas.set(width, height)
+        PictureEffects.setOutputCanvas(width, height)
         val sizeChanged = width != lastOutputWidth || height != lastOutputHeight
         lastOutputWidth = width
         lastOutputHeight = height
@@ -911,7 +933,7 @@ class PlayerEngine(
     }
 
     fun setOnCuesListener(listener: ((List<Cue>) -> Unit)?) {
-        trackSelection.onCuesListener = listener
+        trackSelection.setOnCuesListener(listener)
     }
 
     fun setInternalSubtitleDelay(milliseconds: Int) {
@@ -1016,7 +1038,7 @@ class PlayerEngine(
         isoSession = true
         startPositionMs = 0L
         AppLog.i("echo-iso-bdav-retry:$path")
-        val bdavSource = mediaSources.bdavMediaSource(path, copyHeaders(currentHeaders))
+        val bdavSource = mediaSources.getBdavMediaSource(path, copyHeaders(currentHeaders))
         mediaSource = bdavSource
         exo.setMediaSource(bdavSource, 0)
         startPositionApplied = true
@@ -1033,7 +1055,7 @@ class PlayerEngine(
         }
         retriedAsHls = true
         AppLog.i("echo-Exo retry as HLS: $path")
-        val hlsSource = mediaSources.hlsMediaSource(path, copyHeaders(currentHeaders)) ?: return false
+        val hlsSource = mediaSources.getHlsMediaSource(path, copyHeaders(currentHeaders)) ?: return false
         mediaSource = hlsSource
         retryAsHlsListener?.invoke()
         exo.setMediaSource(hlsSource, startPositionMs)
@@ -1138,6 +1160,10 @@ class PlayerEngine(
 
     fun setContentKey(key: String?) {
         trackSelection.setContentKey(key)
+    }
+
+    fun setUseDiskCache(enabled: Boolean) {
+        useDiskCache = enabled
     }
 
 }

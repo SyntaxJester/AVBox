@@ -43,7 +43,7 @@ object LocalIPAddress {
         return "127.0.0.1"
     }
     @JvmStatic
-    fun ip(context: Context): String {
+    fun getIP(context: Context): String {
         try {
             val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
             var wifiInfo: WifiInfo? = null
@@ -69,9 +69,9 @@ object LocalIPAddress {
     @JvmStatic
     fun getLocalIPAddress(): String {
         try {
-            val enumeration = NetworkInterface.getNetworkInterfaces()
-            while (enumeration.hasMoreElements()) {
-                val intf = enumeration.nextElement()
+            val mEnumeration = NetworkInterface.getNetworkInterfaces()
+            while (mEnumeration.hasMoreElements()) {
+                val intf = mEnumeration.nextElement()
                 val enumIPAddr = intf.getInetAddresses()
                 while (enumIPAddr.hasMoreElements()) {
                     val inetAddress = enumIPAddr.nextElement()

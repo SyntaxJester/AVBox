@@ -3,7 +3,7 @@ package com.github.avbox.osc.ui.theme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.github.avbox.osc.util.KVKeys
+import com.github.avbox.osc.util.HawkConfig
 import com.github.avbox.osc.util.KV
 
 object LiquidGlassState {
@@ -21,60 +21,48 @@ object LiquidGlassState {
     val config: LiquidGlassConfig get() = current
 
     private fun load(): LiquidGlassConfig = LiquidGlassConfig(
-        navbarEnabled = KV.get(KVKeys.LIQUID_GLASS_NAVBAR, true),
-        controlsEnabled = KV.get(KVKeys.LIQUID_GLASS_CONTROLS, true),
-        blurDp = KV.get(KVKeys.LIQUID_GLASS_BLUR, DEFAULT_BLUR_DP),
-        distortionDp = KV.get(KVKeys.LIQUID_GLASS_DISTORTION, DEFAULT_DISTORTION_DP),
-        translucency = KV.get(KVKeys.LIQUID_GLASS_TRANSLUCENCY, DEFAULT_TRANSLUCENCY),
-        dispersion = KV.get(KVKeys.LIQUID_GLASS_DISPERSION, DEFAULT_DISPERSION),
+        navbarEnabled = KV.get(HawkConfig.LIQUID_GLASS_NAVBAR, true),
+        controlsEnabled = KV.get(HawkConfig.LIQUID_GLASS_CONTROLS, true),
+        blurDp = KV.get(HawkConfig.LIQUID_GLASS_BLUR, DEFAULT_BLUR_DP),
+        distortionDp = KV.get(HawkConfig.LIQUID_GLASS_DISTORTION, DEFAULT_DISTORTION_DP),
+        translucency = KV.get(HawkConfig.LIQUID_GLASS_TRANSLUCENCY, DEFAULT_TRANSLUCENCY),
+        dispersion = KV.get(HawkConfig.LIQUID_GLASS_DISPERSION, DEFAULT_DISPERSION),
     )
 
-    var navbarEnabled: Boolean
-        get() = current.navbarEnabled
-        set(value) {
-            KV.put(KVKeys.LIQUID_GLASS_NAVBAR, value)
-            current = current.copy(navbarEnabled = value)
-        }
+    fun setNavbarEnabled(enabled: Boolean) {
+        KV.put(HawkConfig.LIQUID_GLASS_NAVBAR, enabled)
+        current = current.copy(navbarEnabled = enabled)
+    }
 
-    var controlsEnabled: Boolean
-        get() = current.controlsEnabled
-        set(value) {
-            KV.put(KVKeys.LIQUID_GLASS_CONTROLS, value)
-            current = current.copy(controlsEnabled = value)
-        }
+    fun setControlsEnabled(enabled: Boolean) {
+        KV.put(HawkConfig.LIQUID_GLASS_CONTROLS, enabled)
+        current = current.copy(controlsEnabled = enabled)
+    }
 
-    var blurDp: Float
-        get() = current.blurDp
-        set(value) {
-            KV.put(KVKeys.LIQUID_GLASS_BLUR, value)
-            current = current.copy(blurDp = value)
-        }
+    fun setBlurDp(dp: Float) {
+        KV.put(HawkConfig.LIQUID_GLASS_BLUR, dp)
+        current = current.copy(blurDp = dp)
+    }
 
-    var distortionDp: Float
-        get() = current.distortionDp
-        set(value) {
-            KV.put(KVKeys.LIQUID_GLASS_DISTORTION, value)
-            current = current.copy(distortionDp = value)
-        }
+    fun setDistortionDp(dp: Float) {
+        KV.put(HawkConfig.LIQUID_GLASS_DISTORTION, dp)
+        current = current.copy(distortionDp = dp)
+    }
 
-    var translucency: Float
-        get() = current.translucency
-        set(value) {
-            KV.put(KVKeys.LIQUID_GLASS_TRANSLUCENCY, value)
-            current = current.copy(translucency = value)
-        }
+    fun setTranslucency(value: Float) {
+        KV.put(HawkConfig.LIQUID_GLASS_TRANSLUCENCY, value)
+        current = current.copy(translucency = value)
+    }
 
-    var dispersion: Boolean
-        get() = current.dispersion
-        set(value) {
-            KV.put(KVKeys.LIQUID_GLASS_DISPERSION, value)
-            current = current.copy(dispersion = value)
-        }
+    fun setDispersion(enabled: Boolean) {
+        KV.put(HawkConfig.LIQUID_GLASS_DISPERSION, enabled)
+        current = current.copy(dispersion = enabled)
+    }
 
     fun restoreDefaults() {
-        blurDp = DEFAULT_BLUR_DP
-        distortionDp = DEFAULT_DISTORTION_DP
-        translucency = DEFAULT_TRANSLUCENCY
-        dispersion = DEFAULT_DISPERSION
+        setBlurDp(DEFAULT_BLUR_DP)
+        setDistortionDp(DEFAULT_DISTORTION_DP)
+        setTranslucency(DEFAULT_TRANSLUCENCY)
+        setDispersion(DEFAULT_DISPERSION)
     }
 }

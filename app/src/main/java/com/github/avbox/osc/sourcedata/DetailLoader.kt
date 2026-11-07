@@ -1,13 +1,13 @@
 package com.github.avbox.osc.sourcedata
 
 import android.util.Base64
-import com.github.catvod.crawler.SpiderReaper
 import com.github.avbox.osc.api.ApiConfig
 import com.github.avbox.osc.bean.AbsXml
 import com.github.avbox.osc.bean.Movie
 import com.github.avbox.osc.bean.SourceBean
 import com.github.avbox.osc.util.BoundedCall
 import com.github.avbox.osc.util.AppLog
+import com.github.avbox.osc.util.SpiderReaper
 import com.google.gson.Gson
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -64,34 +64,16 @@ class DetailLoader(
             return
         }
         val type = sourceBean.type
-        if (type == 3 && com.github.avbox.osc.spider.BuiltinSpiders.isHtmlLaunch(sourceBean.api)) {
-            // 内置 html 站点：点宫格 = 拉起页面。页面盖在首页上，用户按返回即回首页，
-            // 所以这里【不】postValue —— 不进详情页。
-            launchHtmlOnly(sourceBean, id)
-        } else if (type == 3) {
-            detailFromSpider(sourceBean, id, fallback, requestToken)
+        if (type == 3) {
+            getDetailFromSpider(sourceBean, id, fallback, requestToken)
         } else if (type == 0 || type == 1 || type == 4) {
-            detailFromApi(sourceBean, id, fallback, requestToken)
+            getDetailFromApi(sourceBean, id, fallback, requestToken)
         } else {
             detailResult.postValue(createEmptyDetail(key, requestToken))
         }
     }
 
-    /** type 6：把这次点击当作"开页面"的信号，调一次 detailContent 拉起 HtmlActivity。 */
-    private suspend fun launchHtmlOnly(sourceBean: SourceBean, id: String) {
-        withContext(Dispatchers.IO) {
-            try {
-                val sp = ApiConfig.get().getCSP(sourceBean)
-                val ids = ArrayList<String>()
-                ids.add(id)
-                SpiderReaper.track(sp) { sp.detailContent(ids) }
-            } catch (e: Exception) {
-                AppLog.i("echo--getDetail--html-error: " + e.message)
-            }
-        }
-    }
-
-    private suspend fun detailFromSpider(sourceBean: SourceBean, id: String, fallback: Boolean, requestToken: Int?) {
+    private suspend fun getDetailFromSpider(sourceBean: SourceBean, id: String, fallback: Boolean, requestToken: Int?) {
         withContext(Dispatchers.IO) {
             val json = BoundedCall.call(Callable<String> {
                 val sp = ApiConfig.get().getCSP(sourceBean)
@@ -103,7 +85,7 @@ class DetailLoader(
                     AppLog.i("echo--getDetail--error: " + e.message)
                     ""
                 }
-            }, if (fallback) 6_000L else sourceBean.playTimeoutSeconds() * 1000L, "echo--getDetail--" + sourceBean.key)
+            }, if (fallback) 6_000L else sourceBean.getPlayTimeoutSeconds() * 1000L, "echo--getDetail--" + sourceBean.key)
             val body = json.orEmpty()
             AppLog.i("echo-detail-body key=" + sourceBean.key + " id=" + id + " len=" + body.length
                     + " fallback=" + fallback + " head=" + body.take(200).replace('\n', ' '))
@@ -111,14 +93,14 @@ class DetailLoader(
         }
     }
 
-    private suspend fun detailFromApi(sourceBean: SourceBean, id: String, fallback: Boolean, requestToken: Int?) {
+    private suspend fun getDetailFromApi(sourceBean: SourceBean, id: String, fallback: Boolean, requestToken: Int?) {
         val type = sourceBean.type
 
         val extend = withContext(Dispatchers.IO) {
             if (fallback) {
                 SourceHelper.getFixUrl(extendCache, gson, sourceBean.ext, 6L)
             } else {
-                SourceHelper.getFixUrl(extendCache, gson, sourceBean.ext, sourceBean.playTimeoutSeconds().toLong())
+                SourceHelper.getFixUrl(extendCache, gson, sourceBean.ext, sourceBean.getPlayTimeoutSeconds().toLong())
             }
         }
 

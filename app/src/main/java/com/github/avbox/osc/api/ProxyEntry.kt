@@ -2,13 +2,13 @@ package com.github.avbox.osc.api
 
 import android.text.TextUtils
 
-import com.github.catvod.crawler.SpiderReaper
 import com.github.avbox.osc.bean.SourceBean
-import com.github.avbox.osc.net.StreamProxy
+import com.github.avbox.osc.net.Proxy
 import com.github.avbox.osc.util.DefaultConfig
-import com.github.avbox.osc.util.KVKeys
+import com.github.avbox.osc.util.HawkConfig
 import com.github.avbox.osc.util.KV
 import com.github.avbox.osc.util.AppLog
+import com.github.avbox.osc.util.SpiderReaper
 
 import java.net.URLDecoder
 import java.util.HashMap
@@ -17,7 +17,7 @@ class ProxyEntry(private val owner: ApiConfig, private val spiderLoader: SpiderL
     private var currentPlaySourceKey = ""
 
     fun proxyLocal(param: MutableMap<String, String>): Array<Any?>? {
-        val source = currentProxySource(param)
+        val source = getCurrentProxySource(param)
         val api = source.api ?: return null
 
         val siteKey = param["siteKey"]
@@ -25,7 +25,7 @@ class ProxyEntry(private val owner: ApiConfig, private val spiderLoader: SpiderL
 
         val isJs = "js" == action
         val isPy = "py" == action
-        val isLive = KV.get(KVKeys.PLAYER_IS_LIVE, false)
+        val isLive = KV.get(HawkConfig.PLAYER_IS_LIVE, false)
         val isApiJs = api.contains(".js")
         val isApiPy = api.contains(".py")
 
@@ -112,7 +112,7 @@ class ProxyEntry(private val owner: ApiConfig, private val spiderLoader: SpiderL
                 param["url"] = url
                 param["go"] = "live"
                 param["type"] = "m3u8"
-                return StreamProxy.itv(param)
+                return Proxy.itv(param)
             }
             return null
         } catch (th: Throwable) {
@@ -129,14 +129,14 @@ class ProxyEntry(private val owner: ApiConfig, private val spiderLoader: SpiderL
             " stream=" + (result.getOrNull(2)?.javaClass?.simpleName ?: "null")
     }
 
-    private fun currentProxySource(param: MutableMap<String, String>): SourceBean {
+    private fun getCurrentProxySource(param: MutableMap<String, String>): SourceBean {
         var siteKey = param["siteKey"]
         if (TextUtils.isEmpty(siteKey)) {
             siteKey = currentPlaySourceKey
             if (!TextUtils.isEmpty(siteKey)) param["siteKey"] = siteKey
         }
         val sourceBean = if (TextUtils.isEmpty(siteKey)) null else owner.getSource(siteKey)
-        return sourceBean ?: owner.homeSourceBean()
+        return sourceBean ?: owner.getHomeSourceBean()
     }
 
     fun setCurrentPlaySourceKey(sourceKey: String?) {
@@ -144,7 +144,7 @@ class ProxyEntry(private val owner: ApiConfig, private val spiderLoader: SpiderL
     }
 
     private fun getCurrentPyKey(): String? {
-        val sourceBean = currentProxySource(HashMap<String, String>())
+        val sourceBean = getCurrentProxySource(HashMap<String, String>())
         if (sourceBean.api?.contains(".py") == true) {
             if (sourceBean.key != spiderLoader.currentPyKey) {
                 spiderLoader.currentPyKey = sourceBean.key

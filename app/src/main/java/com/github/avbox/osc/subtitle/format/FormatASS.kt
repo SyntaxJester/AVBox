@@ -245,10 +245,10 @@ class FormatASS : TimedTextFileFormat {
             styleLine += current.iD + ","
             styleLine += current.font + ","
             styleLine += current.fontSize + ","
-            styleLine += colorsForASS(tto.useASSInsteadOfSSA, current)
-            styleLine += optionsForASS(tto.useASSInsteadOfSSA, current)
+            styleLine += getColorsForASS(tto.useASSInsteadOfSSA, current)
+            styleLine += getOptionsForASS(tto.useASSInsteadOfSSA, current)
             styleLine += "1,2,2,"
-            styleLine += alignForASS(tto.useASSInsteadOfSSA, current.textAlign)
+            styleLine += getAlignForASS(tto.useASSInsteadOfSSA, current.textAlign)
             styleLine += ",0,0,0,"
             if (!tto.useASSInsteadOfSSA) styleLine += "0,"
             styleLine += "0"
@@ -313,20 +313,20 @@ class FormatASS : TimedTextFileFormat {
                 } else if (styleFormat[i].trim { it <= ' ' }.equals("PrimaryColour", ignoreCase = true)) {
                     val color = line[i].trim { it <= ' ' }
                     if (isASS) {
-                        if (color.startsWith("&H")) newStyle.color = Style.rgbValue("&HAABBGGRR", color)
-                        else newStyle.color = Style.rgbValue("decimalCodedAABBGGRR", color)
+                        if (color.startsWith("&H")) newStyle.color = Style.getRGBValue("&HAABBGGRR", color)
+                        else newStyle.color = Style.getRGBValue("decimalCodedAABBGGRR", color)
                     } else {
-                        if (color.startsWith("&H")) newStyle.color = Style.rgbValue("&HBBGGRR", color)
-                        else newStyle.color = Style.rgbValue("decimalCodedBBGGRR", color)
+                        if (color.startsWith("&H")) newStyle.color = Style.getRGBValue("&HBBGGRR", color)
+                        else newStyle.color = Style.getRGBValue("decimalCodedBBGGRR", color)
                     }
                 } else if (styleFormat[i].trim { it <= ' ' }.equals("BackColour", ignoreCase = true)) {
                     val color = line[i].trim { it <= ' ' }
                     if (isASS) {
-                        if (color.startsWith("&H")) newStyle.backgroundColor = Style.rgbValue("&HAABBGGRR", color)
-                        else newStyle.backgroundColor = Style.rgbValue("decimalCodedAABBGGRR", color)
+                        if (color.startsWith("&H")) newStyle.backgroundColor = Style.getRGBValue("&HAABBGGRR", color)
+                        else newStyle.backgroundColor = Style.getRGBValue("decimalCodedAABBGGRR", color)
                     } else {
-                        if (color.startsWith("&H")) newStyle.backgroundColor = Style.rgbValue("&HBBGGRR", color)
-                        else newStyle.backgroundColor = Style.rgbValue("decimalCodedBBGGRR", color)
+                        if (color.startsWith("&H")) newStyle.backgroundColor = Style.getRGBValue("&HBBGGRR", color)
+                        else newStyle.backgroundColor = Style.getRGBValue("decimalCodedBBGGRR", color)
                     }
                 } else if (styleFormat[i].trim { it <= ' ' }.equals("Bold", ignoreCase = true)) {
                     newStyle.bold = java.lang.Boolean.parseBoolean(line[i].trim { it <= ' ' })
@@ -406,7 +406,7 @@ class FormatASS : TimedTextFileFormat {
         return newCaption
     }
 
-    private fun colorsForASS(useASSInsteadOfSSA: Boolean, style: Style): String {
+    private fun getColorsForASS(useASSInsteadOfSSA: Boolean, style: Style): String {
         val color = requireNotNull(style.color) { "style color is missing" }
         val backgroundColor = requireNotNull(style.backgroundColor) { "style background color is missing" }
         val rgb = color.substring(4, 6) + color.substring(2, 4) + color.substring(0, 2)
@@ -419,7 +419,7 @@ class FormatASS : TimedTextFileFormat {
         return colors
     }
 
-    private fun optionsForASS(useASSInsteadOfSSA: Boolean, style: Style): String {
+    private fun getOptionsForASS(useASSInsteadOfSSA: Boolean, style: Style): String {
         var options: String
         if (style.bold)
             options = "-1,"
@@ -439,7 +439,7 @@ class FormatASS : TimedTextFileFormat {
         return options
     }
 
-    private fun alignForASS(useASSInsteadOfSSA: Boolean, align: String?): Int {
+    private fun getAlignForASS(useASSInsteadOfSSA: Boolean, align: String?): Int {
         if (useASSInsteadOfSSA) {
             var placement = 2
             if ("bottom-left" == align)

@@ -27,7 +27,7 @@ object Preconnect {
             warmedCount.set(1)
             warmedHosts.add(host)
         }
-        val client = HttpClients.itvClient() ?: return
+        val client = OkGoHelper.getItvClient() ?: return
         try {
             val builder = Request.Builder().url(link).head()
             headers?.forEach { (name, value) ->

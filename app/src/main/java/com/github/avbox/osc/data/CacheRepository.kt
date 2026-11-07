@@ -30,7 +30,7 @@ internal class RoomCacheRepository(
     }
 
     override suspend fun save(key: String, body: Any?) {
-        val cache = CacheEntry()
+        val cache = Cache()
         cache.key = key
         cache.data = withContext(Dispatchers.IO) { toByteArray(body) }
         caches().save(cache)
@@ -38,7 +38,7 @@ internal class RoomCacheRepository(
 
     override suspend fun delete(key: String?, body: Any?) {
         if (key == null) return
-        val cache = CacheEntry()
+        val cache = Cache()
         cache.key = key
         cache.data = withContext(Dispatchers.IO) { toByteArray(body) }
         caches().delete(cache)

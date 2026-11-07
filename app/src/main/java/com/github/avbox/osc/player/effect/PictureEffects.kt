@@ -1,12 +1,12 @@
 package com.github.avbox.osc.player.effect
 
 import androidx.media3.common.Effect
-import com.github.avbox.osc.player.core.RedrawPolicy
+import com.github.avbox.osc.player.ExoPlayer
 import com.github.avbox.osc.player.effect.anime4k.Anime4kEffect
 import com.github.avbox.osc.player.effect.anime4k.Anime4kSettings
 import com.github.avbox.osc.player.effect.anime4k.Anime4kStatus
 import com.github.avbox.osc.player.effect.anime4k.Anime4kTier
-import com.github.avbox.osc.util.KVKeys
+import com.github.avbox.osc.util.HawkConfig
 import com.github.avbox.osc.util.KV
 import com.github.avbox.osc.util.AppLog
 import java.lang.ref.WeakReference
@@ -42,7 +42,7 @@ object PictureEffects {
     internal fun effectsFor(anime4kEnabled: Boolean): List<Effect> =
         if (anime4kEnabled) listWithAnime4k else listWithoutAnime4k
 
-    private var current: WeakReference<PictureEffectHost>? = null
+    private var current: WeakReference<ExoPlayer>? = null
 
     private var tunneling = false
 
@@ -55,62 +55,62 @@ object PictureEffects {
     private var anime4kDeblurOpened = false
 
     fun preset(): PicturePreset {
-        val name = KV.get(KVKeys.PICTURE_PRESET, PicturePreset.Original.name)
+        val name = KV.get(HawkConfig.PICTURE_PRESET, PicturePreset.Original.name)
         return PicturePreset.entries.firstOrNull { it.name == name } ?: PicturePreset.Original
     }
 
-    var custom: PictureProfile
-        get() = PictureProfile(
-            saturation = KV.get(KVKeys.PICTURE_SATURATION, 1f),
-            contrast = KV.get(KVKeys.PICTURE_CONTRAST, 1f),
-            brightness = KV.get(KVKeys.PICTURE_BRIGHTNESS, 0f),
-            gamma = KV.get(KVKeys.PICTURE_GAMMA, 1f),
-            hue = KV.get(KVKeys.PICTURE_HUE, 0f),
-            temperature = KV.get(KVKeys.PICTURE_TEMPERATURE, 0f),
-            sharpness = KV.get(KVKeys.PICTURE_SHARPNESS, 0f),
-            shadowLift = KV.get(KVKeys.PICTURE_SHADOW_LIFT, 0f),
-        ).clamped()
-        set(value) {
-            KV.put(KVKeys.PICTURE_SATURATION, value.saturation)
-            KV.put(KVKeys.PICTURE_CONTRAST, value.contrast)
-            KV.put(KVKeys.PICTURE_BRIGHTNESS, value.brightness)
-            KV.put(KVKeys.PICTURE_GAMMA, value.gamma)
-            KV.put(KVKeys.PICTURE_HUE, value.hue)
-            KV.put(KVKeys.PICTURE_TEMPERATURE, value.temperature)
-            KV.put(KVKeys.PICTURE_SHARPNESS, value.sharpness)
-            KV.put(KVKeys.PICTURE_SHADOW_LIFT, value.shadowLift)
-            push()
-        }
+    fun custom(): PictureProfile = PictureProfile(
+        saturation = KV.get(HawkConfig.PICTURE_SATURATION, 1f),
+        contrast = KV.get(HawkConfig.PICTURE_CONTRAST, 1f),
+        brightness = KV.get(HawkConfig.PICTURE_BRIGHTNESS, 0f),
+        gamma = KV.get(HawkConfig.PICTURE_GAMMA, 1f),
+        hue = KV.get(HawkConfig.PICTURE_HUE, 0f),
+        temperature = KV.get(HawkConfig.PICTURE_TEMPERATURE, 0f),
+        sharpness = KV.get(HawkConfig.PICTURE_SHARPNESS, 0f),
+        shadowLift = KV.get(HawkConfig.PICTURE_SHADOW_LIFT, 0f),
+    ).clamped()
 
     fun applied(): PictureProfile {
         if (comparing) return PictureProfile.OFF
         val preset = preset()
-        return if (preset.adjustable) custom else PictureProfile.of(preset)
+        return if (preset.adjustable) custom() else PictureProfile.of(preset)
     }
 
     private fun wanted(): Boolean = !applied().isNoOp || Anime4kSettings.enabled()
 
     fun selectPreset(preset: PicturePreset) {
-        KV.put(KVKeys.PICTURE_PRESET, preset.name)
+        KV.put(HawkConfig.PICTURE_PRESET, preset.name)
+        push()
+    }
+
+    fun setCustom(profile: PictureProfile) {
+        KV.put(HawkConfig.PICTURE_SATURATION, profile.saturation)
+        KV.put(HawkConfig.PICTURE_CONTRAST, profile.contrast)
+        KV.put(HawkConfig.PICTURE_BRIGHTNESS, profile.brightness)
+        KV.put(HawkConfig.PICTURE_GAMMA, profile.gamma)
+        KV.put(HawkConfig.PICTURE_HUE, profile.hue)
+        KV.put(HawkConfig.PICTURE_TEMPERATURE, profile.temperature)
+        KV.put(HawkConfig.PICTURE_SHARPNESS, profile.sharpness)
+        KV.put(HawkConfig.PICTURE_SHADOW_LIFT, profile.shadowLift)
         push()
     }
 
     fun reset() {
-        KV.put(KVKeys.PICTURE_PRESET, PicturePreset.Original.name)
-        custom = PictureProfile.OFF
+        KV.put(HawkConfig.PICTURE_PRESET, PicturePreset.Original.name)
+        setCustom(PictureProfile.OFF)
     }
 
     fun compare(original: Boolean) {
         if (comparing == original) return
         comparing = original
-        Anime4kStatus.bypassed = original
+        Anime4kStatus.setBypass(original)
         push()
     }
 
-    fun onPrepare(player: PictureEffectHost, tunnelingBlocked: Boolean) {
+    fun onPrepare(player: ExoPlayer, tunnelingBlocked: Boolean) {
         comparing = false
-        Anime4kStatus.bypassed = false
-        if (KV.get(KVKeys.PLAYER_IS_LIVE, false)) {
+        Anime4kStatus.setBypass(false)
+        if (KV.get(HawkConfig.PLAYER_IS_LIVE, false)) {
             current = null
             AppLog.i("echo-picture-effects skip: live")
             return
@@ -129,15 +129,25 @@ object PictureEffects {
         anime4kTierOpened = tier
         anime4kDeblurOpened = Anime4kSettings.deblur()
         colorTone.setProfile(profile)
-        detail.profile = profile
+        detail.setProfile(profile)
         val enabled = !profile.isNoOp || anime4kWanted
         openedThisSession = enabled
         if (enabled) player.applyVideoEffects(effectsFor(anime4kWanted))
     }
 
-    fun onPlayerReleased(player: PictureEffectHost) {
+    fun onPlayerReleased(player: ExoPlayer) {
         if (current?.get() === player) current = null
     }
+
+    @Volatile
+    private var outputCanvas: IntArray? = null
+
+    fun setOutputCanvas(width: Int, height: Int) {
+        if (width <= 0 || height <= 0) return
+        outputCanvas = intArrayOf(width, height)
+    }
+
+    fun outputCanvas(): IntArray? = outputCanvas
 
     fun anime4kUnavailable(): Boolean {
         val player = current?.get() ?: return false
@@ -182,7 +192,7 @@ object PictureEffects {
         val player = current?.get() ?: return
         val profile = applied()
         colorTone.setProfile(profile)
-        detail.profile = profile
+        detail.setProfile(profile)
         if (tunneling) return
         if (player.isPictureHdrSource()) return
         if (openedThisSession) {

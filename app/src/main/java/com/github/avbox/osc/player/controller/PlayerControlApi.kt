@@ -4,7 +4,7 @@ import android.webkit.WebView
 import androidx.media3.ui.SubtitleView
 
 import com.github.avbox.osc.bean.SourceBean
-import com.github.avbox.osc.player.PlayerKernelView
+import com.github.avbox.osc.player.MyVideoView
 import com.github.avbox.osc.player.state.PlayerUiState
 import com.github.avbox.osc.subtitle.widget.SimpleSubtitleView
 import org.json.JSONObject
@@ -12,7 +12,7 @@ import java.util.HashMap
 
 interface PlayerControlApi {
 
-    fun setKernelProvider(view: PlayerKernelView?) {
+    fun setKernelProvider(view: MyVideoView?) {
     }
 
     fun getSubtitleView(): SimpleSubtitleView
@@ -52,7 +52,8 @@ interface PlayerControlApi {
 
     fun onNewPlayStarted(sameContent: Boolean)
 
-    fun adoptCurrentContent()
+    /** 内容地址下发到播放器时告知控制器，用于识别切换途中的陈旧进度。 */
+    fun onContentUrlSet(url: String?)
 
     fun setLifecyclePaused(paused: Boolean)
 
