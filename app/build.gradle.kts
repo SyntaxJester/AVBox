@@ -8,19 +8,19 @@ plugins {
 }
 
 android {
-    namespace = "com.github.avbox.osc"
+    namespace = "com.github.tvbox.osc"
     compileSdk = libs.versions.compileSdk.get().toInt()
     ndkVersion = libs.versions.ndk.get()
 
     defaultConfig {
-        applicationId = "com.github.xbox.osc"
+        applicationId = "com.github.avbox.osc"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 50
-        versionName = "1.5.5-hotfix1-xbox"
+        versionCode = 53
+        versionName = "1.4.2"
         multiDexEnabled = true
         ndk {
-            abiFilters += setOf("arm64-v8a")
+            abiFilters += setOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
         }
     }
 
@@ -105,7 +105,7 @@ ksp {
 androidComponents {
     onVariants { variant ->
         variant.outputs.forEach { output ->
-            output.outputFileName.set("X-BOX_${variant.buildType}.apk")
+            output.outputFileName.set("AVBox_${variant.buildType}.apk")
         }
     }
 }
@@ -135,8 +135,8 @@ dependencies {
         exclude(group = "xmlpull", module = "xmlpull")
         exclude(group = "xpp3", module = "xpp3_min")
     }
-    implementation(libs.mmkv)
     implementation(libs.eventbus)
+    implementation(libs.mmkv)
     implementation(libs.danmaku.flame.master)
 
     implementation(libs.media3.exoplayer)
