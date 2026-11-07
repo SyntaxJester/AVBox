@@ -164,7 +164,7 @@ class App : Application() {
     companion object {
         private var instance: App? = null
 
-        private var dashData: String? = null
+        var dashData: String? = null
 
         private var p: P2PClass? = null
 
