@@ -1,0 +1,24 @@
+{
+  "groups": [
+    {
+      "id": "resolution",
+      "name": "Resolution",
+      "color": "#00000000",
+      "borderColor": "#00000000",
+      "isExpanded": true
+    },
+    {
+      "id": "source",
+      "name": "Source",
+      "color": "#00000000",
+      "borderColor": "#00000000",
+      "isExpanded": true
+    },
+    {
+      "id": "video-tech",
+      "name": "Video Tech",
+      "color": "#00000000",
+      "borderColor": "#00000000",
+      "isExpanded": true
+    },
+    {
