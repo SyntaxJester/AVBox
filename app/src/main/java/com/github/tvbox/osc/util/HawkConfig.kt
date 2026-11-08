@@ -147,4 +147,10 @@ object HawkConfig {
     const val MEDIA_BADGES_DISPLAY_MODE = "media_badges_display_mode"
     const val MEDIA_BADGES_LINK_MODE = "media_badges_link_mode"
     const val MEDIA_BADGES_CUSTOM_LINK = "media_badges_custom_link"
+
+    // 画中画 (PiP) 设置
+    const val PLAY_PIP_ENABLED = "play_pip_enabled"
+    const val PLAY_PIP_ENABLED_DEFAULT = true
+    const val PLAY_PIP_LAYOUT_MODE = "play_pip_layout_mode"
+    const val PLAY_PIP_LAYOUT_MODE_DEFAULT = 0 // 0=自动, 1=固定左下, 2=固定右下
 }

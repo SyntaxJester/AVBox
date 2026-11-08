@@ -37,6 +37,7 @@ import com.github.tvbox.osc.ui.components.SettingsSliderRow
 import com.github.tvbox.osc.ui.components.SettingsSwitchRow
 import com.github.tvbox.osc.ui.components.TopBarActionBox
 import com.github.tvbox.osc.util.HawkConfig
+import com.github.tvbox.osc.util.KV
 import com.github.tvbox.osc.util.MusicSettings
 import kotlin.math.roundToInt
 import com.github.tvbox.osc.player.AppPlayerView
@@ -323,6 +324,12 @@ fun PlaySettingsScreen(onNavigateBack: () -> Unit, vm: SettingsViewModel = viewM
                 }
             }
 
+            SettingsGroup(title = stringResource(R.string.settings_group_play_pip)) {
+                SettingsCard(SettingsCardPosition.SINGLE) {
+                    pipSetting()
+                }
+            }
+
             Spacer(Modifier.height(64.dp))
         }
     }
@@ -374,4 +381,21 @@ private fun badgeDisplayModeLabel(mode: Int): String {
         else -> R.string.settings_media_badges_mode_hide
     }
     return stringResource(res)
+}
+
+@Composable
+private fun pipSetting() {
+    val pipEnabled by remember { mutableStateOf(KV.get(HawkConfig.PLAY_PIP_ENABLED, HawkConfig.PLAY_PIP_ENABLED_DEFAULT)) }
+
+    Switch(
+        checked = pipEnabled,
+        onCheckedChange = { checked ->
+            KV.put(HawkConfig.PLAY_PIP_ENABLED, checked)
+            pipEnabled = checked
+        },
+    ) {
+        Text(stringResource(R.string.settings_pip_enabled))
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(stringResource(R.string.settings_pip_summary), style = MaterialTheme.typography.bodyMedium)
+    }
 }

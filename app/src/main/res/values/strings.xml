@@ -509,6 +509,7 @@
     <string name="settings_group_play_picture">内核与画面</string>
     <string name="settings_group_play_behavior">播放行为</string>
     <string name="settings_group_media_badges">媒体徽章</string>
+    <string name="settings_group_play_pip">画中画 (PiP)</string>
     <string name="settings_media_badges_show_subtitle">在播放器中显示画面与音轨规格徽章</string>
     <string name="settings_media_badges_display_mode_subtitle">徽章、纯文字或隐藏</string>
     <string name="settings_group_privacy">隐私与交互</string>
@@ -694,4 +695,12 @@
     <!-- 媒体徽章 -->
     <string name="badge_hdr10_plus">HDR10+</string>
     <string name="settings_media_badges_custom_link">媒体徽章自定义链接</string>
+
+    <!-- 画中画 (PiP) -->
+    <string name="pip_action_play_pause">播放/暂停</string>
+    <string name="pip_action_previous">上一集</string>
+    <string name="pip_action_next">下一集</string>
+    <string name="pip_action_back_to_app">回到主应用</string>
+    <string name="settings_pip_enabled">开启画中画</string>
+    <string name="settings_pip_summary">播放时支持画中画模式</string>
 </resources>
