@@ -25,6 +25,7 @@ import com.github.tvbox.osc.bean.VodInfo
 import com.github.tvbox.osc.player.PageHost
 import com.github.tvbox.osc.player.PlaybackController
 import com.github.tvbox.osc.player.pip.PipLauncher
+import com.github.tvbox.osc.ui.components.SheetHostScaffold
 import com.github.tvbox.osc.player.PlaybackService
 import com.github.tvbox.osc.player.engine.MediaSources
 import com.github.tvbox.osc.player.engine.iso.IsoSessionSignal
@@ -117,7 +118,7 @@ class DetailActivity : BaseActivity(), PageHost {
     override fun init() {
         enableTransparentEdgeToEdge()
         applyStatusBarAppearance()
-        PipLauncher.registerAutoEnter(this)
+        PipLauncher.registerAutoEnter(this, DetailActivity::class.java, null, false, false)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 val container = playContainer
@@ -441,7 +442,7 @@ class DetailActivity : BaseActivity(), PageHost {
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        PipLauncher.enter(this)
+        PipLauncher.enter(this, DetailActivity::class.java, null, false, false)
     }
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
