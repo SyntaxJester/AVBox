@@ -309,7 +309,7 @@ class HtmlConfig private constructor() {
 
         /** 本地文件服务的实际端口（9978 被占用时 ControlManager 会递增） */
         private fun servicePort(): Int = try {
-            val cm = com.github.avbox.osc.server.ControlManager.get()
+            val cm = com.github.tvbox.osc.server.ControlManager.get()
             var p = cm.startedPort()
             if (p <= 0) {
                 cm.startServer()

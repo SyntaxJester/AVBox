@@ -173,8 +173,8 @@ object PipLauncher {
             actions.add(
                 RemoteAction(
                     Icon.createWithResource(activity, android.R.drawable.ic_menu_view),
-                    activity.getString(R.string.pip_back_to_app),
-                    activity.getString(R.string.pip_back_to_app),
+                    activity.getString(R.string.pip_action_back_to_app),
+                    activity.getString(R.string.pip_action_back_to_app),
                     backToApp(activity, targetClass, 4),
                 )
             )

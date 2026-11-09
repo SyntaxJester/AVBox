@@ -389,15 +389,13 @@ private fun badgeDisplayModeLabel(mode: Int): String {
 private fun pipSetting() {
     val pipEnabled by remember { mutableStateOf(KV.get(HawkConfig.PLAY_PIP_ENABLED, HawkConfig.PLAY_PIP_ENABLED_DEFAULT)) }
 
-    Switch(
+    SettingsSwitchRow(
+        title = stringResource(R.string.settings_pip_enabled),
+        subtitle = stringResource(R.string.settings_pip_summary),
         checked = pipEnabled,
         onCheckedChange = { checked ->
             KV.put(HawkConfig.PLAY_PIP_ENABLED, checked)
             pipEnabled = checked
         },
-    ) {
-        Text(stringResource(R.string.settings_pip_enabled))
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(stringResource(R.string.settings_pip_summary), style = MaterialTheme.typography.bodyMedium)
-    }
+    )
 }

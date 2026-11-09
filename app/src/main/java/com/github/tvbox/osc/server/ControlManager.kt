@@ -37,6 +37,10 @@ class ControlManager private constructor() {
         } while (RemoteServer.serverPort < 9999)
     }
 
+    fun startedPort(): Int {
+        return if (mServer?.isStarting() == true) RemoteServer.serverPort else 0
+    }
+
     fun stopServer() {
         mServer?.let {
             if (it.isStarting()) it.stop()
