@@ -22,9 +22,9 @@ import androidx.lifecycle.ViewModelProvider
 import com.github.tvbox.osc.R
 import com.github.tvbox.osc.base.BaseActivity
 import com.github.tvbox.osc.bean.VodInfo
-import com.github.tvbox.osc.ui.components.SheetHostScaffold
 import com.github.tvbox.osc.player.PageHost
 import com.github.tvbox.osc.player.PlaybackController
+import com.github.tvbox.osc.player.pip.PipLauncher
 import com.github.tvbox.osc.player.PlaybackService
 import com.github.tvbox.osc.player.engine.MediaSources
 import com.github.tvbox.osc.player.engine.iso.IsoSessionSignal
@@ -117,6 +117,7 @@ class DetailActivity : BaseActivity(), PageHost {
     override fun init() {
         enableTransparentEdgeToEdge()
         applyStatusBarAppearance()
+        PipLauncher.registerAutoEnter(this)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 val container = playContainer
@@ -437,6 +438,20 @@ class DetailActivity : BaseActivity(), PageHost {
     }
 
     fun startDetailFallbackAfterLinesExhausted(): Boolean = vm.startFallbackAfterLinesExhausted()
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        PipLauncher.enter(this)
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        if (isInPictureInPictureMode) {
+            playContainer?.hostPause()
+        } else {
+            playContainer?.hostResume()
+        }
+    }
 
     override fun onResume() {
         super.onResume()

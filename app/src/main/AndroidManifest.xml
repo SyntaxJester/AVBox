@@ -74,7 +74,8 @@
         <activity
             android:name=".ui.activity.DetailActivity"
             android:launchMode="singleTop"
-            android:configChanges="orientation|screenSize" />
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
+            android:supportsPictureInPicture="true" />
         <activity
             android:name=".ui.activity.MusicPlayerActivity"
             android:configChanges="orientation|screenSize" />
