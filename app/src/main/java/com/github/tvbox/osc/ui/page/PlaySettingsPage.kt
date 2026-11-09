@@ -387,7 +387,7 @@ private fun badgeDisplayModeLabel(mode: Int): String {
 
 @Composable
 private fun pipSetting() {
-    val pipEnabled by remember { mutableStateOf(KV.get(HawkConfig.PLAY_PIP_ENABLED, HawkConfig.PLAY_PIP_ENABLED_DEFAULT)) }
+    var pipEnabled by remember { mutableStateOf(KV.get(HawkConfig.PLAY_PIP_ENABLED, HawkConfig.PLAY_PIP_ENABLED_DEFAULT)) }
 
     SettingsSwitchRow(
         title = stringResource(R.string.settings_pip_enabled),
