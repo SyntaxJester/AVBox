@@ -97,7 +97,7 @@ data class SettingsState(
     val adAudioFingerprintEnabled: Boolean,
     val mediaBadgesShow: Boolean,
     val mediaBadgesDisplayMode: Int,
-    val mediaBadgesLinkMode: Int,
+    val mediaBadgesSelectedLink: Int,
     val mediaBadgesCustomLink: String,
     val historyNumIndex: Int,
     val historyMerge: Boolean,
@@ -151,11 +151,11 @@ class SettingsViewModel : ViewModel() {
         _state.value = _state.value.copy(
             mediaBadgesShow = if (key == HawkConfig.MEDIA_BADGES_SHOW) (value as? Boolean) ?: _state.value.mediaBadgesShow else _state.value.mediaBadgesShow,
             mediaBadgesDisplayMode = if (key == HawkConfig.MEDIA_BADGES_DISPLAY_MODE) (value as? Int) ?: _state.value.mediaBadgesDisplayMode else _state.value.mediaBadgesDisplayMode,
-            mediaBadgesLinkMode = if (key == HawkConfig.MEDIA_BADGES_LINK_MODE) (value as? Int) ?: _state.value.mediaBadgesLinkMode else _state.value.mediaBadgesLinkMode,
+            mediaBadgesSelectedLink = if (key == HawkConfig.MEDIA_BADGES_SELECTED_LINK) (value as? Int) ?: _state.value.mediaBadgesSelectedLink else _state.value.mediaBadgesSelectedLink,
             mediaBadgesCustomLink = if (key == HawkConfig.MEDIA_BADGES_CUSTOM_LINK) (value as? String) ?: _state.value.mediaBadgesCustomLink else _state.value.mediaBadgesCustomLink,
         )
         if (key != HawkConfig.MEDIA_BADGES_SHOW && key != HawkConfig.MEDIA_BADGES_DISPLAY_MODE &&
-            key != HawkConfig.MEDIA_BADGES_LINK_MODE && key != HawkConfig.MEDIA_BADGES_CUSTOM_LINK) {
+            key != HawkConfig.MEDIA_BADGES_SELECTED_LINK && key != HawkConfig.MEDIA_BADGES_CUSTOM_LINK) {
             refresh()
         }
     }
@@ -215,7 +215,7 @@ class SettingsViewModel : ViewModel() {
         adAudioFingerprintEnabled = KV.get(HawkConfig.AD_AUDIO_FINGERPRINT_ENABLED, false),
         mediaBadgesShow = KV.get(HawkConfig.MEDIA_BADGES_SHOW, true),
         mediaBadgesDisplayMode = KV.get(HawkConfig.MEDIA_BADGES_DISPLAY_MODE, 0),
-        mediaBadgesLinkMode = KV.get(HawkConfig.MEDIA_BADGES_LINK_MODE, 0),
+        mediaBadgesSelectedLink = KV.get(HawkConfig.MEDIA_BADGES_SELECTED_LINK, HawkConfig.MEDIA_BADGE_LINK_NONE),
         mediaBadgesCustomLink = KV.get(HawkConfig.MEDIA_BADGES_CUSTOM_LINK, ""),
         exoCacheSizeMb = KV.get(HawkConfig.EXO_CACHE_SIZE_MB, HawkConfig.EXO_CACHE_SIZE_MB_DEFAULT),
         dohIndex = KV.get(HawkConfig.DOH_URL, 0),

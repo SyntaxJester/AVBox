@@ -43,12 +43,26 @@ object MediaBadgeLoader {
     }
 
     /**
+     * Returns the key used for caching: either a URL or the built-in marker.
+     */
+    private fun selectedLinkKey(context: Context): String {
+        val link = KV.get<Int>(HawkConfig.MEDIA_BADGES_SELECTED_LINK, HawkConfig.MEDIA_BADGE_LINK_NONE)
+        val custom = KV.get<String>(HawkConfig.MEDIA_BADGES_CUSTOM_LINK, "")
+        return when (link) {
+            HawkConfig.MEDIA_BADGE_LINK_1 -> "https://media-badges.app.workbuddy.host/xinyue4capyplayer.json"
+            HawkConfig.MEDIA_BADGE_LINK_2 -> "https://streambridge-studio-markers.vercel.app/badges-noframe.json"
+            HawkConfig.MEDIA_BADGE_LINK_3 -> "https://raw.githubusercontent.com/zxxlxj/rex-m/main/xijing-club/pppboom.json"
+            HawkConfig.MEDIA_BADGE_LINK_CUSTOM -> if (custom.isNotBlank()) custom else ""
+            else -> "" // built-in
+        }
+    }
+
+    /**
      * Synchronously returns badge names matched for [title].
-     * Loads the JSON (built-in or custom) on first use and caches it.
+     * Loads the JSON (built-in or selected link) on first use and caches it.
      */
     fun badgeNames(context: Context, title: String): List<String> {
-        val link = KV.get<String>(HawkConfig.MEDIA_BADGES_CUSTOM_LINK, "")
-        val key = link ?: ""
+        val key = selectedLinkKey(context)
         val cached = cache.get()
         if (cached != null && cacheKey.get() == key) {
             return match(cached, title)
@@ -61,7 +75,7 @@ object MediaBadgeLoader {
             match(pack, title)
         } catch (e: Throwable) {
             LOG.e("media-badge load-failed: " + e.message)
-            // Fall back to built-in pack if a custom link failed.
+            // Fall back to built-in pack if a selected link failed.
             if (key.isNotBlank()) {
                 try {
                     val fallback = load(context.applicationContext, "")

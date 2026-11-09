@@ -145,8 +145,15 @@ object HawkConfig {
     const val AD_AUDIO_FINGERPRINT_ENABLED = "ad_audio_fingerprint_enabled"
     const val MEDIA_BADGES_SHOW = "media_badges_show"
     const val MEDIA_BADGES_DISPLAY_MODE = "media_badges_display_mode"
-    const val MEDIA_BADGES_LINK_MODE = "media_badges_link_mode"
+    const val MEDIA_BADGES_SELECTED_LINK = "media_badges_selected_link"
     const val MEDIA_BADGES_CUSTOM_LINK = "media_badges_custom_link"
+
+    // 媒体徽章链接选项索引
+    const val MEDIA_BADGE_LINK_NONE = 0      // 内置徽章包
+    const val MEDIA_BADGE_LINK_CUSTOM = 4   // 自定义链接
+    const val MEDIA_BADGE_LINK_1 = 1        // xinyue4capyplayer
+    const val MEDIA_BADGE_LINK_2 = 2        // streambridge
+    const val MEDIA_BADGE_LINK_3 = 3        // xijing-club
 
     // 画中画 (PiP) 设置
     const val PLAY_PIP_ENABLED = "play_pip_enabled"

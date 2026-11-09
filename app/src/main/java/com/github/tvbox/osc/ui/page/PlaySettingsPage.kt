@@ -293,25 +293,24 @@ fun PlaySettingsScreen(onNavigateBack: () -> Unit, vm: SettingsViewModel = viewM
                         onSelect = { idx -> vm.put(HawkConfig.MEDIA_BADGES_DISPLAY_MODE, idx) },
                     )
                 }
-                SettingsCard(if (state.mediaBadgesLinkMode == 1) SettingsCardPosition.MIDDLE else SettingsCardPosition.LAST) {
+                SettingsCard(if (state.mediaBadgesSelectedLink == HawkConfig.MEDIA_BADGE_LINK_CUSTOM) SettingsCardPosition.MIDDLE else SettingsCardPosition.LAST) {
                     SettingsOptionMenuRow(
-                        title = stringResource(R.string.settings_media_badges_link_mode),
+                        title = stringResource(R.string.settings_media_badges_selected_link),
                         leadingIconRes = R.drawable.ic_play_cache,
-                        subtitle = stringResource(R.string.settings_media_badges_link_mode_subtitle),
-                        valueText = if (state.mediaBadgesLinkMode == 1) {
-                            stringResource(R.string.settings_media_badges_link_custom)
-                        } else {
-                            stringResource(R.string.settings_media_badges_link_none)
-                        },
+                        subtitle = stringResource(R.string.settings_media_badges_selected_link_subtitle),
+                        valueText = badgeLinkLabel(state.mediaBadgesSelectedLink),
                         options = listOf(
                             stringResource(R.string.settings_media_badges_link_none),
+                            stringResource(R.string.settings_media_badges_link_1),
+                            stringResource(R.string.settings_media_badges_link_2),
+                            stringResource(R.string.settings_media_badges_link_3),
                             stringResource(R.string.settings_media_badges_link_custom),
                         ),
-                        selectedIndex = state.mediaBadgesLinkMode,
-                        onSelect = { idx -> vm.put(HawkConfig.MEDIA_BADGES_LINK_MODE, idx) },
+                        selectedIndex = state.mediaBadgesSelectedLink,
+                        onSelect = { idx -> vm.put(HawkConfig.MEDIA_BADGES_SELECTED_LINK, idx) },
                     )
                 }
-                if (state.mediaBadgesLinkMode == 1) {
+                if (state.mediaBadgesSelectedLink == HawkConfig.MEDIA_BADGE_LINK_CUSTOM) {
                     SettingsCard(SettingsCardPosition.LAST) {
                         SettingsRow(
                             title = stringResource(R.string.settings_media_badges_custom_link),
@@ -382,6 +381,18 @@ private fun badgeDisplayModeLabel(mode: Int): String {
         0 -> R.string.settings_media_badges_mode_badge
         1 -> R.string.settings_media_badges_mode_text
         else -> R.string.settings_media_badges_mode_hide
+    }
+    return stringResource(res)
+}
+
+@Composable
+private fun badgeLinkLabel(link: Int): String {
+    val res = when (link) {
+        HawkConfig.MEDIA_BADGE_LINK_1 -> R.string.settings_media_badges_link_1
+        HawkConfig.MEDIA_BADGE_LINK_2 -> R.string.settings_media_badges_link_2
+        HawkConfig.MEDIA_BADGE_LINK_3 -> R.string.settings_media_badges_link_3
+        HawkConfig.MEDIA_BADGE_LINK_CUSTOM -> R.string.settings_media_badges_link_custom
+        else -> R.string.settings_media_badges_link_none
     }
     return stringResource(res)
 }

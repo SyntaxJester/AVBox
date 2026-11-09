@@ -138,6 +138,18 @@
                 <action android:name="android.content.movie.custom.web.Action" />
             </intent-filter>
         </receiver>
+        <receiver
+            android:name=".receiver.PipActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="pip_action_play_pause" />
+                <action android:name="pip_action_previous" />
+                <action android:name="pip_action_next" />
+                <action android:name="pip_action_live_previous" />
+                <action android:name="pip_action_live_next" />
+                <action android:name="pip_action_back_to_app" />
+            </intent-filter>
+        </receiver>
 
         <provider
             android:name="androidx.core.content.FileProvider"
