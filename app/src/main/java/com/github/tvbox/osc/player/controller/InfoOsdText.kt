@@ -18,6 +18,7 @@ import com.github.tvbox.osc.player.AppPlayerView
 import com.github.tvbox.osc.player.ExoPlayer
 import com.github.tvbox.osc.player.PlayerDecodeKind
 import com.github.tvbox.osc.player.PlayerHelper
+import com.github.tvbox.osc.player.badge.MediaBadgeLoader
 import com.github.tvbox.osc.player.engine.AudioCodecChoice
 import com.github.tvbox.osc.player.engine.AudioDecoderLookup
 import com.github.tvbox.osc.player.state.PlayState
@@ -93,7 +94,7 @@ internal object InfoOsdText {
         state.infoOsdLeft = left
         state.infoOsdRight = right
         state.infoOsdFooter = footer
-        state.mediaBadges = mediaBadgeLines(context, video, exo)
+        state.mediaBadges = mediaBadgeLines(context, video, exo, state.title)
     }
 
     /**
@@ -101,11 +102,16 @@ internal object InfoOsdText {
      * 仅当用户开启显示时返回，否则返回空列表。
      * 每个徽章为 Pair<名称, 类型>，类型用于 UI 区分显示方式。
      */
-    private fun mediaBadgeLines(context: Context, video: Format?, exo: ExoPlayer?): List<Pair<String, String>> {
+    private fun mediaBadgeLines(context: Context, video: Format?, exo: ExoPlayer?, title: String): List<Pair<String, String>> {
         if (!(KV.get(HawkConfig.MEDIA_BADGES_SHOW, true) == true)) return emptyList()
         val mode = KV.get(HawkConfig.MEDIA_BADGES_DISPLAY_MODE, 0) ?: 0
         if (mode == 2) return emptyList()
         val badges = ArrayList<Pair<String, String>>()
+        // JSON badge pack (built-in or custom link) matched by title patterns.
+        val packNames = MediaBadgeLoader.badgeNames(context, title)
+        for (name in packNames) {
+            badges.add(name to "pack")
+        }
         if (video != null) {
             val width = video.width
             val height = video.height

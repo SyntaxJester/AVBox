@@ -343,6 +343,7 @@ fun PlaySettingsScreen(onNavigateBack: () -> Unit, vm: SettingsViewModel = viewM
             onDismiss = { showBadgeLinkDialog = false },
             onConfirm = { link ->
                 vm.put(HawkConfig.MEDIA_BADGES_CUSTOM_LINK, link)
+                com.github.tvbox.osc.player.badge.MediaBadgeLoader.invalidate()
                 showBadgeLinkDialog = false
             },
         )

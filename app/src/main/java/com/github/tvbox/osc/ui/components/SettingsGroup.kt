@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
@@ -61,6 +62,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.github.tvbox.osc.R
 import com.github.tvbox.osc.ui.theme.cardContainer
@@ -405,7 +407,12 @@ private fun RowValue(text: String, enabled: Boolean, modifier: Modifier = Modifi
         } else {
             MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
         },
-        modifier = modifier,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        textAlign = TextAlign.End,
+        modifier = modifier
+            .widthIn(max = 200.dp)
+            .padding(start = 12.dp),
     )
 }
 
