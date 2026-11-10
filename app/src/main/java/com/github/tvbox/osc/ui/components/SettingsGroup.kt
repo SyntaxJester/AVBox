@@ -148,7 +148,7 @@ fun SettingsRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 64.dp)
+            .heightIn(min = 56.dp)
             .then(
                 if (onClick != null) {
                     Modifier.clickable(enabled = enabled, onClick = onClick)
@@ -156,7 +156,7 @@ fun SettingsRow(
                     Modifier
                 }
             )
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         leadingIconRes?.let { RowLeadingIcon(it, enabled) }
