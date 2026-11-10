@@ -21,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextMeasurer
@@ -30,6 +31,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
 import com.github.tvbox.osc.R
 import com.github.tvbox.osc.player.state.PlayerActions
 import com.github.tvbox.osc.player.state.PlayerUiState
@@ -108,40 +110,58 @@ fun BoxScope.PlayerInfoOsd(state: PlayerUiState, actions: PlayerActions, maxWidt
 }
 
 @Composable
-private fun OsdMediaBadges(badges: List<Pair<String, String>>, size: TextUnit, gap: Dp) {
+private fun OsdMediaBadges(badges: List<com.github.tvbox.osc.player.badge.MediaBadge>, size: TextUnit, gap: Dp) {
     val textColor = Color(0xFFFAFAFA)
     val baseStyle = LocalTextStyle.current
     val badgeStyle = baseStyle.copy(color = textColor, fontSize = size)
     when (KV.get(HawkConfig.MEDIA_BADGES_DISPLAY_MODE, 0)) {
         1 -> Text(
-            text = badges.joinToString(" · ") { it.first },
+            text = badges.joinToString(" · ") { it.name },
             style = badgeStyle,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
         else -> Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
             badges.forEach { badge ->
-                Box(
-                    modifier = Modifier
-                        .background(
-                            Color(OSD_BADGE_BG),
-                            RoundedCornerShape(playerDim(R.dimen.vs_4)),
-                        )
-                        .padding(
-                            horizontal = playerDim(R.dimen.vs_8),
-                            vertical = playerDim(R.dimen.vs_3),
-                        ),
-                ) {
-                    Text(
-                        text = badge.first,
-                        style = badgeStyle,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                if (badge.imageURL.isNotBlank()) {
+                    AsyncImage(
+                        model = badge.imageURL,
+                        contentDescription = badge.name,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .background(Color.Black.copy(alpha = 0.35f), RoundedCornerShape(playerDim(R.dimen.vs_4)))
+                            .padding(horizontal = playerDim(R.dimen.vs_4), vertical = playerDim(R.dimen.vs_2))
+                            .height(sizeToDp(size)),
                     )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                Color(OSD_BADGE_BG),
+                                RoundedCornerShape(playerDim(R.dimen.vs_4)),
+                            )
+                            .padding(
+                                horizontal = playerDim(R.dimen.vs_8),
+                                vertical = playerDim(R.dimen.vs_3),
+                            ),
+                    ) {
+                        Text(
+                            text = badge.name,
+                            style = badgeStyle,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun sizeToDp(size: TextUnit): Dp {
+    val density = LocalDensity.current
+    return with(density) { size.toDp() }
 }
 
 private fun labelWidthPx(

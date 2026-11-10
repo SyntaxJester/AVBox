@@ -29,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalConfiguration
@@ -41,6 +42,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.compose.AsyncImage
 import com.github.tvbox.osc.R
 import com.github.tvbox.osc.player.state.PlayerActions
 import com.github.tvbox.osc.player.state.PlayerUiState
@@ -287,19 +289,34 @@ fun PlayerTopBar(state: PlayerUiState, actions: PlayerActions) {
                                 horizontalArrangement = Arrangement.spacedBy(playerDim(R.dimen.vs_4)),
                             ) {
                                 state.mediaBadges.take(4).forEach { badge ->
-                                    Text(
-                                        text = badge.first,
-                                        color = Color.White,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        maxLines = 1,
-                                        modifier = Modifier
-                                            .background(
-                                                Color.Black.copy(alpha = 0.35f),
-                                                RoundedCornerShape(4.dp),
-                                            )
-                                            .padding(horizontal = playerDim(R.dimen.vs_8), vertical = playerDim(R.dimen.vs_2)),
-                                    )
+                                    if (badge.imageURL.isNotBlank()) {
+                                        AsyncImage(
+                                            model = badge.imageURL,
+                                            contentDescription = badge.name,
+                                            contentScale = ContentScale.Fit,
+                                            modifier = Modifier
+                                                .height(20.dp)
+                                                .background(
+                                                    Color.Black.copy(alpha = 0.35f),
+                                                    RoundedCornerShape(4.dp),
+                                                )
+                                                .padding(horizontal = 2.dp, vertical = 1.dp),
+                                        )
+                                    } else {
+                                        Text(
+                                            text = badge.name,
+                                            color = Color.White,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            maxLines = 1,
+                                            modifier = Modifier
+                                                .background(
+                                                    Color.Black.copy(alpha = 0.35f),
+                                                    RoundedCornerShape(4.dp),
+                                                )
+                                                .padding(horizontal = playerDim(R.dimen.vs_8), vertical = playerDim(R.dimen.vs_2)),
+                                        )
+                                    }
                                 }
                             }
                         }

@@ -33,6 +33,7 @@ object MediaBadgeLoader {
         val id: String,
         val name: String,
         val pattern: String,
+        val imageURL: String,
         val regex: Regex,
     )
 
@@ -62,6 +63,14 @@ object MediaBadgeLoader {
      * Loads the JSON (built-in or selected link) on first use and caches it.
      */
     fun badgeNames(context: Context, title: String): List<String> {
+        return badgeItems(context, title).map { it.name }
+    }
+
+    /**
+     * Synchronously returns badges (name + imageURL) matched for [title].
+     * Loads the JSON (built-in or selected link) on first use and caches it.
+     */
+    fun badgeItems(context: Context, title: String): List<MediaBadge> {
         val key = selectedLinkKey(context)
         val cached = cache.get()
         if (cached != null && cacheKey.get() == key) {
@@ -130,10 +139,11 @@ object MediaBadgeLoader {
             val id = o.optString("id")
             val name = o.optString("name")
             val pattern = o.optString("pattern")
+            val imageURL = o.optString("imageURL")
             if (id.isEmpty() || name.isEmpty() || pattern.isEmpty()) continue
             try {
                 val regex = Regex(pattern, RegexOption.IGNORE_CASE)
-                out.add(BadgeFilter(id, name, pattern, regex))
+                out.add(BadgeFilter(id, name, pattern, imageURL, regex))
             } catch (_: Throwable) {
                 // Skip invalid patterns.
             }
@@ -141,13 +151,13 @@ object MediaBadgeLoader {
         return BadgePack(out)
     }
 
-    private fun match(pack: BadgePack, title: String): List<String> {
+    private fun match(pack: BadgePack, title: String): List<MediaBadge> {
         if (title.isBlank() || pack.filters.isEmpty()) return emptyList()
         val seen = HashSet<String>()
-        val out = ArrayList<String>()
+        val out = ArrayList<MediaBadge>()
         for (f in pack.filters) {
             if (f.regex.containsMatchIn(title) && seen.add(f.name)) {
-                out.add(f.name)
+                out.add(MediaBadge(f.name, f.imageURL, MediaBadge.TYPE_PACK))
             }
         }
         return out

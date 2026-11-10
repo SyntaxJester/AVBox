@@ -58,7 +58,7 @@ class PlayerUiState {
     var infoOsdLeft: List<Pair<String, String>> by mutableStateOf(emptyList())
     var infoOsdRight: List<Pair<String, String>> by mutableStateOf(emptyList())
     var infoOsdFooter: Pair<String, String>? by mutableStateOf(null)
-    var mediaBadges: List<Pair<String, String>> by mutableStateOf(emptyList())
+    var mediaBadges: List<com.github.tvbox.osc.player.badge.MediaBadge> by mutableStateOf(emptyList())
     var showParseRow: Boolean by mutableStateOf(false)
     var isPortrait: Boolean by mutableStateOf(true)
     var playerType: Int by mutableStateOf(2)

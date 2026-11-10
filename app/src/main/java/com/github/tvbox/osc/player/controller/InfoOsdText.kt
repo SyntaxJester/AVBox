@@ -113,49 +113,46 @@ internal object InfoOsdText {
     /**
      * 媒体徽章：按真实解码的画面和音轨计算。
      * 仅当用户开启显示时返回，否则返回空列表。
-     * 每个徽章为 Pair<名称, 类型>，类型用于 UI 区分显示方式。
+     * 每个徽章包含名称、图片地址和类型。
      */
-    private fun mediaBadgeLines(context: Context, video: Format?, exo: ExoPlayer?, title: String): List<Pair<String, String>> {
+    private fun mediaBadgeLines(context: Context, video: Format?, exo: ExoPlayer?, title: String): List<com.github.tvbox.osc.player.badge.MediaBadge> {
         if (!(KV.get(HawkConfig.MEDIA_BADGES_SHOW, true) == true)) return emptyList()
         val mode = KV.get(HawkConfig.MEDIA_BADGES_DISPLAY_MODE, 0) ?: 0
         if (mode == 2) return emptyList()
-        val badges = ArrayList<Pair<String, String>>()
+        val badges = ArrayList<com.github.tvbox.osc.player.badge.MediaBadge>()
         // JSON badge pack (built-in or custom link) matched by title patterns.
-        val packNames = MediaBadgeLoader.badgeNames(context, title)
-        for (name in packNames) {
-            badges.add(name to "pack")
-        }
+        badges.addAll(MediaBadgeLoader.badgeItems(context, title))
         if (video != null) {
             val width = video.width
             val height = video.height
             if (width >= 3800 || height >= 2100) {
-                badges.add(context.getString(R.string.badge_4k) to "video")
+                badges.add(com.github.tvbox.osc.player.badge.MediaBadge(context.getString(R.string.badge_4k), "", com.github.tvbox.osc.player.badge.MediaBadge.TYPE_VIDEO))
             } else if (width >= 2500 || height >= 1400) {
-                badges.add(context.getString(R.string.badge_2k) to "video")
+                badges.add(com.github.tvbox.osc.player.badge.MediaBadge(context.getString(R.string.badge_2k), "", com.github.tvbox.osc.player.badge.MediaBadge.TYPE_VIDEO))
             } else if (width >= 1900 || height >= 1000) {
-                badges.add(context.getString(R.string.badge_1080p) to "video")
+                badges.add(com.github.tvbox.osc.player.badge.MediaBadge(context.getString(R.string.badge_1080p), "", com.github.tvbox.osc.player.badge.MediaBadge.TYPE_VIDEO))
             }
             when (video.sampleMimeType) {
-                MimeTypes.VIDEO_H265 -> badges.add(context.getString(R.string.badge_hevc) to "video")
-                MimeTypes.VIDEO_H264 -> badges.add(context.getString(R.string.badge_avc) to "video")
-                MimeTypes.VIDEO_AV1 -> badges.add(context.getString(R.string.badge_av1) to "video")
-                MimeTypes.VIDEO_VP9 -> badges.add(context.getString(R.string.badge_vp9) to "video")
+                MimeTypes.VIDEO_H265 -> badges.add(com.github.tvbox.osc.player.badge.MediaBadge(context.getString(R.string.badge_hevc), "", com.github.tvbox.osc.player.badge.MediaBadge.TYPE_VIDEO))
+                MimeTypes.VIDEO_H264 -> badges.add(com.github.tvbox.osc.player.badge.MediaBadge(context.getString(R.string.badge_avc), "", com.github.tvbox.osc.player.badge.MediaBadge.TYPE_VIDEO))
+                MimeTypes.VIDEO_AV1 -> badges.add(com.github.tvbox.osc.player.badge.MediaBadge(context.getString(R.string.badge_av1), "", com.github.tvbox.osc.player.badge.MediaBadge.TYPE_VIDEO))
+                MimeTypes.VIDEO_VP9 -> badges.add(com.github.tvbox.osc.player.badge.MediaBadge(context.getString(R.string.badge_vp9), "", com.github.tvbox.osc.player.badge.MediaBadge.TYPE_VIDEO))
             }
             val hdrType = videoHdrType(video)
-            if (hdrType != null) badges.add(context.getString(hdrType) to "video")
+            if (hdrType != null) badges.add(com.github.tvbox.osc.player.badge.MediaBadge(context.getString(hdrType), "", com.github.tvbox.osc.player.badge.MediaBadge.TYPE_VIDEO))
         }
         val audio = exo?.selectedAudioFormat
         if (audio != null) {
             when (audio.sampleMimeType) {
-                "audio/ac3" -> badges.add(context.getString(R.string.badge_dolby_digital) to "audio")
-                "audio/eac3", "audio/eac3-joc" -> badges.add(context.getString(R.string.badge_dolby_digital_plus) to "audio")
-                "audio/true-hd" -> badges.add(context.getString(R.string.badge_dolby_truehd) to "audio")
-                "audio/dts" -> badges.add(context.getString(R.string.badge_dts) to "audio")
-                "audio/dts-hd", "audio/dts-x" -> badges.add(context.getString(R.string.badge_dts_hd) to "audio")
+                "audio/ac3" -> badges.add(com.github.tvbox.osc.player.badge.MediaBadge(context.getString(R.string.badge_dolby_digital), "", com.github.tvbox.osc.player.badge.MediaBadge.TYPE_AUDIO))
+                "audio/eac3", "audio/eac3-joc" -> badges.add(com.github.tvbox.osc.player.badge.MediaBadge(context.getString(R.string.badge_dolby_digital_plus), "", com.github.tvbox.osc.player.badge.MediaBadge.TYPE_AUDIO))
+                "audio/true-hd" -> badges.add(com.github.tvbox.osc.player.badge.MediaBadge(context.getString(R.string.badge_dolby_truehd), "", com.github.tvbox.osc.player.badge.MediaBadge.TYPE_AUDIO))
+                "audio/dts" -> badges.add(com.github.tvbox.osc.player.badge.MediaBadge(context.getString(R.string.badge_dts), "", com.github.tvbox.osc.player.badge.MediaBadge.TYPE_AUDIO))
+                "audio/dts-hd", "audio/dts-x" -> badges.add(com.github.tvbox.osc.player.badge.MediaBadge(context.getString(R.string.badge_dts_hd), "", com.github.tvbox.osc.player.badge.MediaBadge.TYPE_AUDIO))
             }
             val channels = audio.channelCount
-            if (channels >= 8) badges.add(context.getString(R.string.badge_7_1) to "audio")
-            else if (channels >= 6) badges.add(context.getString(R.string.badge_5_1) to "audio")
+            if (channels >= 8) badges.add(com.github.tvbox.osc.player.badge.MediaBadge(context.getString(R.string.badge_7_1), "", com.github.tvbox.osc.player.badge.MediaBadge.TYPE_AUDIO))
+            else if (channels >= 6) badges.add(com.github.tvbox.osc.player.badge.MediaBadge(context.getString(R.string.badge_5_1), "", com.github.tvbox.osc.player.badge.MediaBadge.TYPE_AUDIO))
         }
         return badges
     }
