@@ -297,7 +297,6 @@ fun PlaySettingsScreen(onNavigateBack: () -> Unit, vm: SettingsViewModel = viewM
                     SettingsOptionMenuRow(
                         title = stringResource(R.string.settings_media_badges_selected_link),
                         leadingIconRes = R.drawable.ic_play_cache,
-                        subtitle = stringResource(R.string.settings_media_badges_selected_link_subtitle),
                         valueText = badgeLinkLabel(state.mediaBadgesSelectedLink),
                         options = listOf(
                             stringResource(R.string.settings_media_badges_link_none),
@@ -314,7 +313,6 @@ fun PlaySettingsScreen(onNavigateBack: () -> Unit, vm: SettingsViewModel = viewM
                     SettingsCard(SettingsCardPosition.LAST) {
                         SettingsRow(
                             title = stringResource(R.string.settings_media_badges_custom_link),
-                            subtitle = stringResource(R.string.settings_media_badges_custom_link_subtitle),
                             valueText = state.mediaBadgesCustomLink.ifBlank {
                                 stringResource(R.string.settings_media_badges_custom_link_empty)
                             },

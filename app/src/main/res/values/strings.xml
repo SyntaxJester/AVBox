@@ -644,14 +644,11 @@
     <string name="settings_media_badges_mode_badge">徽章</string>
     <string name="settings_media_badges_mode_text">文字</string>
     <string name="settings_media_badges_mode_hide">隐藏</string>
-    <string name="settings_media_badges_link_mode">徽章包源</string>
-    <string name="settings_media_badges_link_mode_subtitle">选择媒体徽章 JSON 链接</string>
     <string name="settings_media_badges_link_none">内置徽章包</string>
     <string name="settings_media_badges_link_custom">自定义链接</string>
     <string name="settings_media_badges_link_1">徽章包 1 (xinyue4capyplayer)</string>
     <string name="settings_media_badges_link_2">徽章包 2 (streambridge)</string>
     <string name="settings_media_badges_link_3">徽章包 3 (xijing-club)</string>
-    <string name="settings_media_badges_custom_link_subtitle">填写徽章包 JSON 链接</string>
     <string name="settings_media_badges_custom_link_empty">未设置</string>
     <string name="osd_device">设备</string>
     <string name="osd_system">系统</string>
