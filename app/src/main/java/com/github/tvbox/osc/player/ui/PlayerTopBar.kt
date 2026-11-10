@@ -289,7 +289,8 @@ fun PlayerTopBar(state: PlayerUiState, actions: PlayerActions) {
                                 horizontalArrangement = Arrangement.spacedBy(playerDim(R.dimen.vs_4)),
                             ) {
                                 state.mediaBadges.take(4).forEach { badge ->
-                                    if (badge.imageURL.isNotBlank()) {
+                                    val isImage = badge.imageURL.isNotBlank() && badge.imageURL.lowercase().endsWith(".png") || badge.imageURL.lowercase().endsWith(".jpg") || badge.imageURL.lowercase().endsWith(".jpeg")
+                                    if (isImage) {
                                         AsyncImage(
                                             model = badge.imageURL,
                                             contentDescription = badge.name,

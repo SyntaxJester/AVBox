@@ -124,7 +124,8 @@ private fun OsdMediaBadges(badges: List<com.github.tvbox.osc.player.badge.MediaB
         )
         else -> Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
             badges.forEach { badge ->
-                if (badge.imageURL.isNotBlank()) {
+                val isImage = badge.imageURL.isNotBlank() && badge.imageURL.lowercase().endsWith(".png") || badge.imageURL.lowercase().endsWith(".jpg") || badge.imageURL.lowercase().endsWith(".jpeg")
+                if (isImage) {
                     AsyncImage(
                         model = badge.imageURL,
                         contentDescription = badge.name,
