@@ -215,7 +215,7 @@ class SettingsViewModel : ViewModel() {
         adAudioFingerprintEnabled = KV.get(HawkConfig.AD_AUDIO_FINGERPRINT_ENABLED, false),
         mediaBadgesShow = KV.get(HawkConfig.MEDIA_BADGES_SHOW, true),
         mediaBadgesDisplayMode = KV.get(HawkConfig.MEDIA_BADGES_DISPLAY_MODE, 0),
-        mediaBadgesSelectedLink = KV.get(HawkConfig.MEDIA_BADGES_SELECTED_LINK, HawkConfig.MEDIA_BADGE_LINK_NONE),
+        mediaBadgesSelectedLink = KV.get(HawkConfig.MEDIA_BADGES_SELECTED_LINK, HawkConfig.MEDIA_BADGE_LINK_1),
         mediaBadgesCustomLink = KV.get(HawkConfig.MEDIA_BADGES_CUSTOM_LINK, ""),
         exoCacheSizeMb = KV.get(HawkConfig.EXO_CACHE_SIZE_MB, HawkConfig.EXO_CACHE_SIZE_MB_DEFAULT),
         dohIndex = KV.get(HawkConfig.DOH_URL, 0),

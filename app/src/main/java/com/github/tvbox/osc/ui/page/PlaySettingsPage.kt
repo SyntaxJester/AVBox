@@ -299,15 +299,14 @@ fun PlaySettingsScreen(onNavigateBack: () -> Unit, vm: SettingsViewModel = viewM
                         leadingIconRes = R.drawable.ic_play_cache,
                         valueText = badgeLinkLabel(state.mediaBadgesSelectedLink),
                         options = listOf(
-                            stringResource(R.string.settings_media_badges_link_none),
                             stringResource(R.string.settings_media_badges_link_1),
                             stringResource(R.string.settings_media_badges_link_2),
                             stringResource(R.string.settings_media_badges_link_3),
                             stringResource(R.string.settings_media_badges_link_custom),
                         ),
-                        selectedIndex = state.mediaBadgesSelectedLink,
+                        selectedIndex = state.mediaBadgesSelectedLink - 1,
                         onSelect = { idx ->
-                            vm.put(HawkConfig.MEDIA_BADGES_SELECTED_LINK, idx)
+                            vm.put(HawkConfig.MEDIA_BADGES_SELECTED_LINK, idx + 1)
                             com.github.tvbox.osc.player.badge.MediaBadgeLoader.invalidate()
                         },
                     )
@@ -393,7 +392,7 @@ private fun badgeLinkLabel(link: Int): String {
         HawkConfig.MEDIA_BADGE_LINK_2 -> R.string.settings_media_badges_link_2
         HawkConfig.MEDIA_BADGE_LINK_3 -> R.string.settings_media_badges_link_3
         HawkConfig.MEDIA_BADGE_LINK_CUSTOM -> R.string.settings_media_badges_link_custom
-        else -> R.string.settings_media_badges_link_none
+        else -> R.string.settings_media_badges_link_1
     }
     return stringResource(res)
 }

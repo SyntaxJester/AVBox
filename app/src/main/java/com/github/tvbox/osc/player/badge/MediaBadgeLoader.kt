@@ -46,7 +46,7 @@ object MediaBadgeLoader {
      * Returns the key used for caching: either a URL or the built-in marker.
      */
     private fun selectedLinkKey(context: Context): String {
-        val link = KV.get<Int>(HawkConfig.MEDIA_BADGES_SELECTED_LINK, HawkConfig.MEDIA_BADGE_LINK_NONE)
+        val link = KV.get<Int>(HawkConfig.MEDIA_BADGES_SELECTED_LINK, HawkConfig.MEDIA_BADGE_LINK_1)
         val custom = KV.get<String>(HawkConfig.MEDIA_BADGES_CUSTOM_LINK, "")
         return when (link) {
             HawkConfig.MEDIA_BADGE_LINK_1 -> "https://media-badges.app.workbuddy.host/xinyue4capyplayer.json"

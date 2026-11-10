@@ -644,7 +644,6 @@
     <string name="settings_media_badges_mode_badge">徽章</string>
     <string name="settings_media_badges_mode_text">文字</string>
     <string name="settings_media_badges_mode_hide">隐藏</string>
-    <string name="settings_media_badges_link_none">内置徽章包</string>
     <string name="settings_media_badges_link_custom">自定义链接</string>
     <string name="settings_media_badges_link_1">徽章包 1 (xinyue4capyplayer)</string>
     <string name="settings_media_badges_link_2">徽章包 2 (streambridge)</string>
