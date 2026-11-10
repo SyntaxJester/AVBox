@@ -149,7 +149,7 @@ object HawkConfig {
     const val MEDIA_BADGES_CUSTOM_LINK = "media_badges_custom_link"
 
     // 媒体徽章链接选项索引
-    const val MEDIA_BADGE_LINK_CUSTOM = 3   // 自定义链接
+    const val MEDIA_BADGE_LINK_CUSTOM = 4   // 自定义链接
     const val MEDIA_BADGE_LINK_1 = 1        // xinyue4capyplayer
     const val MEDIA_BADGE_LINK_2 = 2        // streambridge
     const val MEDIA_BADGE_LINK_3 = 3        // xijing-club

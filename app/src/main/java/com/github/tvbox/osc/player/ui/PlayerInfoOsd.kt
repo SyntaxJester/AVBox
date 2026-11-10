@@ -133,7 +133,8 @@ private fun OsdMediaBadges(badges: List<com.github.tvbox.osc.player.badge.MediaB
                         modifier = Modifier
                             .background(Color.Black.copy(alpha = 0.35f), RoundedCornerShape(playerDim(R.dimen.vs_4)))
                             .padding(horizontal = playerDim(R.dimen.vs_4), vertical = playerDim(R.dimen.vs_2))
-                            .height(sizeToDp(size)),
+                            .height(sizeToDp(size) * 1.2f)
+                            .width(sizeToDp(size) * 1.2f),
                     )
                 } else {
                     Box(

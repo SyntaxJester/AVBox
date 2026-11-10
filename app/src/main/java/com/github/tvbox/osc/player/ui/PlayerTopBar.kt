@@ -288,7 +288,7 @@ fun PlayerTopBar(state: PlayerUiState, actions: PlayerActions) {
                                 modifier = Modifier.padding(top = playerDim(R.dimen.vs_4)),
                                 horizontalArrangement = Arrangement.spacedBy(playerDim(R.dimen.vs_4)),
                             ) {
-                                state.mediaBadges.take(4).forEach { badge ->
+                                state.mediaBadges.take(8).forEach { badge ->
                                     val imageUrl = badge.imageURL
                                     if (imageUrl.isNotBlank()) {
                                         AsyncImage(
@@ -296,7 +296,8 @@ fun PlayerTopBar(state: PlayerUiState, actions: PlayerActions) {
                                             contentDescription = badge.name,
                                             contentScale = ContentScale.Fit,
                                             modifier = Modifier
-                                                .height(20.dp)
+                                                .height(24.dp)
+                                                .width(24.dp)
                                                 .background(
                                                     Color.Black.copy(alpha = 0.35f),
                                                     RoundedCornerShape(4.dp),
