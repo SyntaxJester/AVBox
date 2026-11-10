@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -39,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.github.tvbox.osc.R
 import com.github.tvbox.osc.player.state.PlayerActions
 import com.github.tvbox.osc.player.state.PlayerUiState
@@ -277,6 +279,29 @@ fun PlayerTopBar(state: PlayerUiState, actions: PlayerActions) {
                                 fontWeight = FontWeight.Medium,
                                 maxLines = 1,
                             )
+                        }
+                        // 媒体徽章显示在顶部栏右侧
+                        if (state.mediaBadges.isNotEmpty()) {
+                            Row(
+                                modifier = Modifier.padding(top = playerDim(R.dimen.vs_4)),
+                                horizontalArrangement = Arrangement.spacedBy(playerDim(R.dimen.vs_4)),
+                            ) {
+                                state.mediaBadges.take(4).forEach { badge ->
+                                    Text(
+                                        text = badge.first,
+                                        color = Color.White,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        maxLines = 1,
+                                        modifier = Modifier
+                                            .background(
+                                                Color.Black.copy(alpha = 0.35f),
+                                                RoundedCornerShape(4.dp),
+                                            )
+                                            .padding(horizontal = playerDim(R.dimen.vs_8), vertical = playerDim(R.dimen.vs_2)),
+                                    )
+                                }
+                            }
                         }
                         if (showActionsInTopBar) {
                             PlayerActionIcons(actions = actions)

@@ -396,6 +396,8 @@ internal class PlayerActionsDelegate(private val host: VideoPlayerController) : 
         val size = runCatching { view.videoSize }.getOrDefault(intArrayOf(0, 0))
         host.state.videoSize = host.videoSizeGate.textFor(size[0], size[1])
         host.state.videoQuality = host.videoSizeGate.qualityFor(size[0], size[1])
+        // 刷新媒体徽章（独立于信息 OSD，即使 OSD 未打开也更新）
+        InfoOsdText.refreshMediaBadges(host.context, host.state, host.videoView)
         if (host.state.infoOsdVisible) InfoOsdText.refreshInfoOsd(host.context, host.state, host.videoView, host.playerActivity(), speed)
     }
 

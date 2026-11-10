@@ -37,6 +37,19 @@ private const val ENV_CACHE_MS = 5000L
 
 internal object InfoOsdText {
 
+    /**
+     * 独立刷新媒体徽章（不刷新整个信息 OSD），用于播放参数变化时更新徽章。
+     */
+    fun refreshMediaBadges(
+        context: Context,
+        state: PlayerUiState,
+        videoView: AppPlayerView?,
+    ) {
+        val exo = videoView?.mediaPlayer as? ExoPlayer
+        val video = exo?.selectedVideoFormat
+        state.mediaBadges = mediaBadgeLines(context, video, exo, state.title)
+    }
+
     fun refreshInfoOsd(
         context: Context,
         state: PlayerUiState,
