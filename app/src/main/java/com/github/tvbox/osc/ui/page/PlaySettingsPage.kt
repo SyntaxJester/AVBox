@@ -306,7 +306,10 @@ fun PlaySettingsScreen(onNavigateBack: () -> Unit, vm: SettingsViewModel = viewM
                             stringResource(R.string.settings_media_badges_link_custom),
                         ),
                         selectedIndex = state.mediaBadgesSelectedLink,
-                        onSelect = { idx -> vm.put(HawkConfig.MEDIA_BADGES_SELECTED_LINK, idx) },
+                        onSelect = { idx ->
+                            vm.put(HawkConfig.MEDIA_BADGES_SELECTED_LINK, idx)
+                            com.github.tvbox.osc.player.badge.MediaBadgeLoader.invalidate()
+                        },
                     )
                 }
                 if (state.mediaBadgesSelectedLink == HawkConfig.MEDIA_BADGE_LINK_CUSTOM) {
