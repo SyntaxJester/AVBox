@@ -1020,7 +1020,7 @@ class DetailViewModel : ViewModel() {
         if (target.isEmpty()) return 0
         if (target.size == 1) return 0
         if (current == null || current.name.isNullOrEmpty()) {
-            return fallback.coerceIn(0, target.size - 1)
+            return 0
         }
         val currentEpisode = extractEpisodeNumber(current.name)
         var matched = -1
@@ -1032,7 +1032,7 @@ class DetailViewModel : ViewModel() {
                 matched = i
             }
         }
-        return if (matched >= 0) matched else fallback.coerceIn(0, target.size - 1)
+        return if (matched >= 0) matched else 0
     }
 
     private fun findMatchingEpisodeIndex(current: VodInfo.VodSeries?, target: List<VodInfo.VodSeries>?): Int {

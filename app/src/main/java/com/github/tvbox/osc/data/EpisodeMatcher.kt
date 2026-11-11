@@ -58,7 +58,7 @@ object EpisodeMatcher {
             return 0
         }
         if (currentSeries == null || currentSeries.name.isNullOrEmpty()) {
-            return Math.max(0, Math.min(fallbackIndex, targetList.size - 1))
+            return 0
         }
         val currentEpisode = extractEpisodeNumber(currentSeries.name)
         var matchedIndex = -1
@@ -73,7 +73,7 @@ object EpisodeMatcher {
         if (matchedIndex >= 0) {
             return matchedIndex
         }
-        return Math.max(0, Math.min(fallbackIndex, targetList.size - 1))
+        return 0
     }
 
     @JvmStatic
