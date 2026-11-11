@@ -298,12 +298,7 @@ fun PlayerTopBar(state: PlayerUiState, actions: PlayerActions) {
                                             contentScale = ContentScale.Fit,
                                             modifier = Modifier
                                                 .height(24.dp)
-                                                .width(24.dp)
-                                                .background(
-                                                    Color.Black.copy(alpha = 0.35f),
-                                                    RoundedCornerShape(4.dp),
-                                                )
-                                                .padding(horizontal = 2.dp, vertical = 1.dp),
+                                                .width(24.dp),
                                         )
                                     } else {
                                         Text(
@@ -312,12 +307,6 @@ fun PlayerTopBar(state: PlayerUiState, actions: PlayerActions) {
                                             fontSize = 14.sp,
                                             fontWeight = FontWeight.Medium,
                                             maxLines = 1,
-                                            modifier = Modifier
-                                                .background(
-                                                    Color.Black.copy(alpha = 0.35f),
-                                                    RoundedCornerShape(4.dp),
-                                                )
-                                                .padding(horizontal = playerDim(R.dimen.vs_8), vertical = playerDim(R.dimen.vs_2)),
                                         )
                                     }
                                 }

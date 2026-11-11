@@ -32,6 +32,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.github.tvbox.osc.R
 import com.github.tvbox.osc.player.state.PlayerActions
@@ -107,6 +108,16 @@ fun BoxScope.PlayerInfoOsd(state: PlayerUiState, actions: PlayerActions, maxWidt
         if (state.mediaBadges.isNotEmpty()) {
             OsdMediaBadges(state.mediaBadges, lineSize, gap)
         }
+        if (state.title.isNotBlank()) {
+            Text(
+                text = state.title,
+                modifier = Modifier.align(Alignment.Start),
+                color = Color.White.copy(alpha = 0.9f),
+                fontSize = 14.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 
@@ -131,30 +142,16 @@ private fun OsdMediaBadges(badges: List<com.github.tvbox.osc.player.badge.MediaB
                         contentDescription = badge.name,
                         contentScale = ContentScale.Fit,
                         modifier = Modifier
-                            .background(Color.Black.copy(alpha = 0.35f), RoundedCornerShape(playerDim(R.dimen.vs_4)))
-                            .padding(horizontal = playerDim(R.dimen.vs_4), vertical = playerDim(R.dimen.vs_2))
                             .height(sizeToDp(size) * 1.2f)
                             .width(sizeToDp(size) * 1.2f),
                     )
                 } else {
-                    Box(
-                        modifier = Modifier
-                            .background(
-                                Color(OSD_BADGE_BG),
-                                RoundedCornerShape(playerDim(R.dimen.vs_4)),
-                            )
-                            .padding(
-                                horizontal = playerDim(R.dimen.vs_8),
-                                vertical = playerDim(R.dimen.vs_3),
-                            ),
-                    ) {
-                        Text(
-                            text = badge.name,
-                            style = badgeStyle,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
+                    Text(
+                        text = badge.name,
+                        style = badgeStyle,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
         }
