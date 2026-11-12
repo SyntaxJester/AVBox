@@ -25,26 +25,8 @@ data class BadgeRule(
     val tagColor: String = "",
     val borderColor: String = "",
     val style: String = "",
-    private val pattern: Pattern? = null,
+    internal val pattern: Pattern? = null,
 ) {
-    init {
-        val g = group
-        this.group = if (g == null) "" else g
-        val c = category
-        this.category = if (c == null) "" else c
-        val n = name
-        this.name = if (n == null) "" else n
-        val i = imageURL
-        this.imageURL = if (i == null) "" else i
-        val tc = textColor
-        this.textColor = if (tc == null) "" else tc
-        val tgc = tagColor
-        this.tagColor = if (tgc == null) "" else tgc
-        val bc = borderColor
-        this.borderColor = if (bc == null) "" else bc
-        val s = style
-        this.style = if (s == null) "" else s
-    }
 
     /** 等价于原实现里的 Regex.containsMatchIn(...)，即 Java 的 find()。 */
     fun matches(input: CharSequence): Boolean {

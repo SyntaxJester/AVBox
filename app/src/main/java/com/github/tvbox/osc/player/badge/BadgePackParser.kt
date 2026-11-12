@@ -1,5 +1,6 @@
 package com.github.tvbox.osc.player.badge
 
+import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
 
 /**
@@ -50,9 +51,6 @@ object BadgePackParser {
         var skipped = 0
 
         try {
-            // 简单手动解析：使用 org.json 或 kotlin 的 JSON
-            // 这里为了避免引入额外依赖，使用手动解析或内置的 kotlin 内部 JSON
-            // 实际上使用 com.github.tvbox.osc 的 JSON 工具
             val obj = org.json.JSONObject(json)
             val packId = obj.optString("id", "")
             val packName = obj.optString("name", "")

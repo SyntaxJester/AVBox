@@ -1,6 +1,5 @@
 package com.github.tvbox.osc.player.badge
 
-import java.util.regex.Matcher
 import java.util.regex.Pattern
 
 /**
@@ -39,8 +38,6 @@ class BadgeMatcher(private val rules: List<BadgeRule>) {
             }
         }
 
-        // 如果某组内没有单独规则匹配，尝试按 category 再匹配一次（技术类规则）
-        // 这里保持简单，只按规则顺序返回
         return matched.toList()
     }
 
