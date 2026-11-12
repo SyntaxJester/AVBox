@@ -19,19 +19,21 @@ object BadgeColor {
 
     fun parse(value: String?): Int? {
         if (value == null) return null
-        var s = value
+        val s = value.trim()
         if (!s.startsWith("#")) return null
         val len = s.length
         if (len != 7 && len != 9) return null
         return try {
-            if (len == 9) {
+            val hex = if (len == 9) {
+                // #RRGGBBAA -> #AARRGGBB
                 val alpha = s.substring(7, 9)
                 val rgb = s.substring(1, 7)
-                s = "#" + alpha + rgb   // #RRGGBBAA -> #AARRGGBB
+                alpha + rgb
+            } else {
+                s.substring(1)
             }
-            val v = Long.parseLong(s.substring(1), 16)
-            if (len == 9) v.toInt() else (0xFF000000L | v).toInt()
-        } catch (_: Exception) {
+            hex.toInt(16)
+        } catch (_: NumberFormatException) {
             null
         }
     }
