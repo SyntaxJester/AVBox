@@ -1,114 +1,137 @@
 package com.github.tvbox.osc.player.badge
 
 import android.content.Context
+import android.util.Patterns
 import com.github.tvbox.osc.R
 import com.github.tvbox.osc.util.HawkConfig
 import com.github.tvbox.osc.util.KV
 import com.github.tvbox.osc.util.LOG
-import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.util.concurrent.atomic.AtomicReference
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
- * Loads the media badge pack JSON (built-in or custom link) and matches
- * title text against filter patterns to produce badge display names.
+ * 媒体徽章加载器（基于 media-badge-kit 架构移植）。
  *
- * The JSON schema (as shipped in res/raw/media_badges.json):
+ * 负责：
+ *   1. 从内置 res/raw/media_badges.json 或用户选定的远程链接加载徽章包
+ *   2. 解析 groups + filters，按 group 顺序排序
+ *   3. 对媒体标题执行正则匹配，返回匹配的徽章列表
+ *
+ * 与旧 MediaBadgeLoader 保持 API 兼容：badgeItems(context, title) / badgeNames(context, title)
+ *
+ * 包 JSON 格式：
  * {
- *   "groups": [{"id":"...","name":"..."}],
- *   "filters": [{"id":"...","groupId":"...","name":"...","pattern":"...","imageURL":"..."}]
+ *   "groups": [{"id":"resolution","name":"分辨率"}, ...],
+ *   "filters": [
+ *     {"id":"4k","name":"4K","groupId":"resolution","pattern":"2160[Pp]|\\b4K\\b","imageURL":"https://..."}
+ *   ]
  * }
  */
 object MediaBadgeLoader {
 
-    private val cache = AtomicReference<BadgePack?>(null)
-    private val cacheKey = AtomicReference<String?>(null)
+    // ===== 缓存：一次加载，重复使用 =====
+    private val rulesCache = AtomicReference<Pair<String, List<BadgeRule>>?>(null)
+    // Pair<cacheKey, rules>
 
-    data class BadgePack(
-        val filters: List<BadgeFilter>,
-    )
-
-    data class BadgeFilter(
-        val id: String,
-        val name: String,
-        val pattern: String,
-        val imageURL: String,
-        val regex: Regex,
-    )
-
-    /** Clears the cached pack so a new link takes effect on next call. */
+    /** 清除缓存，下次加载时重新下载。 */
     fun invalidate() {
-        cache.set(null)
-        cacheKey.set(null)
+        rulesCache.set(null)
     }
 
     /**
-     * Returns the key used for caching: either a URL or the built-in marker.
+     * 根据设置确定徽章包来源 URL。
      */
     private fun selectedLinkKey(context: Context): String {
         val link = KV.get<Int>(HawkConfig.MEDIA_BADGES_SELECTED_LINK, HawkConfig.MEDIA_BADGE_LINK_1)
         val custom = KV.get<String>(HawkConfig.MEDIA_BADGES_CUSTOM_LINK, "")
         return when (link) {
-            HawkConfig.MEDIA_BADGE_LINK_1 -> "https://media-badges.app.workbuddy.host/xinyue4capyplayer.json"
-            HawkConfig.MEDIA_BADGE_LINK_2 -> "https://streambridge-studio-markers.vercel.app/badges-noframe.json"
-            HawkConfig.MEDIA_BADGE_LINK_3 -> "https://raw.githubusercontent.com/zxxlxj/rex-m/main/xijing-club/pppboom.json"
-            HawkConfig.MEDIA_BADGE_LINK_CUSTOM -> if (custom.isNotBlank()) custom else ""
-            else -> "" // built-in
+            HawkConfig.MEDIA_BADGE_LINK_1 ->
+                "https://media-badges.app.workbuddy.host/xinyue4capyplayer.json"
+            HawkConfig.MEDIA_BADGE_LINK_2 ->
+                "https://streambridge-studio-markers.vercel.app/badges-noframe.json"
+            HawkConfig.MEDIA_BADGE_LINK_3 ->
+                "https://raw.githubusercontent.com/zxxlxj/rex-m/main/xijing-club/pppboom.json"
+            HawkConfig.MEDIA_BADGE_LINK_CUSTOM ->
+                if (custom.isNotBlank()) custom else ""
+            else -> ""
         }
     }
 
     /**
-     * Synchronously returns badge names matched for [title].
-     * Loads the JSON (built-in or selected link) on first use and caches it.
+     * 同步返回与 [title] 匹配的徽章名称列表（保持向后兼容）。
      */
     fun badgeNames(context: Context, title: String): List<String> {
         return badgeItems(context, title).map { it.name }
     }
 
     /**
-     * Synchronously returns badges (name + imageURL) matched for [title].
-     * Loads the JSON (built-in or selected link) on first use and caches it.
+     * 同步返回与 [title] 匹配的 [MediaBadge] 列表（name + imageURL）。
+     * 首次调用或链接变更时会下载并缓存徽章包。
      */
     fun badgeItems(context: Context, title: String): List<MediaBadge> {
+        if (title.isBlank()) return emptyList()
+
         val key = selectedLinkKey(context)
-        val cached = cache.get()
-        if (cached != null && cacheKey.get() == key) {
-            return match(cached, title)
-        }
-        // First call (or link changed): load synchronously so badges show now.
-        return try {
-            val pack = load(context.applicationContext, key)
-            cache.set(pack)
-            cacheKey.set(key)
-            match(pack, title)
-        } catch (e: Throwable) {
-            LOG.e("media-badge load-failed: " + e.message)
-            // Fall back to built-in pack if a selected link failed.
-            if (key.isNotBlank()) {
-                try {
-                    val fallback = load(context.applicationContext, "")
-                    cache.set(fallback)
-                    cacheKey.set(key)
-                    match(fallback, title)
-                } catch (_: Throwable) {
+        val cached = rulesCache.get()
+        val rules: List<BadgeRule> = if (cached != null && cached.first == key) {
+            cached.second
+        } else {
+            try {
+                val packText = if (key.isBlank()) {
+                    readRaw(context.applicationContext, R.raw.media_badges)
+                } else {
+                    fetch(key)
+                }
+                val result = BadgePackParser.parse(packText)
+                val parsedRules = result.rules
+                rulesCache.set(Pair(key, parsedRules))
+                parsedRules
+            } catch (e: Throwable) {
+                LOG.e("media-badge load-failed: " + e.message)
+                // 选定链接失败时，尝试内置包回退
+                if (key.isNotBlank()) {
+                    try {
+                        val packText = readRaw(context.applicationContext, R.raw.media_badges)
+                        val result = BadgePackParser.parse(packText)
+                        rulesCache.set(Pair(key, result.rules))
+                        result.rules
+                    } catch (_: Throwable) {
+                        emptyList()
+                    }
+                } else {
                     emptyList()
                 }
-            } else {
-                emptyList()
             }
         }
+
+        return match(rules, title)
     }
 
-    private fun load(context: Context, key: String): BadgePack {
-        val text = if (key.isBlank()) {
-            readRaw(context, R.raw.media_badges)
-        } else {
-            fetch(key)
+    /** 对规则列表执行正则匹配，返回 MediaBadge 列表。 */
+    private fun match(rules: List<BadgeRule>, title: String): List<MediaBadge> {
+        if (rules.isEmpty()) return emptyList()
+        val seen = java.util.HashSet<String>()
+        val out = java.util.ArrayList<MediaBadge>()
+        for (rule in rules) {
+            if (rule.pattern.containsMatchIn(title) && seen.add(rule.name)) {
+                out.add(
+                    MediaBadge(
+                        name = rule.name,
+                        imageURL = rule.imageURL,
+                        type = MediaBadge.TYPE_PACK,
+                    )
+                )
+            }
         }
-        return parse(text)
+        return out
     }
 
+    /** 从 assets/raw 读取内置徽章包文本。 */
     private fun readRaw(context: Context, resId: Int): String {
         context.resources.openRawResource(resId).use { input ->
             BufferedReader(InputStreamReader(input)).use { reader ->
@@ -117,49 +140,15 @@ object MediaBadgeLoader {
         }
     }
 
+    /** 通过 OkHttp 下载远程徽章包文本。 */
     private fun fetch(url: String): String {
-        val client = okhttp3.OkHttpClient.Builder()
+        val client = OkHttpClient.Builder()
             .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
             .readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
             .build()
-        client.newCall(
-            okhttp3.Request.Builder().url(url).build()
-        ).execute().use { resp ->
+        client.newCall(Request.Builder().url(url).build()).execute().use { resp ->
             if (!resp.isSuccessful) throw IllegalStateException("HTTP ${resp.code}")
             return resp.body?.string() ?: throw IllegalStateException("empty body")
         }
-    }
-
-    private fun parse(text: String): BadgePack {
-        val root = JSONObject(text)
-        val arr = root.optJSONArray("filters") ?: return BadgePack(emptyList())
-        val out = ArrayList<BadgeFilter>(arr.length())
-        for (i in 0 until arr.length()) {
-            val o = arr.optJSONObject(i) ?: continue
-            val id = o.optString("id")
-            val name = o.optString("name")
-            val pattern = o.optString("pattern")
-            val imageURL = o.optString("imageURL")
-            if (id.isEmpty() || name.isEmpty() || pattern.isEmpty()) continue
-            try {
-                val regex = Regex(pattern, RegexOption.IGNORE_CASE)
-                out.add(BadgeFilter(id, name, pattern, imageURL, regex))
-            } catch (_: Throwable) {
-                // Skip invalid patterns.
-            }
-        }
-        return BadgePack(out)
-    }
-
-    private fun match(pack: BadgePack, title: String): List<MediaBadge> {
-        if (title.isBlank() || pack.filters.isEmpty()) return emptyList()
-        val seen = HashSet<String>()
-        val out = ArrayList<MediaBadge>()
-        for (f in pack.filters) {
-            if (f.regex.containsMatchIn(title) && seen.add(f.name)) {
-                out.add(MediaBadge(f.name, f.imageURL, MediaBadge.TYPE_PACK))
-            }
-        }
-        return out
     }
 }
