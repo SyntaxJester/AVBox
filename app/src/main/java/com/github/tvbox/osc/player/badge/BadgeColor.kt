@@ -9,13 +9,13 @@ package com.github.tvbox.osc.player.badge
 object BadgeColor {
 
     /** 默认文字色（深色界面上用白色） */
-    val DEFAULT_TEXT_LIGHT_BG = 0xFF111111
+    val DEFAULT_TEXT_LIGHT_BG: Int = java.lang.Integer.parseInt("FF111111", 16)
     /** 默认文字色（亮色界面上用黑色） */
-    val DEFAULT_TEXT_DARK_BG = 0xFFFFFFFF
+    val DEFAULT_TEXT_DARK_BG: Int = java.lang.Integer.parseInt("FFFFFFFF", 16)
     /** 默认背景色 */
-    val DEFAULT_BG = 0xFF333333
+    val DEFAULT_BG: Int = java.lang.Integer.parseInt("FF333333", 16)
     /** 默认边框色 */
-    val DEFAULT_BORDER = 0xFF888888
+    val DEFAULT_BORDER: Int = java.lang.Integer.parseInt("FF888888", 16)
 
     fun parse(value: String?): Int? {
         if (value == null) return null
@@ -27,7 +27,7 @@ object BadgeColor {
             val str: String = if (len == 9) {
                 val alpha = s.substring(7, 9)
                 val rgb = s.substring(1, 7)
-                "#" + alpha + rgb   // #RRGGBBAA -> #AARRGGBB
+                "#" + alpha + rgb
             } else {
                 s
             }
@@ -36,7 +36,8 @@ object BadgeColor {
             val result: Int = if (len == 9) {
                 v.toInt()
             } else {
-                (0xFF000000L or v).toInt()
+                val combined: Long = 0xFF000000L or v
+                combined.toInt()
             }
             result
         } catch (e: Exception) {
@@ -45,18 +46,18 @@ object BadgeColor {
     }
 
     fun text(value: String?, lightTheme: Boolean): Int {
-        val c = parse(value)
+        val c: Int? = parse(value)
         if (c != null) return c
         return if (lightTheme) DEFAULT_TEXT_LIGHT_BG else DEFAULT_TEXT_DARK_BG
     }
 
     fun background(value: String?): Int {
-        val c = parse(value)
-        return c ?: DEFAULT_BG
+        val c: Int? = parse(value)
+        return if (c != null) c else DEFAULT_BG
     }
 
     fun border(value: String?): Int {
-        val c = parse(value)
-        return c ?: DEFAULT_BORDER
+        val c: Int? = parse(value)
+        return if (c != null) c else DEFAULT_BORDER
     }
 }
