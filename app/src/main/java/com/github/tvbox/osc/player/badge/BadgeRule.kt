@@ -27,29 +27,6 @@ class BadgeRule(
     val style: String,
     private val pattern: Pattern?,
 ) {
-    constructor(
-        group: String,
-        category: String,
-        name: String,
-        image: String,
-        textColor: String,
-        tagColor: String,
-        borderColor: String,
-        style: String,
-        pattern: Pattern?,
-        @Suppress("UNUSED_PARAMETER") dummy: Unit = Unit,
-    ) : this(
-        group = group ?: "",
-        category = category ?: "",
-        name = name ?: "",
-        image = image ?: "",
-        textColor = textColor ?: "",
-        tagColor = tagColor ?: "",
-        borderColor = borderColor ?: "",
-        style = style ?: "",
-        pattern = pattern,
-    )
-
     /** 等价于原实现里的 Regex.containsMatchIn(...)，即 Java 的 find()。 */
     fun matches(input: CharSequence): Boolean {
         if (pattern == null) return false
