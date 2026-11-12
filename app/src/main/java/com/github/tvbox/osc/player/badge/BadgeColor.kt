@@ -31,12 +31,14 @@ object BadgeColor {
             } else {
                 s
             }
-            val v = str.substring(1).toLong(16)
-            if (len == 9) {
+            val hex = str.substring(1)
+            val v: Long = java.lang.Long.parseLong(hex, 16)
+            val result: Int = if (len == 9) {
                 v.toInt()
             } else {
                 (0xFF000000L or v).toInt()
             }
+            result
         } catch (e: Exception) {
             null
         }
