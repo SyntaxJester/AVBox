@@ -82,4 +82,12 @@ object MediaBadgeLoader {
         storeInitialized = false
         badgeCache.evictAll()
     }
+
+    /**
+     * 使缓存失效，下次获取徽章时重新加载。
+     */
+    fun invalidate() {
+        badgeCache.evictAll()
+        store?.reload()
+    }
 }

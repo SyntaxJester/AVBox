@@ -21,7 +21,7 @@ class BadgeMatcher(private val rules: List<BadgeRule>) {
      * @return 匹配到的徽章列表（同一组最多一个）
      */
     fun match(input: String?): List<BadgeRule> {
-        if (input.isNullOrEmpty() || rules.isEmpty()) return emptyList()
+        if (input == null || input.isEmpty() || rules.isEmpty()) return emptyList()
 
         val matched = mutableListOf<BadgeRule>()
         val matchedGroups = mutableSetOf<String>()

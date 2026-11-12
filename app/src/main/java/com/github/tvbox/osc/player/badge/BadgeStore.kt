@@ -139,4 +139,11 @@ class BadgeStore(
         job?.cancel()
         job = null
     }
+
+    /**
+     * 重新加载当前选中的徽章包（配置变更时调用）。
+     */
+    fun reload() {
+        loadSelectedPack()
+    }
 }
