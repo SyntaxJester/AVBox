@@ -9,27 +9,19 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import java.io.File
 import java.net.URL
 
 /**
  * 徽章包存储：负责下载、缓存、加载徽章包 JSON，并匹配媒体徽章。
  *
- * 对应原实现里的 BadgeStore，字段和方法完全一致：
- *   context          上下文
- *   mHandler         主线程 Handler
- *   mPackParser      JSON 解析器
- *   mBadgeMatcher    匹配器
- *   mPackName        当前选中的徽章包名称（供 UI 显示）
- *   mPackVersion     当前选中的徽章包版本
- *   mRuleGroupId     当前选中的分组 id
- *   mBadgePacks      已缓存的徽章包列表
- *   mBadgePackCursor 当前选中的徽章包索引
+ * 对应原实现里的 BadgeStore，简化版只保留核心功能：
+ *   - 从网络或本地加载徽章包
+ *   - 解析 JSON 并缓存规则
+ *   - 提供匹配接口
  */
 class BadgeStore(
     private val context: Context,
     private val handler: Handler = Handler(Looper.getMainLooper()),
-    private val packParser: BadgePackParser = BadgePackParser,
 ) {
     private val scope = CoroutineScope(Dispatchers.Default)
     private var job: Job? = null
@@ -38,10 +30,7 @@ class BadgeStore(
     private var packVersion: String = ""
     private var ruleGroupId: String = ""
 
-    private val badgePacks = mutableListOf<BadgePack>()
-    private var badgePackCursor = 0
-
-    private var matcher: BadgeMatcher? = null
+    private var rules: List<BadgeRule> = emptyList()
 
     // 当前选中的徽章包（用于 UI 显示）
     val packNameValue: String
@@ -50,13 +39,14 @@ class BadgeStore(
         get() = packVersion
     val ruleGroupIdValue: String
         get() = ruleGroupId
-    val badgePacksValue: List<BadgePack>
-        get() = badgePacks.toList()
-    val badgePackCursorValue: Int
-        get() = badgePackCursor
 
-    val matcherValue: BadgeMatcher?
-        get() = matcher
+    val rulesValue: List<BadgeRule>
+        get() = rules
+
+    /**
+     * 获取当前加载的规则列表。
+     */
+    fun getRules(): List<BadgeRule> = rules
 
     /**
      * 加载当前选中的徽章包（从本地或网络）。
@@ -107,29 +97,14 @@ class BadgeStore(
     }
 
     private fun parseAndSet(text: String, source: String, version: String) {
-        val result = packParser.parse(text)
-        val pack = BadgePack(
-            id = source,
-            name = source,
-            source = source,
-        )
+        val result = BadgePackParser.parse(text)
 
         handler.post {
-            badgePacks.clear()
-            badgePacks.add(pack)
-            badgePackCursor = 0
-            packName = pack.name
+            packName = source
             packVersion = version
             ruleGroupId = if (result.rules.isNotEmpty()) result.rules.first().group else ""
-            matcher = BadgeMatcher.create(result.rules)
+            rules = result.rules
         }
-    }
-
-    /**
-     * 匹配给定文本中的徽章。
-     */
-    fun matchBadges(input: String?): List<BadgeRule> {
-        return matcher?.match(input) ?: emptyList()
     }
 
     /**

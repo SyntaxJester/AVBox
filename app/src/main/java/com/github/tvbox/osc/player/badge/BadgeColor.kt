@@ -19,37 +19,42 @@ object BadgeColor {
 
     fun parse(value: String?): Int? {
         if (value == null) return null
-        val s = value.trim()
+        val s = value
         if (!s.startsWith("#")) return null
         val len = s.length
         if (len != 7 && len != 9) return null
         return try {
-            val hex = if (len == 9) {
-                // #RRGGBBAA -> #AARRGGBB
+            val str: String = if (len == 9) {
                 val alpha = s.substring(7, 9)
                 val rgb = s.substring(1, 7)
-                alpha + rgb
+                "#" + alpha + rgb   // #RRGGBBAA -> #AARRGGBB
             } else {
-                s.substring(1)
+                s
             }
-            java.lang.Integer.parseInt(hex, 16)
-        } catch (_: NumberFormatException) {
+            val v = str.substring(1).toLong(16)
+            if (len == 9) {
+                v.toInt()
+            } else {
+                (0xFF000000L or v).toInt()
+            }
+        } catch (e: Exception) {
             null
         }
     }
 
     fun text(value: String?, lightTheme: Boolean): Int {
         val c = parse(value)
-        return if (c != null) c else if (lightTheme) DEFAULT_TEXT_LIGHT_BG else DEFAULT_TEXT_DARK_BG
+        if (c != null) return c
+        return if (lightTheme) DEFAULT_TEXT_LIGHT_BG else DEFAULT_TEXT_DARK_BG
     }
 
     fun background(value: String?): Int {
         val c = parse(value)
-        return if (c != null) c else DEFAULT_BG
+        return c ?: DEFAULT_BG
     }
 
     fun border(value: String?): Int {
         val c = parse(value)
-        return if (c != null) c else DEFAULT_BORDER
+        return c ?: DEFAULT_BORDER
     }
 }

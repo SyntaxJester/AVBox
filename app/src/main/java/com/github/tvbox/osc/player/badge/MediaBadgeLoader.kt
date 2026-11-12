@@ -1,18 +1,7 @@
 package com.github.tvbox.osc.player.badge
 
 import android.content.Context
-import android.graphics.Color
-import android.os.Handler
-import android.os.Looper
 import androidx.collection.LruCache
-import com.github.tvbox.osc.util.HawkConfig
-import com.github.tvbox.osc.util.KV
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
-import java.io.File
-import java.net.URL
 
 /**
  * 媒体徽章加载器：负责下载、缓存徽章包 JSON，并根据媒体信息匹配徽章。
@@ -47,11 +36,12 @@ object MediaBadgeLoader {
         if (cached != null) return cached
 
         val s = ensureStore(context)
-        val badges = s.matchBadges(title)
+        val rules = s.getRules()
+        val badges = BadgeMatcher.matches(title, "", rules)
         val result = badges.map { rule ->
             MediaBadge(
                 name = rule.name,
-                imageURL = rule.imageURL,
+                imageURL = rule.image,
                 type = MediaBadge.TYPE_PACK,
             )
         }
@@ -67,7 +57,7 @@ object MediaBadgeLoader {
         return rules.map { rule ->
             MediaBadge(
                 name = rule.name,
-                imageURL = rule.imageURL,
+                imageURL = rule.image,
                 type = MediaBadge.TYPE_PACK,
             )
         }
