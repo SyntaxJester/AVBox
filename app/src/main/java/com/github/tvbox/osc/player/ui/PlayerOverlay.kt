@@ -281,29 +281,51 @@ private fun PlayerOverlayMediaBadges(
     badges: List<com.github.tvbox.osc.player.badge.MediaBadge>,
     modifier: Modifier = Modifier,
 ) {
-    val badgeSize = 48.dp  // 增大徽章尺寸
+    // 读取媒体徽章显示模式：0=徽章(图标), 1=文字, 2=隐藏
+    val displayMode = KV.get(HawkConfig.MEDIA_BADGES_DISPLAY_MODE, 0)
+    // 读取媒体徽章是否显示
+    val showBadges = KV.get(HawkConfig.MEDIA_BADGES_SHOW, true)
+    
+    if (!showBadges || displayMode == 2 || badges.isEmpty()) {
+        return
+    }
+    
+    val badgeSize = 48.dp
+    val filteredBadges = if (displayMode == 1) {
+        // 文字模式：只显示有名字的徽章
+        badges.filter { it.name.isNotBlank() }
+    } else {
+        // 徽章模式：只显示有图片的徽章
+        badges.filter { it.imageURL.isNotBlank() }
+    }
+    
+    if (filteredBadges.isEmpty()) {
+        return
+    }
+    
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        badges.take(8).forEach { badge ->
-            val imageUrl = badge.imageURL
-            if (imageUrl.isNotBlank()) {
+        filteredBadges.take(8).forEach { badge ->
+            if (displayMode == 1) {
+                // 文字模式
+                Text(
+                    text = badge.name,
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                )
+            } else {
+                // 徽章模式（图标）
                 AsyncImage(
-                    model = imageUrl,
+                    model = badge.imageURL,
                     contentDescription = badge.name,
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
                         .height(badgeSize)
                         .width(badgeSize),
-                )
-            } else {
-                Text(
-                    text = badge.name,
-                    color = Color.White,
-                    fontSize = 16.sp,  // 增大文字尺寸
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
                 )
             }
         }
