@@ -47,7 +47,7 @@ class BadgeMatcher(private val rules: List<BadgeRule>) {
     fun matchAll(vararg inputs: String?): List<BadgeRule> {
         val all = mutableListOf<String>()
         for (input in inputs) {
-            if (input.isNotEmpty()) all.add(input)
+            if (input != null && input.isNotEmpty()) all.add(input)
         }
         return match(all.joinToString(" "))
     }

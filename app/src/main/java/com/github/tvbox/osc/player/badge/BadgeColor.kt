@@ -32,7 +32,7 @@ object BadgeColor {
             } else {
                 s.substring(1)
             }
-            hex.toInt(16).toInt()
+            java.lang.Integer.parseInt(hex, 16)
         } catch (_: NumberFormatException) {
             null
         }
