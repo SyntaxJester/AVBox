@@ -30,7 +30,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalConfiguration
@@ -42,8 +41,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import coil3.compose.AsyncImage
 import com.github.tvbox.osc.R
 import com.github.tvbox.osc.player.state.PlayerActions
 import com.github.tvbox.osc.player.state.PlayerUiState
@@ -283,35 +280,35 @@ fun PlayerTopBar(state: PlayerUiState, actions: PlayerActions) {
                                 maxLines = 1,
                             )
                         }
-                        // 媒体徽章显示在顶部栏右侧
-                        if (state.mediaBadges.isNotEmpty()) {
-                            Row(
-                                modifier = Modifier.padding(top = playerDim(R.dimen.vs_4)),
-                                horizontalArrangement = Arrangement.spacedBy(playerDim(R.dimen.vs_4)),
-                            ) {
-                                state.mediaBadges.take(8).forEach { badge ->
-                                    val imageUrl = badge.imageURL
-                                    if (imageUrl.isNotBlank()) {
-                                        AsyncImage(
-                                            model = imageUrl,
-                                            contentDescription = badge.name,
-                                            contentScale = ContentScale.Fit,
-                                            modifier = Modifier
-                                                .height(24.dp)
-                                                .width(24.dp),
-                                        )
-                                    } else {
-                                        Text(
-                                            text = badge.name,
-                                            color = Color.White,
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            maxLines = 1,
-                                        )
-                                    }
-                                }
-                            }
-                        }
+                        // 媒体徽章已移至左下角 OSD 面板
+                        // if (state.mediaBadges.isNotEmpty()) {
+                        //     Row(
+                        //         modifier = Modifier.padding(top = playerDim(R.dimen.vs_4)),
+                        //         horizontalArrangement = Arrangement.spacedBy(playerDim(R.dimen.vs_4)),
+                        //     ) {
+                        //         state.mediaBadges.take(8).forEach { badge ->
+                        //             val imageUrl = badge.imageURL
+                        //             if (imageUrl.isNotBlank()) {
+                        //                 AsyncImage(
+                        //                     model = imageUrl,
+                        //                     contentDescription = badge.name,
+                        //                     contentScale = ContentScale.Fit,
+                        //                     modifier = Modifier
+                        //                         .height(24.dp)
+                        //                         .width(24.dp),
+                        //                 )
+                        //             } else {
+                        //                 Text(
+                        //                     text = badge.name,
+                        //                     color = Color.White,
+                        //                     fontSize = 14.sp,
+                        //                     fontWeight = FontWeight.Medium,
+                        //                     maxLines = 1,
+                        //                 )
+                        //             }
+                        //         }
+                        //     }
+                        // }
                         if (showActionsInTopBar) {
                             PlayerActionIcons(actions = actions)
                         }

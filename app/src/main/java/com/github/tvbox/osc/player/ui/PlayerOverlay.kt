@@ -6,14 +6,21 @@ import android.util.TypedValue
 import androidx.annotation.DimenRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import coil3.compose.AsyncImage
+import com.github.tvbox.osc.util.HawkConfig
+import com.github.tvbox.osc.util.KV
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -32,6 +39,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.github.tvbox.osc.R
 import com.github.tvbox.osc.player.state.ParamsChoice
 import com.github.tvbox.osc.player.state.PlayerActions
@@ -99,6 +107,15 @@ fun PlayerOverlay(
             exitMs = PLAYER_OSD_OUT_MS,
         ) {
             PlayerInfoOsd(state, actions, maxWidth)
+        }
+        // 媒体徽章显示在左下角，调整位置和间距
+        if (state.mediaBadges.isNotEmpty()) {
+            PlayerOverlayMediaBadges(
+                badges = state.mediaBadges,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = playerEdgePadding(), bottom = playerDim(R.dimen.vs_140)),
+            )
         }
         PlayerSpeedBoostHint(state)
 
@@ -257,4 +274,38 @@ internal fun playerIconBox(availableWidth: Dp): Dp {
         playerDim(R.dimen.vs_70),
         (availableWidth - gap * (PILL_MAX_ICONS + 1)) / PILL_MAX_ICONS,
     ).coerceAtLeast(1.dp)
+}
+
+@Composable
+private fun PlayerOverlayMediaBadges(
+    badges: List<com.github.tvbox.osc.player.badge.MediaBadge>,
+    modifier: Modifier = Modifier,
+) {
+    val badgeSize = 48.dp  // 增大徽章尺寸
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        badges.take(8).forEach { badge ->
+            val imageUrl = badge.imageURL
+            if (imageUrl.isNotBlank()) {
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = badge.name,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .height(badgeSize)
+                        .width(badgeSize),
+                )
+            } else {
+                Text(
+                    text = badge.name,
+                    color = Color.White,
+                    fontSize = 16.sp,  // 增大文字尺寸
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                )
+            }
+        }
+    }
 }

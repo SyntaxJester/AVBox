@@ -33,12 +33,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.AsyncImage
 import com.github.tvbox.osc.R
 import com.github.tvbox.osc.player.state.PlayerActions
 import com.github.tvbox.osc.player.state.PlayerUiState
-import com.github.tvbox.osc.util.HawkConfig
-import com.github.tvbox.osc.util.KV
 
 private const val OSD_BG_ALPHA = 0.82f
 private const val OSD_LABEL_ALPHA = 0.6f
@@ -105,9 +102,6 @@ fun BoxScope.PlayerInfoOsd(state: PlayerUiState, actions: PlayerActions, maxWidt
             OsdGroup(state.infoOsdRight, rightLabelWidth, labelGap, gap, lineSize, groupLimit)
         }
         state.infoOsdFooter?.let { OsdFooterLine(it, leftLabelWidth, labelGap, lineSize, contentLimit) }
-        if (state.mediaBadges.isNotEmpty()) {
-            OsdMediaBadges(state.mediaBadges, lineSize, gap)
-        }
         if (state.title.isNotBlank()) {
             Text(
                 text = state.title,
@@ -117,43 +111,6 @@ fun BoxScope.PlayerInfoOsd(state: PlayerUiState, actions: PlayerActions, maxWidt
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-        }
-    }
-}
-
-@Composable
-private fun OsdMediaBadges(badges: List<com.github.tvbox.osc.player.badge.MediaBadge>, size: TextUnit, gap: Dp) {
-    val textColor = Color(0xFFFAFAFA)
-    val baseStyle = LocalTextStyle.current
-    val badgeStyle = baseStyle.copy(color = textColor, fontSize = size)
-    when (KV.get(HawkConfig.MEDIA_BADGES_DISPLAY_MODE, 0)) {
-        1 -> Text(
-            text = badges.joinToString(" · ") { it.name },
-            style = badgeStyle,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        else -> Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-            badges.forEach { badge ->
-                val imageUrl = badge.imageURL
-                if (imageUrl.isNotBlank()) {
-                    AsyncImage(
-                        model = imageUrl,
-                        contentDescription = badge.name,
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier
-                            .height(sizeToDp(size) * 1.2f)
-                            .width(sizeToDp(size) * 1.2f),
-                    )
-                } else {
-                    Text(
-                        text = badge.name,
-                        style = badgeStyle,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
         }
     }
 }
