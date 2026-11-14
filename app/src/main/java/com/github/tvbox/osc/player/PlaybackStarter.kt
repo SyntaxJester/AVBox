@@ -339,7 +339,8 @@ class PlaybackStarter(private val host: Host) {
             }
             if (host.view() == null) return@launch
             var targetUrl = finalUrl
-            val playerType = requireNotNull(host.playerCfg()).optInt("pl", 2)
+            val cfg = host.playerCfg() ?: org.json.JSONObject()
+            val playerType = cfg.optInt("pl", 2)
             if (playerType >= 10 && PlayerHelper.getPlayerExist(playerType)) {
                 host.view()?.releasePlayer()
                 val vod = host.vod()
