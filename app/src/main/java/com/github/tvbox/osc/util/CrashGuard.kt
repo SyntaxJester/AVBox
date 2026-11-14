@@ -130,6 +130,12 @@ object CrashGuard {
         } catch (ignored: Throwable) {
         }
 
+        // 无论是否恢复，都强制归档崩溃日志，确保用户能拿到完整堆栈
+        try {
+            archiveCrashLog()
+        } catch (ignored: Throwable) {
+        }
+
         if (!isMain) {
             // 子线程异常：记录后收掉这条线程即可，不让整个 App 陪葬
             try {
@@ -166,7 +172,6 @@ object CrashGuard {
 
         EchoLog.i(TAG, "main looper restarting after fatal")
         EchoLog.flushSync()
-        archiveCrashLog()
 
         while (true) {
             try {

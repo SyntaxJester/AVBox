@@ -100,7 +100,8 @@ object EchoLog {
 
     @JvmStatic
     fun crash(tag: String, msg: String, tr: Throwable?) {
-        write("E", tag, msg + "\n" + stackOf(tr))
+        writeRawNoThrottle(timeFmt.format(Date()) + " [E] [" + tag + "] " + msg + "\n" + stackOf(tr))
+        flushSync()
     }
 
     /** 打一条醒目的分隔线，方便在长日志里定位阶段 */
@@ -195,6 +196,27 @@ object EchoLog {
             return false
         }
         return true
+    }
+
+    private fun writeRawNoThrottle(line: String) {
+        synchronized(lock) {
+            try {
+                if (writer == null) openWriter()
+                rotateIfNeeded()
+                writer?.write(line)
+                writer?.write("\n")
+                writer?.flush()
+            } catch (th: Throwable) {
+                try {
+                    closeWriter()
+                    openWriter()
+                    writer?.write(line)
+                    writer?.write("\n")
+                    writer?.flush()
+                } catch (ignored: Throwable) {
+                }
+            }
+        }
     }
 
     private fun writeRaw(line: String) {
