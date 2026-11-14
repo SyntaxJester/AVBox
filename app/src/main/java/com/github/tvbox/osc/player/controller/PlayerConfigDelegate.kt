@@ -41,8 +41,8 @@ internal class PlayerConfigDelegate(private val host: VideoPlayerController) {
         host.state.playerType = cfg.optInt("pl", 2)
         val start = cfg.optInt("st", 0)
         val end = cfg.optInt("et", 0)
-        host.state.timeStartText = if (start == 0) "" else PlayerUtils.stringForTime(start * 1000L)
-        host.state.timeEndText = if (end == 0) "" else PlayerUtils.stringForTime(end * 1000L)
+        host.state.timeStartText = if (start == 0) "" else PlayerUtils.stringForTime(start * 1000)
+        host.state.timeEndText = if (end == 0) "" else PlayerUtils.stringForTime(end * 1000)
         refreshParamsSheet()
     }
 
