@@ -42,7 +42,7 @@ object MediaBadgeLoader {
         val items = matched.map { rule ->
             MediaBadge(
                 name = rule.name,
-                imageURL = rule.image,
+                imageURL = rule.imageURL,
                 type = MediaBadge.TYPE_PACK,
                 group = rule.group,
                 technical = BadgeMatcher.isTechnicalGroup(rule.group, rule.category),

@@ -20,7 +20,7 @@ class BadgeRule(
     val group: String,
     val category: String,
     val name: String,
-    val image: String,
+    val imageURL: String,
     val textColor: String,
     val tagColor: String,
     val borderColor: String,
@@ -34,7 +34,7 @@ class BadgeRule(
         return m.find()
     }
 
-    fun hasImage(): Boolean = image.isNotEmpty()
+    fun hasImage(): Boolean = imageURL.isNotEmpty()
 
     override fun toString(): String =
         "BadgeRule{$group/$category $name${if (hasImage()) " [img]" else ""}}"
