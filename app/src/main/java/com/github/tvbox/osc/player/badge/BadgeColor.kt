@@ -9,13 +9,13 @@ package com.github.tvbox.osc.player.badge
 object BadgeColor {
 
     /** 默认文字色（深色界面上用白色） */
-    val DEFAULT_TEXT_LIGHT_BG: Int = java.lang.Integer.parseInt("FF111111", 16)
+    val DEFAULT_TEXT_LIGHT_BG: Int = java.lang.Long.parseLong("FF111111", 16).toInt()
     /** 默认文字色（亮色界面上用黑色） */
-    val DEFAULT_TEXT_DARK_BG: Int = java.lang.Integer.parseInt("FFFFFFFF", 16)
+    val DEFAULT_TEXT_DARK_BG: Int = java.lang.Long.parseLong("FFFFFFFF", 16).toInt()
     /** 默认背景色 */
-    val DEFAULT_BG: Int = java.lang.Integer.parseInt("FF333333", 16)
+    val DEFAULT_BG: Int = java.lang.Long.parseLong("FF333333", 16).toInt()
     /** 默认边框色 */
-    val DEFAULT_BORDER: Int = java.lang.Integer.parseInt("FF888888", 16)
+    val DEFAULT_BORDER: Int = java.lang.Long.parseLong("FF888888", 16).toInt()
 
     fun parse(value: String?): Int? {
         if (value == null) return null
