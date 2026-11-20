@@ -1,0 +1,25 @@
+{
+  "groups": [
+    {
+      "id": "gs",
+      "name": "流媒体服务",
+      "color": "#27C04F",
+      "borderColor": "#00000000",
+      "isExpanded": true
+    },
+    {
+      "id": "gr",
+      "name": "分辨率",
+      "color": "#FFBE01",
+      "borderColor": "#00000000",
+      "isExpanded": true
+    },
+    {
+      "id": "video-tech",
+      "name": "动态范围 / HDR",
+      "color": "#7F8CFF",
+      "borderColor": "#00000000",
+      "isExpanded": true
+    },
+    {
+      "id": "video-codec",
